@@ -1,0 +1,113 @@
+seed: 1
+record_video: yes
+
+environment:
+  render: True
+  evaluate: True
+  type: 2
+  #    1 : 90 degree maze
+  #    2 : diagonal maze (env1)  ===
+  #    3 : scattered obstacle (seen)
+  #    4 : scattered obstacle (unseen)
+  #    5 : narrow obstacle
+  #    6 : (env2)
+  #    7 : (env3)
+  #    8 : (env4)  ===
+  #    9 : (env5)  ===
+  num_envs: 300
+  max_n_update: 10000
+  eval_every_n: 50
+  num_threads: 4
+  test_num_threads: 4
+  simulation_dt: 0.0025
+  control_dt: 0.01
+  max_time: 9.0
+  obstacle_grid_size:
+    min: 3
+    max: 5
+  obstacle_dr:
+    min: 0.3
+    max: 0.5
+  command:
+    forward_vel:
+      min: -1.0
+      max: 1.0
+    lateral_vel:
+      min: -0.4
+      max: 0.4
+    yaw_rate:
+      min: -1.2
+      max: 1.2
+  randomization: False  # 1) Base COM position, 2) Mass of links, 3) Joint position
+  random_initialize: False  # yaw angle is only randomized
+  random_external_force: False  # 50N force for 1s for lateral direction
+
+training:
+  learning_rate: 3e-4
+  batch_size: 512
+  storage_size: 6300
+  num_epochs: 5
+  shuffle_batch: True
+  clip_gradient: False
+  max_gradient_norm: 0.5
+  loss_weight:
+    collision: 1.67
+    coordinate: 1
+
+evaluating:
+  command_period: 3.0
+  sigma: 1.0
+  number_of_sample: 2000
+  gamma: 7
+  beta: 0.5
+  number_of_bin: 10
+
+data_collection:
+  command_sampler_beta: 0.2
+  command_sampler_sigma: 0.1
+  prediction_period: 6  # [s]
+  command_period: 0.5  # [s]
+
+architecture:
+  command_tracking_policy_net: [128, 128]
+  COM_encoder:
+    use_TCN: False
+    TCN:
+      input: 9
+      output: [32, 32, 32]
+      activation: leakyrelu
+      dropout: 0.2
+      time_step: 57  # 1.14 [s]
+      update_period: 0.02
+    naive:
+      input: 9   # body_orientation + vel + ang_vel
+      time_step: 10  # 0.5 [s]
+      update_period: 0.05  # [s]
+  state_encoder:  # state = lidar + (encoded COM history)
+    input: 450  # COM_encoder output is included in the input  (360 + 32)
+    output: 64
+    shape: [256, 256, 128, 128]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+  command_encoder:
+    input: 3
+    output: 32
+    shape: [64, 64]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+  recurrence:
+    input: 32
+    hidden: 64
+    layer: 1
+  traj_predictor:
+    input: 64
+    shape: [32, 32]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+    collision:
+      output: 1
+    coordinate:
+      output: 2

@@ -1,0 +1,52 @@
+seed: 1
+record_video: yes
+
+environment:
+  render: False
+  # just testing commenting
+  evaluate: True
+  num_envs: 1
+  eval_every_n: 100
+  num_threads: 1  # maximum available threads in the system
+  test_num_threads: 1
+  simulation_dt: 0.0025
+  control_dt: 0.01
+  max_time: 6.0
+  command_period: 3.0
+  n_rewards: 9
+  reward:
+    joint_torque:
+      coeff: 1.0 * 0.1
+    linear_vel_error:
+      coeff: 2.0
+    angular_vel_error:
+      coeff: 3.0
+    joint_vel:
+      coeff: 10.0 * 0.85 * 1
+    foot_clearance:
+      coeff: 0.25 * 0.85
+    foot_slip:
+      coeff: 9.375 * 0.85 * 2.5
+    previous_action_smooth:
+      coeff: 10.0 * 0.85
+    foot_z_vel:
+      coeff: 1.0 * 0.85 * 2.5
+    orientation:
+      coeff: 1.0 * 0.85
+  command:
+    forward_vel:
+      min: -1.0
+      max: 1.0
+    lateral_vel:
+      min: -0.4
+      max: 0.4
+    yaw_rate:
+      min: -1.2
+      max: 1.2
+  randomization: False  # 1) Base COM position, 2) Mass of links, 3) Joint position
+  random_initialize: False  # previous traj samples state + noise
+  random_external_force: False  # 50N force for 1s for lateral direction
+
+architecture:
+  policy_net: [128, 128]
+  value_net: [128, 128]
