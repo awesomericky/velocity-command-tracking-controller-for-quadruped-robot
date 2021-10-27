@@ -18,7 +18,7 @@ import pdb
 import wandb
 from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
 from raisimGymTorch.env.envs.lidar_model.trainer import Trainer, Trainer_TCN
-from raisimGymTorch.env.envs.lidar_model.action import Command_sampler
+from raisimGymTorch.env.envs.lidar_model.action import Command_sampler, Time_correlated_command_sampler, Normal_time_correlated_command_sampler
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 
 np.random.seed(0)
@@ -48,7 +48,9 @@ cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 
 # user command samping
 user_command = UserCommand(cfg, cfg['environment']['num_envs'])
-command_sampler = Command_sampler(user_command)
+# command_sampler = Command_sampler(user_command)
+command_sampler = Time_correlated_command_sampler(user_command)
+# command_sampler = Normal_time_correlated_command_sampler(user_command)
 
 # create environment from the configuration file
 env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
@@ -136,7 +138,9 @@ else:
                       max_grad_norm=cfg["training"]["max_gradient_norm"],
                       device=device,
                       logging=logging,
-                      P_col_interpolate=cfg["training"]["interpolate_probability"])
+                      P_col_interpolate=cfg["training"]["interpolate_probability"],
+                      prioritized_data_update=cfg["data_collection"]["prioritized_data_update"],
+                      prioritized_data_update_magnitude=cfg["data_collection"]["prioritized_data_update_magnitude"])
 
 saver = ConfigurationSaver(log_dir=home_path + "/raisimGymTorch/data/"+task_name,
                            save_items=[task_path + "/cfg.yaml", task_path + "/Environment.hpp"])
@@ -238,7 +242,6 @@ for update in range(cfg["environment"]["max_n_update"]):
 
                 sample_user_command = command_sampler.sample()
                 temp_command = sample_user_command.copy()
-
 
             tracking_obs = np.concatenate((sample_user_command, obs[:, :proprioceptive_sensor_dim]), axis=1)
             tracking_obs = env.force_normalize_observation(tracking_obs, type=1)
@@ -367,7 +370,7 @@ for update in range(cfg["environment"]["max_n_update"]):
     init_coordinate_traj = []
     done_envs = set()
 
-    sample_user_command = user_command.uniform_sample_train()
+    # sample_user_command = user_command.uniform_sample_train()
 
     # train
     for step in range(n_steps):

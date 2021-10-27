@@ -28,13 +28,18 @@ class Trainer:
                  learning_rate=5e-4,
                  max_grad_norm=0.5,
                  logging=True,
-                 P_col_interpolate=False):
+                 P_col_interpolate=False,
+                 prioritized_data_update=True,
+                 prioritized_data_update_magnitude=0.5):
 
         self.n_prediction_step = int(prediction_period / delta_prediction_time)
         self.state_dim = state_dim
         self.command_dim = command_dim
         self.P_col_dim = P_col_dim
         self.coordinate_dim = coordinate_dim
+
+        self.prioritized_data_update = prioritized_data_update
+        self.prioritized_data_update_magnitude = prioritized_data_update_magnitude
 
         # environment model
         self.environment_model = environment_model
@@ -46,7 +51,8 @@ class Trainer:
                                    command_shape=[self.n_prediction_step, command_dim],
                                    P_col_shape=[self.n_prediction_step, P_col_dim],
                                    coordinate_shape=[self.n_prediction_step, coordinate_dim],
-                                   device=device)
+                                   device=device,
+                                   prioritized_data_update=self.prioritized_data_update)
 
         if shuffle_batch:
             self.batch_sampler = self.storage.mini_batch_generator_shuffle
@@ -91,6 +97,12 @@ class Trainer:
         new_P_col = np.zeros((self.n_prediction_step, n_env, self.P_col_dim))
         new_coordinate = np.zeros((self.n_prediction_step, n_env, self.coordinate_dim))
 
+        if self.prioritized_data_update:
+            total_new_state = []
+            total_new_command = []
+            total_new_P_col = []
+            total_new_corrdinate = []
+
         n_traj_step_samples = int((traj_len - self.n_prediction_step + 1) / 2)
         sampled_traj_steps = np.random.choice(traj_len - self.n_prediction_step + 1, n_traj_step_samples, replace=False)
 
@@ -134,7 +146,45 @@ class Trainer:
             # prob_col = np.sum(np.where(np.squeeze(np.sum(new_P_col, axis=0), axis=1) != 0, 1, 0)) / n_env
             # print(prob_col)
 
-            self.storage.add_data(new_state, new_command, new_P_col, new_coordinate)
+            if self.prioritized_data_update and self.storage.is_full():
+                total_new_state.append(torch.from_numpy(new_state.copy()).to(self.device))
+                total_new_command.append(torch.from_numpy(new_command.copy()).to(self.device))
+                total_new_P_col.append(torch.from_numpy(new_P_col.copy()).to(self.device))
+                total_new_corrdinate.append(torch.from_numpy(new_coordinate.copy()).to(self.device))
+            else:
+                self.storage.add_data(new_state, new_command, new_P_col, new_coordinate)
+
+        if self.prioritized_data_update and self.storage.is_full():
+            buffer_states, buffer_commands, buffer_P_cols, buffer_coordinates = self.storage.return_data()
+            total_new_state.append(buffer_states)
+            total_new_command.append(buffer_commands)
+            total_new_P_col.append(buffer_P_cols)
+            total_new_corrdinate.append(buffer_coordinates)
+
+            total_new_state = torch.cat(total_new_state, dim=0)
+            total_new_command = torch.cat(total_new_command, dim=1)
+            total_new_P_col = torch.cat(total_new_P_col, dim=1)
+            total_new_corrdinate = torch.cat(total_new_corrdinate, dim=1)
+
+            with torch.no_grad():
+                predicted_P_cols, predicted_coordinates = self.environment_model(total_new_state, total_new_command, training=True)
+                # Collision probability loss (CLE)
+                P_col_loss = - (total_new_P_col * torch.log(predicted_P_cols + 1e-6) + (1 - total_new_P_col) * torch.log(1 - predicted_P_cols + 1e-6))
+                P_col_loss = torch.sum(P_col_loss, dim=0).mean()
+
+                # Coordinate loss (MSE)
+                coordinate_loss = torch.sum(torch.sum((predicted_coordinates - total_new_corrdinate).pow(2), dim=0), dim=-1).mean()
+
+                loss = P_col_loss * self.loss_weight["collision"] + coordinate_loss * self.loss_weight["coordinate"]
+                PER_prob = loss ** self.prioritized_data_update_magnitude
+                PER_prob /= torch.sum(PER_prob)
+
+                PER_sampled_idx = torch.multinomial(PER_prob, self.max_storage_size, replacement=False)
+                new_buffer_states = total_new_state[PER_sampled_idx, :]
+                new_buffer_commands = total_new_command[:, PER_sampled_idx, :]
+                new_buffer_P_cols = total_new_P_col[:, PER_sampled_idx, :]
+                new_buffer_coordinates = total_new_corrdinate[:, PER_sampled_idx, :]
+                self.storage.update_buffer_data(new_buffer_states, new_buffer_commands, new_buffer_P_cols, new_buffer_coordinates)
 
     def log(self, logging_data):
         if self.logging:

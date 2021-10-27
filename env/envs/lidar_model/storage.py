@@ -7,8 +7,9 @@ from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler, Sequenti
 
 # Data storage when not using TCN COM encoder
 class DataStorage:
-    def __init__(self, max_storage_size, state_dim, command_shape, P_col_shape, coordinate_shape, device):
+    def __init__(self, max_storage_size, state_dim, command_shape, P_col_shape, coordinate_shape, device, prioritized_data_update):
         self.device = device
+        self.prioritized_data_update = prioritized_data_update
 
         # Core
         self.states = torch.zeros(max_storage_size, state_dim).to(self.device)
@@ -59,6 +60,17 @@ class DataStorage:
             self.coordinates[:, :second_step, :].copy_(torch.from_numpy(coordinate[:, first_step:, :]).to(self.device))
             self.step = second_step
 
+        self.balance_data()
+
+    def update_buffer_data(self, new_states, new_commands, new_P_cols, new_coordinates):
+        self.states.copy_(new_states)
+        self.commands.copy_(new_commands)
+        self.P_cols.copy_(new_P_cols)
+        self.coordinates.copy_(new_coordinates)
+
+        self.balance_data()
+
+    def balance_data(self):
         self.total_sampled_idx = []
         P_col_sum = torch.sum(self.P_cols, dim=0)
         self.col_idx = np.array(list(set((P_col_sum != 0).nonzero()[:, 0].cpu().numpy())))
@@ -76,8 +88,12 @@ class DataStorage:
     def clear(self):
         self.step = 0
 
+    @property
     def is_full(self):
         return self.full
+
+    def return_data(self):
+        return self.states, self.commands, self.P_cols, self.coordinates
 
     def mini_batch_generator_shuffle(self, mini_batch_size):
         for indices in BatchSampler(SubsetRandomSampler(self.total_sampled_idx), mini_batch_size, drop_last=True):

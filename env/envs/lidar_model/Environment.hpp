@@ -585,6 +585,9 @@ namespace raisim
 
     void updateObservation()
     {
+        static std::default_random_engine generator(random_seed);
+        std::normal_distribution<> lidar_noise(0, 0.1);
+
         anymal_->getState(gc_, gv_);
         raisim::Vec<4> quat;
         raisim::Mat<3, 3> rot;
@@ -617,7 +620,7 @@ namespace raisim
             if (col.size() > 0) {
                 if (visualizable_)
                     scans[i]->setPosition(col[0].getPosition());
-                lidar_scan_depth[i] = (lidarPos.e() - col[0].getPosition()).norm() / ray_length;
+                lidar_scan_depth[i] = ((lidarPos.e() - col[0].getPosition()).norm() + lidar_noise(generator)) / ray_length;
             }
             else {
                 if (visualizable_)

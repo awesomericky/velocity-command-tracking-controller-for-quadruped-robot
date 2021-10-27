@@ -9,7 +9,7 @@ environment:
   num_envs: 500
   max_n_update: 30000
   eval_every_n: 100
-  new_environment_every_n: 1000
+  new_environment_every_n: 100
   seed:
     train: 0
     evaluate: 600
@@ -35,16 +35,16 @@ environment:
       min: -1.2
       max: 1.2
   randomization: False  # 1) Base COM position, 2) Mass of links, 3) Joint position
-  random_initialize: False  # yaw angle is only randomized
+  random_initialize: True  # yaw angle is only randomized
   random_external_force: False  # 50N force for 1s for lateral direction
-  point_goal_initialize: True
+  point_goal_initialize: False
   safe_control_initialize: False
 
 training:
   learning_rate: 3e-4
   batch_size: 512
-  storage_size: 3150 #6300
-  num_epochs: 5
+  storage_size: 9000 #3150
+  num_epochs: 3 #5
   shuffle_batch: True
   clip_gradient: False
   max_gradient_norm: 0.5
@@ -66,6 +66,8 @@ data_collection:
   command_sampler_sigma: 0.1
   prediction_period: 6  # [s]
   command_period: 0.5  # [s]
+  prioritized_data_update: True
+  prioritized_data_update_magnitude: 0.5
 
 architecture:
   command_tracking_policy_net: [128, 128]

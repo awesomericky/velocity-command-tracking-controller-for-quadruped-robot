@@ -7,7 +7,7 @@ import numpy as np
 
 class Time_correlated_command_sampler:
     """
-    Sample time correlated command :
+    Sample time correlated command (using soft update rule):
 
     Time coorelation factor is controlled with 'beta'.
     """
@@ -38,9 +38,39 @@ class Time_correlated_command_sampler:
         self.new_command = None
 
 
+class Normal_time_correlated_command_sampler:
+    """
+    Sample time correlated command (using normal distribution):
+
+    Time coorelation factor is controlled with 'sigma'.
+    """
+    def __init__(self, random_command_sampler):
+        self.old_command = None
+        self.random_command_sampler = random_command_sampler
+        self.sigma = np.array([0.2, 0.08, 0.24]) # one-tenth of available command range
+
+    def random_sample(self, training=True):
+        if training:
+            random_command = self.random_command_sampler.uniform_sample_train()
+        else:
+            random_command = self.random_command_sampler.uniform_sample_evaluate()
+        return random_command
+
+    def sample(self):
+        if isinstance(self.old_command, type(None)):
+            modified_command = self.random_sample()
+        else:
+            modified_command = np.random.normal(self.old_command, self.sigma)
+        self.old_command = modified_command
+        return modified_command
+
+    def reset(self):
+        self.old_command = None
+
+
 class Noisy_command_sampler:
     """
-    Sample noisy command with time correlation:
+    Sample noisy command:
 
     Noise factor is controlled with 'sigma'.
     """
@@ -74,7 +104,7 @@ class Noisy_command_sampler:
 
 class Command_sampler:
     """
-    Sample command with time correlation:
+    Sample constant command:
 
     """
     def __init__(self, random_command_sampler):
@@ -453,76 +483,6 @@ class Stochastic_action_planner_normal:
         else:
             a_hat_traj = np.broadcast_to(self.a_hat[0], (self.n_horizon, self.action_dim)).copy()
         return self.a_hat[0], a_hat_traj.astype(np.float32)
-
-
-# class Stochastic_action_planner_normal:
-#     """
-#     Sample commands from normal distribution, where the mean value is user command
-#     """
-#     def __init__(self, command_range, n_sample, n_horizon, sigma, gamma, noise_sigma=0.1, noise=True, action_dim=3):
-#         # Available command limit
-#         self.min_forward_vel = command_range["forward_vel"]["min"]
-#         self.max_forward_vel = command_range["forward_vel"]["max"]
-#         self.min_lateral_vel = command_range["lateral_vel"]["min"]
-#         self.max_lateral_vel = command_range["lateral_vel"]["max"]
-#         self.min_yaw_rate = command_range["yaw_rate"]["min"]
-#         self.max_yaw_rate = command_range["yaw_rate"]["max"]
-#         self.delta = 0.5 * np.array([self.max_forward_vel - self.min_forward_vel, self.max_lateral_vel - self.min_lateral_vel, self.max_yaw_rate - self.min_yaw_rate])
-#         self.noise = noise
-#
-#         self.n_sample = n_sample
-#         self.n_horizon = n_horizon
-#         self.sigma = sigma
-#         self.gamma = gamma
-#         self.noise_sigma = noise_sigma
-#         self.action_dim = action_dim
-#
-#         self.a_hat = np.zeros((self.n_horizon, self.action_dim))
-#         self.a_tilda = np.zeros((self.n_sample, self.n_horizon, self.action_dim))
-#
-#     def sample(self, user_command):
-#         """
-#
-#         :param user_command: (self.action_dim, )  type: numpy tensor
-#         :return: (self.n_sample, self.n_horizon, self.action_dim)  type: numpy tensor
-#         """
-#         epsil = np.random.normal(0.0, self.sigma, size=(self.n_sample - 1, self.action_dim))
-#         epsil = self.delta * epsil
-#         epsil = np.broadcast_to(epsil[:, np.newaxis, :], (self.n_sample - 1, self.n_horizon, self.action_dim)).copy()
-#         epsil = np.concatenate((np.zeros((1, self.n_horizon, self.action_dim)), epsil), axis=0)  # (self.n_sample, self.n_horizon, self.action_dim)
-#
-#         if self.noise:
-#             # add extra noise along the command trajectory
-#             noise_epsil = np.random.normal(0.0, self.noise_sigma, size=(self.n_sample, self.n_horizon - 1, self.action_dim))
-#             epsil[:, 1:, :] += noise_epsil
-#
-#         self.a_tilda = epsil + user_command
-#         self.a_tilda[:, :, 0] = np.clip(self.a_tilda[:, :, 0], a_min=self.min_forward_vel, a_max=self.max_forward_vel)
-#         self.a_tilda[:, :, 1] = np.clip(self.a_tilda[:, :, 1], a_min=self.min_lateral_vel, a_max=self.max_lateral_vel)
-#         self.a_tilda[:, :, 2] = np.clip(self.a_tilda[:, :, 2], a_min=self.min_yaw_rate, a_max=self.max_yaw_rate)
-#
-#         return self.a_tilda.copy()
-#
-#     def update(self, rewards):
-#         probs = np.exp(self.gamma * rewards)
-#         probs /= np.sum(probs) + 1e-10
-#         self.a_hat = np.sum(self.a_tilda * probs[:, np.newaxis, np.newaxis], axis=0)
-#
-#     def action(self, rewards, safe=False):
-#         """
-#
-#         :param rewards: (self.n_sample,)  type: numpy
-#         :return:
-#         """
-#         if safe:
-#             return self.a_tilda[0, 0, :]
-#         self.update(rewards)
-#         if self.noise:
-#             noise_epsil = np.concatenate((np.zeros((1, self.action_dim)), np.random.normal(0.0, self.noise_sigma, size=(self.n_horizon - 1, self.action_dim))), axis=0)
-#             a_hat_traj = self.a_hat[0, :] + noise_epsil
-#         else:
-#             a_hat_traj = np.broadcast_to(self.a_hat[0], (self.n_horizon, self.action_dim)).copy()
-#         return self.a_hat[0], a_hat_traj.astype(np.float32)
 
 
 class Stochastic_action_planner_uniform_bin_baseline:
