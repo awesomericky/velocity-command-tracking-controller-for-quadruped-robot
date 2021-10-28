@@ -170,10 +170,10 @@ class Trainer:
                 predicted_P_cols, predicted_coordinates = self.environment_model(total_new_state, total_new_command, training=True)
                 # Collision probability loss (CLE)
                 P_col_loss = - (total_new_P_col * torch.log(predicted_P_cols + 1e-6) + (1 - total_new_P_col) * torch.log(1 - predicted_P_cols + 1e-6))
-                P_col_loss = torch.sum(P_col_loss, dim=0).mean()
+                P_col_loss = torch.sum(P_col_loss, dim=0).squeeze(-1)
 
                 # Coordinate loss (MSE)
-                coordinate_loss = torch.sum(torch.sum((predicted_coordinates - total_new_corrdinate).pow(2), dim=0), dim=-1).mean()
+                coordinate_loss = torch.sum(torch.sum((predicted_coordinates - total_new_corrdinate).pow(2), dim=0), dim=-1)
 
                 loss = P_col_loss * self.loss_weight["collision"] + coordinate_loss * self.loss_weight["coordinate"]
                 PER_prob = loss ** self.prioritized_data_update_magnitude
@@ -257,7 +257,7 @@ class Trainer:
                     n_not_col_prediction_acc_mean += 1
 
                 n_update += 1
-
+        
         mean_loss /= n_update
         mean_P_col_loss /= n_update
         mean_coordinate_loss /= n_update
@@ -353,7 +353,7 @@ class Trainer:
 
         # compute collision prediction accuracy
         if self.P_col_interpolate:
-            col_state = np.where(predicted_P_cols > 0.8, 1, 0)
+            col_state = np.where(predicted_P_cols > 0.99, 1, 0)
             ground_truth_col_state = np.where(real_P_cols == 1., 1, 0)
             n_total_col = np.sum(ground_truth_col_state)
             n_total_not_col = np.sum(1 - ground_truth_col_state)
@@ -369,7 +369,7 @@ class Trainer:
             not_coll_correct_idx = np.where(col_state + ground_truth_col_state == 0, 1, 0)
             total_col_prediction_accuracy = np.sum(coll_correct_idx + not_coll_correct_idx) / (n_total_col + n_total_not_col)
         else:
-            col_state = np.where(predicted_P_cols > 0.99, 1, 0)
+            col_state = np.where(predicted_P_cols > 0.5, 1, 0)
             ground_truth_col_state = np.where(real_P_cols == 1., 1, 0)
             n_total_col = np.sum(ground_truth_col_state)
             n_total_not_col = np.sum(1 - ground_truth_col_state)

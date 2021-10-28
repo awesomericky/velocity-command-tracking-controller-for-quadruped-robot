@@ -42,7 +42,8 @@ namespace raisim
 //            env_type = 3;
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
-            hm_sizeX = 21., hm_sizeY = 21.;
+	    // hm_sizeX = 21., hm_sizeY = 21.;
+	    hm_sizeX = 40., hm_sizeY = 40.;
 //            double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
             double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
             double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
@@ -52,14 +53,15 @@ namespace raisim
             static std::default_random_engine env_generator(random_seed);
 
             /// sample obstacle center
-//            double obstacle_grid_size = sample_obstacle_grid_size;;
-            double obstacle_grid_size = 3.;
+            double obstacle_grid_size = sample_obstacle_grid_size;;
+            // double obstacle_grid_size = 3.;
             int n_x_grid = int(hm_sizeX / obstacle_grid_size);
             int n_y_grid = int(hm_sizeY / obstacle_grid_size);
             n_obstacle = n_x_grid * n_y_grid;
 
-            obstacle_centers.setZero(n_obstacle, 2);
-            std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
+            obstacle_centers.setZero(n_obstacle, 2); 
+            std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
+            // std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
             for (int i=0; i<n_obstacle; i++) {
                 int current_n_y = int(i / n_x_grid);
                 int current_n_x = i - current_n_y * n_x_grid;
@@ -81,8 +83,8 @@ namespace raisim
                 Eigen::VectorXd obstacle_circle_dr;
                 obstacle_circle_dr.setZero(n_obstacle);
                 for (int i=0; i<n_obstacle; i++) {
-                    obstacle_circle_dr[i] = 0.4;
-//                    obstacle_circle_dr[i] = uniform_obstacle(env_generator);
+                    // obstacle_circle_dr[i] = 0.4;
+                    obstacle_circle_dr[i] = uniform_obstacle(env_generator);
                 }
 
                 // set raw height value
@@ -128,8 +130,8 @@ namespace raisim
                 Eigen::VectorXd obstacle_box_size;
                 obstacle_box_size.setZero(n_obstacle);
                 for (int i=0; i<n_obstacle; i++) {
-                    obstacle_box_size[i] = 0.8;
-//                    obstacle_box_size[i] = uniform_obstacle(env_generator);
+                    // obstacle_box_size[i] = 0.8;
+                    obstacle_box_size[i] = uniform_obstacle(env_generator);
                 }
 
                 for (int j=0; j<hm_samplesY; j++) {
@@ -428,10 +430,10 @@ namespace raisim
             footIndices_.insert(anymal_->getBodyIdx("RF_SHANK"));
             footIndices_.insert(anymal_->getBodyIdx("LH_SHANK"));
             footIndices_.insert(anymal_->getBodyIdx("RH_SHANK"));
-            footIndices_.insert(anymal_->getBodyIdx("LF_THIGH"));
-            footIndices_.insert(anymal_->getBodyIdx("RF_THIGH"));
-            footIndices_.insert(anymal_->getBodyIdx("LH_THIGH"));
-            footIndices_.insert(anymal_->getBodyIdx("RH_THIGH"));
+            // footIndices_.insert(anymal_->getBodyIdx("LF_THIGH"));
+            // footIndices_.insert(anymal_->getBodyIdx("RF_THIGH"));
+            // footIndices_.insert(anymal_->getBodyIdx("LH_THIGH"));
+            // footIndices_.insert(anymal_->getBodyIdx("RH_THIGH"));
 
             /// visualize if it is the first environment
             if (visualizable_)
@@ -620,7 +622,7 @@ namespace raisim
             if (col.size() > 0) {
                 if (visualizable_)
                     scans[i]->setPosition(col[0].getPosition());
-                lidar_scan_depth[i] = ((lidarPos.e() - col[0].getPosition()).norm() + lidar_noise(generator)) / ray_length;
+                lidar_scan_depth[i] = ((lidarPos.e() - col[0].getPosition()).norm() + std::abs(lidar_noise(generator))) / ray_length;
             }
             else {
                 if (visualizable_)
@@ -933,21 +935,21 @@ namespace raisim
         terminalReward = float(terminalRewardCoeff_);
 
         /// if anymal falls down
-        raisim::Vec<3> base_position;
-        anymal_->getFramePosition("base_to_base_inertia", base_position);
-        if (base_position[2] < 0.3)
-            return true;
+        // raisim::Vec<3> base_position;
+        // anymal_->getFramePosition("base_to_base_inertia", base_position);
+        // if (base_position[2] < 0.3)
+        //    return true;
 
-//        /// if the contact body is not feet (this terminal condition includes crashing with obstacle)
-//        for (auto &contact : anymal_->getContacts()) {
-//            if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end()) {
-//                return true;
-//            }
+        /// if the contact body is not feet (this terminal condition includes crashing with obstacle)
+        for (auto &contact : anymal_->getContacts()) {
+            if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end()) {
+                return true;
+            }
 ////            for (int i=0; i<4; i++) {
 ////                if (shank_Pos_difference[i] < 1e-2)
 ////                    return true;
 ////            }
-//        }
+        }
         terminalReward = 0.f;
 
         return false;

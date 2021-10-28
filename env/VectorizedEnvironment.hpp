@@ -55,7 +55,7 @@ class VectorizedEnvironment {
     std::cout << "Evaluate: " << evaluate << "\n";
     std::cout << "Seed: " << generator_seed << "\n";
     std::default_random_engine generator(generator_seed);
-    std::uniform_int_distribution<> seed_uniform(0, 10000);
+    std::uniform_int_distribution<> seed_uniform(0, 1000000);
     std::uniform_int_distribution<> env_type_uniform(1, 3);
     std::uniform_real_distribution<> obstacle_grid_size_uniform(min_obstacle_grid_size, max_obstacle_grid_size);
     std::uniform_real_distribution<> obstacle_dr_uniform(min_obstacle_dr, max_obstacle_dr);

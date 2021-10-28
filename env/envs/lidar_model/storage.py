@@ -88,7 +88,6 @@ class DataStorage:
     def clear(self):
         self.step = 0
 
-    @property
     def is_full(self):
         return self.full
 

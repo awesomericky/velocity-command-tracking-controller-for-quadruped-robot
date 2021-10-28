@@ -1,3 +1,6 @@
 1. Add lidar noise to all folders except "lidar_model" (especially lidar_model_test"
-
 2. Change "Command_sampler --> Time_correlated_command_sampler" if needed for MPPI planner
+
+*Check
+- 50/50 matching the collision/non-collision data --> erase it and run it because there could be overfitting
+- larger beta(current: 0.1) for time correlated command sampling?

@@ -5,7 +5,7 @@ logging: True
 environment:
   render: True
   # just testing commenting
-  evaluate: True
+  evaluate: False
   num_envs: 500
   max_n_update: 30000
   eval_every_n: 100
@@ -13,8 +13,8 @@ environment:
   seed:
     train: 0
     evaluate: 600
-  num_threads: 11
-  test_num_threads: 11
+  num_threads: 12
+  test_num_threads: 12
   simulation_dt: 0.0025
   control_dt: 0.01
   max_time: 9.0
