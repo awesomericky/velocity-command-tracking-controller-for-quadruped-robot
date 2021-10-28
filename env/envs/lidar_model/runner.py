@@ -156,7 +156,7 @@ if mode == 'retrain':
 assert command_tracking_weight_path != '', "Pre-trained command tracking policy weight path should be determined."
 command_tracking_policy = ppo_module.MLP(cfg['architecture']['command_tracking_policy_net'], nn.LeakyReLU,
                                          command_tracking_ob_dim, command_tracking_act_dim)
-command_tracking_policy.load_state_dict(torch.load(command_tracking_weight_path)['actor_architecture_state_dict'])
+command_tracking_policy.load_state_dict(torch.load(command_tracking_weight_path, map_location=device)['actor_architecture_state_dict'])
 command_tracking_policy.to(device)
 command_tracking_weight_dir = command_tracking_weight_path.rsplit('/', 1)[0] + '/'
 iteration_number = command_tracking_weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0]
@@ -182,7 +182,7 @@ for update in range(cfg["environment"]["max_n_update"]):
                                                            recurrence_config=cfg["architecture"]["recurrence"],
                                                            prediction_config=cfg["architecture"]["traj_predictor"],
                                                            device=device)
-        loaded_environment_model.load_state_dict(torch.load(saver.data_dir+"/full_"+str(update)+'.pt')['model_architecture_state_dict'])
+        loaded_environment_model.load_state_dict(torch.load(saver.data_dir+"/full_"+str(update)+'.pt', map_location=device)['model_architecture_state_dict'])
         loaded_environment_model.eval()
         loaded_environment_model.to(device)
 
