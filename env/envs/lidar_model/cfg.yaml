@@ -14,7 +14,7 @@ environment:
     train: 0
     evaluate: 600
   num_threads: 12
-  test_num_threads: 12
+  test_num_threads: 2 #12
   simulation_dt: 0.0025
   control_dt: 0.01
   max_time: 9.0
@@ -35,9 +35,9 @@ environment:
       min: -1.2
       max: 1.2
   randomization: False  # 1) Base COM position, 2) Mass of links, 3) Joint position
-  random_initialize: True  # yaw angle is only randomized
+  random_initialize: False #True  # yaw angle is only randomized
   random_external_force: False  # 50N force for 1s for lateral direction
-  point_goal_initialize: False
+  point_goal_initialize: True
   safe_control_initialize: False
 
 training:

@@ -181,7 +181,8 @@ class Zeroth_action_planner:
 
     def update(self, rewards):
         probs = np.exp(self.gamma * (rewards - np.max(rewards)))
-        probs /= np.sum(probs) + 1e-10
+        probs = np.exp(self.gamma * rewards)
+        probs /= (np.sum(probs) + 1e-10)
         self.a_hat = np.sum(self.a_tilda * probs[:, np.newaxis, np.newaxis], axis=0)
 
     def action(self, rewards):
@@ -192,6 +193,10 @@ class Zeroth_action_planner:
         """
         self.update(rewards)
         return self.a_hat[0], self.a_hat.astype(np.float32)
+
+    def reset(self):
+        self.a_hat = np.zeros((self.n_horizon, self.action_dim))
+        self.a_tilda = np.zeros((self.n_sample, self.n_horizon, self.action_dim))
 
 
 class Modified_zeroth_action_planner:
@@ -374,7 +379,7 @@ class Stochastic_action_planner_uniform_bin:
             self.a_hat = np.sum(self.a_tilda[safe_idx, :, :] * probs[:, np.newaxis, np.newaxis], axis=0)
         else:
             probs = np.exp(self.gamma * rewards)
-            probs /= np.sum(probs) + 1e-10
+            probs /= (np.sum(probs) + 1e-10)
             self.a_hat = np.sum(self.a_tilda * probs[:, np.newaxis, np.newaxis], axis=0)
 
     def action(self, rewards):
@@ -393,6 +398,124 @@ class Stochastic_action_planner_uniform_bin:
         # max_idx = np.argmax(rewards)
         # return self.a_tilda[max_idx, 0, :].astype(np.float32), self.a_tilda[max_idx, :, :].astype(np.float32)
         return self.a_hat[0], a_hat_traj.astype(np.float32)
+
+
+class Stochastic_action_planner_uniform_bin_w_time_correlation:
+    """
+    Sample commands from uniformly seperated_bin
+    """
+    def __init__(self, command_range, n_sample, n_horizon, n_bin, beta, gamma,
+                 random_command_sampler, time_correlation_beta=0.1,
+                 noise_sigma=0.1, noise=False, action_dim=3):
+        """
+
+        :param command_range: available command range
+        :param n_sample: number of sampling trajectory
+        :param n_horizon: number of predicted future steps
+        :param n_bin: number of seperate bins for available command range
+        :param beta: factor that determines the degree of action time correlation
+        :param noise_sigma: std of noise distribution added to each time step
+        :param noise: whether to give noise or not to across different time steps
+        """
+        # Available command limit
+        self.min_forward_vel = command_range["forward_vel"]["min"]
+        self.max_forward_vel = command_range["forward_vel"]["max"]
+        self.forward_vel_bin_size = (self.max_forward_vel - self.min_forward_vel) / n_bin
+        self.forward_vel_bin_array = np.arange(self.min_forward_vel, self.max_forward_vel, self.forward_vel_bin_size)
+        self.min_lateral_vel = command_range["lateral_vel"]["min"]
+        self.max_lateral_vel = command_range["lateral_vel"]["max"]
+        self.lateral_vel_bin_size = (self.max_lateral_vel - self.min_lateral_vel) / n_bin
+        self.lateral_vel_bin_array = np.arange(self.min_lateral_vel, self.max_lateral_vel, self.lateral_vel_bin_size)
+        self.min_yaw_rate = command_range["yaw_rate"]["min"]
+        self.max_yaw_rate = command_range["yaw_rate"]["max"]
+        self.yaw_rate_bin_size = (self.max_yaw_rate - self.min_yaw_rate) / n_bin
+        self.yaw_rate_bin_array = np.arange(self.min_yaw_rate, self.max_yaw_rate, self.yaw_rate_bin_size)
+        self.noise = noise
+
+        self.n_sample = n_sample
+        self.n_bin = n_bin
+        self.beta = beta
+        self.gamma = gamma
+        self.n_horizon = n_horizon
+        self.noise_sigma = noise_sigma
+        self.action_dim = action_dim
+
+        self.action_bottom_margin = np.zeros((self.n_sample, self.action_dim))
+        for i in range(self.n_sample):
+            forward_vel_idx = (i // (self.n_bin ** 2)) % self.n_bin
+            lateral_vel_idx = (i // self.n_bin) % self.n_bin
+            yaw_rate_idx = i % self.n_bin
+            self.action_bottom_margin[i] = [self.forward_vel_bin_array[forward_vel_idx],
+                                            self.lateral_vel_bin_array[lateral_vel_idx],
+                                            self.yaw_rate_bin_array[yaw_rate_idx]]
+
+        self.a_hat = np.zeros((self.n_horizon, self.action_dim))
+        self.first = True
+
+        self.random_command_sampler = random_command_sampler
+        self.time_correlation_beta = time_correlation_beta
+
+    def sample(self):
+        """
+
+        :return: (self.n_sample, self.n_horizon, self.action_dim)  type: numpy tensor
+        """
+        self.a_tilda = np.random.uniform(0.0, 1.0, size=(self.n_sample, self.action_dim))
+        self.a_tilda[:, 0] *= self.forward_vel_bin_size
+        self.a_tilda[:, 1] *= self.lateral_vel_bin_size
+        self.a_tilda[:, 2] *= self.yaw_rate_bin_size
+        self.a_tilda += self.action_bottom_margin
+        self.a_tilda = self.a_tilda[:, np.newaxis, :]
+        self.a_tilda = np.broadcast_to(self.a_tilda, (self.n_sample, self.n_horizon, self.action_dim)).copy()
+
+        for i in range(1, self.n_horizon):
+            random_command = self.random_command_sampler.uniform_sample_train()
+            self.a_tilda[:, i, :] = self.time_correlation_beta * random_command + (1 - self.time_correlation_beta) * self.a_tilda[:, i-1, :]
+
+        # time correlated sampling
+        if self.first:
+            self.first = False
+        else:
+            self.a_tilda = self.a_tilda * (1 - self.beta) + self.a_hat[np.newaxis, :, :] * self.beta
+
+        # add noise
+        if self.noise:
+            noise_epsil = np.random.normal(0.0, self.noise_sigma, size=(self.n_sample, self.n_horizon - 1, self.action_dim))
+            self.a_tilda[:, 1:, :] += noise_epsil
+
+        self.a_tilda[:, :, 0] = np.clip(self.a_tilda[:, :, 0], a_min=self.min_forward_vel, a_max=self.max_forward_vel)
+        self.a_tilda[:, :, 1] = np.clip(self.a_tilda[:, :, 1], a_min=self.min_lateral_vel, a_max=self.max_lateral_vel)
+        self.a_tilda[:, :, 2] = np.clip(self.a_tilda[:, :, 2], a_min=self.min_yaw_rate, a_max=self.max_yaw_rate)
+
+        return self.a_tilda.copy()
+
+    def reset(self):
+        self.a_hat = np.zeros((self.n_horizon, self.action_dim))
+        self.first = True
+
+    def update(self, rewards):
+        # probs = np.exp(self.gamma * rewards)
+        # probs /= np.sum(probs) + 1e-10
+        # self.a_hat = np.sum(self.a_tilda * probs[:, np.newaxis, np.newaxis], axis=0)
+        safe_idx = np.where(rewards != 0)[0]
+        # safe_idx = np.argpartition(rewards, -500)[-500:]
+        if len(safe_idx) != 0:
+            probs = np.exp(self.gamma * rewards[safe_idx])
+            probs /= np.sum(probs) + 1e-10
+            self.a_hat = np.sum(self.a_tilda[safe_idx, :, :] * probs[:, np.newaxis, np.newaxis], axis=0)
+        else:
+            probs = np.exp(self.gamma * rewards)
+            probs /= np.sum(probs) + 1e-10
+            self.a_hat = np.sum(self.a_tilda * probs[:, np.newaxis, np.newaxis], axis=0)
+
+    def action(self, rewards):
+        """
+
+        :param rewards: (self.n_sample,)  type: numpy
+        :return:
+        """
+        self.update(rewards)
+        return self.a_hat[0], self.a_hat.astype(np.float32)
 
 
 class Stochastic_action_planner_normal:

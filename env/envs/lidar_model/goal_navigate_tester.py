@@ -17,7 +17,7 @@ import argparse
 from collections import defaultdict
 import pdb
 from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
-from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin
+from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin, Stochastic_action_planner_uniform_bin_w_time_correlation
 from raisimGymTorch.env.envs.lidar_model.action import Zeroth_action_planner, Modified_zeroth_action_planner
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 
@@ -159,15 +159,36 @@ else:
 
     # Load action planner
     n_prediction_step = int(cfg["data_collection"]["prediction_period"] / cfg["data_collection"]["command_period"])
-    action_planner = Stochastic_action_planner_uniform_bin(command_range=cfg["environment"]["command"],
-                                                           n_sample=cfg["evaluating"]["number_of_sample"],
-                                                           n_horizon=n_prediction_step,
-                                                           n_bin=cfg["evaluating"]["number_of_bin"],
-                                                           beta=cfg["evaluating"]["beta"],
-                                                           gamma=cfg["evaluating"]["gamma"],
-                                                           noise_sigma=0.1,
-                                                           noise=False,
-                                                           action_dim=command_dim)
+    # action_planner = Stochastic_action_planner_uniform_bin(command_range=cfg["environment"]["command"],
+    #                                                        n_sample=cfg["evaluating"]["number_of_sample"],
+    #                                                        n_horizon=n_prediction_step,
+    #                                                        n_bin=cfg["evaluating"]["number_of_bin"],
+    #                                                        beta=cfg["evaluating"]["beta"],
+    #                                                        gamma=cfg["evaluating"]["gamma"],
+    #                                                        noise_sigma=0.1,
+    #                                                        noise=False,
+    #                                                        action_dim=command_dim)
+
+    # user_command = UserCommand(cfg, cfg["evaluating"]["number_of_sample"])
+    # action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation(command_range=cfg["environment"]["command"],
+    #                                                                           n_sample=cfg["evaluating"]["number_of_sample"],
+    #                                                                           n_horizon=n_prediction_step,
+    #                                                                           n_bin=cfg["evaluating"]["number_of_bin"],
+    #                                                                           beta=cfg["evaluating"]["beta"],
+    #                                                                           gamma=cfg["evaluating"]["gamma"],
+    #                                                                           noise_sigma=0.1,
+    #                                                                           noise=False,
+    #                                                                           action_dim=command_dim,
+    #                                                                           random_command_sampler=user_command)
+
+    action_planner = Zeroth_action_planner(command_range=cfg["environment"]["command"],
+                                           n_sample=cfg["evaluating"]["number_of_sample"],
+                                           n_horizon=n_prediction_step,
+                                           sigma=1,
+                                           gamma=cfg["evaluating"]["gamma"],
+                                           beta=0.5,
+                                           action_dim=3)
+
     env.initialize_n_step()
     env.reset()
     action_planner.reset()
@@ -258,7 +279,8 @@ else:
             action_size = np.sqrt((action_candidates[0, :, 0] / 1) ** 2 + (action_candidates[0, :, 1] / 0.4) ** 2 + (action_candidates[0, :, 2] / 1.2) ** 2)
             action_size /= np.max(action_size)
 
-            reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
+            # reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
+            reward = 1.0 * goal_reward + 1.0 * safety_reward  # weighted sum for computing rewards
             coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
 
             if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
@@ -270,7 +292,7 @@ else:
             # traj_len, n_sample, coor_dim = predicted_coordinates.shape
             # for j in range(n_sample):
             #     plt.plot(predicted_coordinates[:, j, 0], predicted_coordinates[:, j, 1])
-            # # plt.title("Sampled trajectory (n_sample: 2000)")
+            # # plt.title("Sa,mpled trajectory (n_sample: 2000)")
             # plt.savefig("sampled_traj (ours).png")
             # plt.clf()
             # pdb.set_trace()
