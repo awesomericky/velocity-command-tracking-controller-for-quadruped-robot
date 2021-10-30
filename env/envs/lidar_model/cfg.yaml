@@ -1,6 +1,6 @@
 seed: 1
 record_video: yes
-logging: True
+logging: False
 
 environment:
   render: True

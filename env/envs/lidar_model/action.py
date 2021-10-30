@@ -70,7 +70,7 @@ class Normal_time_correlated_command_sampler:
                                        [self.cfg_command["forward_vel"]["min"], self.cfg_command["lateral_vel"]["min"], self.cfg_command["yaw_rate"]["min"]],
                                        [self.cfg_command["forward_vel"]["max"], self.cfg_command["lateral_vel"]["max"], self.cfg_command["yaw_rate"]["max"]])
         self.old_command = modified_command
-        return modified_command
+        return np.ascontiguousarray(modified_command).astype(np.float32)
 
     def reset(self):
         self.old_command = None
@@ -185,7 +185,12 @@ class Zeroth_action_planner:
             else:
                 self.a_tilda[:, h, :] = self.beta * (self.a_hat[h + 1, :] + epsil[:, h, :]) \
                                         + (1 - self.beta) * self.a_tilda[:, h - 1, :]
-        return self.a_tilda
+
+            self.a_tilda[:, h, :] = np.clip(self.a_tilda[:, h, :],
+                                            a_min=[self.min_forward_vel, self.min_lateral_vel, self.min_yaw_rate],
+                                            a_max=[self.max_forward_vel, self.max_lateral_vel, self.max_yaw_rate])
+
+        return self.a_tilda.astype(np.float32).copy()
 
     def update(self, rewards):
         probs = np.exp(self.gamma * (rewards - np.max(rewards)))
@@ -276,7 +281,7 @@ class Modified_zeroth_action_planner:
                                 a_min=[self.min_forward_vel, self.min_lateral_vel, self.min_yaw_rate],
                                 a_max=[self.max_forward_vel, self.max_lateral_vel, self.max_yaw_rate])
 
-        return self.a_tilda
+        return self.a_tilda.astype(np.float32).copy()
 
     def update(self, rewards):
         probs = np.exp(self.gamma * (rewards - np.max(rewards)))
@@ -371,11 +376,11 @@ class Stochastic_action_planner_uniform_bin:
             noise_epsil = np.random.normal(0.0, self.noise_sigma, size=(self.n_sample, self.n_horizon - 1, self.action_dim))
             self.a_tilda[:, 1:, :] += noise_epsil
 
-        self.a_tilda[:, :, 0] = np.clip(self.a_tilda[:, :, 0], a_min=self.min_forward_vel, a_max=self.max_forward_vel)
-        self.a_tilda[:, :, 1] = np.clip(self.a_tilda[:, :, 1], a_min=self.min_lateral_vel, a_max=self.max_lateral_vel)
-        self.a_tilda[:, :, 2] = np.clip(self.a_tilda[:, :, 2], a_min=self.min_yaw_rate, a_max=self.max_yaw_rate)
+        self.a_tilda = np.clip(self.a_tilda,
+                               a_min=[self.min_forward_vel, self.min_lateral_vel, self.min_yaw_rate],
+                               a_max=[self.max_forward_vel, self.max_lateral_vel, self.max_yaw_rate])
 
-        return self.a_tilda.copy()
+        return self.a_tilda.astype(np.float32).copy()
 
     def reset(self):
         self.a_hat = np.zeros((self.n_horizon, self.action_dim))
@@ -497,11 +502,11 @@ class Stochastic_action_planner_uniform_bin_w_time_correlation:
             noise_epsil = np.random.normal(0.0, self.noise_sigma, size=(self.n_sample, self.n_horizon - 1, self.action_dim))
             self.a_tilda[:, 1:, :] += noise_epsil
 
-        self.a_tilda[:, :, 0] = np.clip(self.a_tilda[:, :, 0], a_min=self.min_forward_vel, a_max=self.max_forward_vel)
-        self.a_tilda[:, :, 1] = np.clip(self.a_tilda[:, :, 1], a_min=self.min_lateral_vel, a_max=self.max_lateral_vel)
-        self.a_tilda[:, :, 2] = np.clip(self.a_tilda[:, :, 2], a_min=self.min_yaw_rate, a_max=self.max_yaw_rate)
+        self.a_tilda = np.clip(self.a_tilda,
+                               a_min=[self.min_forward_vel, self.min_lateral_vel, self.min_yaw_rate],
+                               a_max=[self.max_forward_vel, self.max_lateral_vel, self.max_yaw_rate])
 
-        return self.a_tilda.copy()
+        return self.a_tilda.astype(np.float32).copy()
 
     def reset(self):
         self.a_hat = np.zeros((self.n_horizon, self.action_dim))
@@ -583,11 +588,11 @@ class Stochastic_action_planner_normal:
         else:
             self.a_tilda[1:, :, :] = self.a_tilda[1:, :, :] * (1 - self.beta) + self.a_hat[np.newaxis, :, :] * self.beta
 
-        self.a_tilda[:, :, 0] = np.clip(self.a_tilda[:, :, 0], a_min=self.min_forward_vel, a_max=self.max_forward_vel)
-        self.a_tilda[:, :, 1] = np.clip(self.a_tilda[:, :, 1], a_min=self.min_lateral_vel, a_max=self.max_lateral_vel)
-        self.a_tilda[:, :, 2] = np.clip(self.a_tilda[:, :, 2], a_min=self.min_yaw_rate, a_max=self.max_yaw_rate)
+        self.a_tilda = np.clip(self.a_tilda,
+                               a_min=[self.min_forward_vel, self.min_lateral_vel, self.min_yaw_rate],
+                               a_max=[self.max_forward_vel, self.max_lateral_vel, self.max_yaw_rate])
 
-        return self.a_tilda.copy()
+        return self.a_tilda.astype(np.float32).copy()
 
     def reset(self):
         self.a_hat = np.zeros((self.n_horizon, self.action_dim))
@@ -687,11 +692,11 @@ class Stochastic_action_planner_uniform_bin_baseline:
         else:
             self.a_tilda = self.a_tilda * (1 - self.beta) + self.a_hat[np.newaxis, :] * self.beta
 
-        self.a_tilda[:, 0] = np.clip(self.a_tilda[:, 0], a_min=self.min_forward_vel, a_max=self.max_forward_vel)
-        self.a_tilda[:, 1] = np.clip(self.a_tilda[:, 1], a_min=self.min_lateral_vel, a_max=self.max_lateral_vel)
-        self.a_tilda[:, 2] = np.clip(self.a_tilda[:, 2], a_min=self.min_yaw_rate, a_max=self.max_yaw_rate)
+        self.a_tilda = np.clip(self.a_tilda,
+                               a_min=[self.min_forward_vel, self.min_lateral_vel, self.min_yaw_rate],
+                               a_max=[self.max_forward_vel, self.max_lateral_vel, self.max_yaw_rate])
 
-        return self.a_tilda.copy()
+        return self.a_tilda.astype(np.float32).copy()
 
     def reset(self):
         self.a_hat = np.zeros(self.action_dim)
