@@ -61,6 +61,8 @@ home_path = task_path + "/../../../../.."
 # config
 cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 
+assert cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to True"
+
 # config (load saved configuration)
 # cfg = YAML().load(open(weight_path.rsplit("/", 1)[0] + "/cfg.yaml", 'r'))
 

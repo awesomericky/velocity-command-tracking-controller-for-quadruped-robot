@@ -46,6 +46,8 @@ home_path = task_path + "/../../../../.."
 # config
 cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 
+assert not cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to False"
+
 # user command samping
 user_command = UserCommand(cfg, cfg['environment']['num_envs'])
 # command_sampler = Command_sampler(user_command)

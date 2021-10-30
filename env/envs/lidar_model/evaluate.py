@@ -20,7 +20,7 @@ import pdb
 import wandb
 from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
 from raisimGymTorch.env.envs.lidar_model.trainer import Trainer, Trainer_TCN
-from raisimGymTorch.env.envs.lidar_model.action import Command_sampler
+from raisimGymTorch.env.envs.lidar_model.action import Command_sampler, Time_correlated_command_sampler
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 
 
@@ -48,9 +48,17 @@ home_path = task_path + "/../../../../.."
 # cfg = YAML().load(open(weight_path.rsplit("/", 1)[0] + "/cfg.yaml", 'r'))
 cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 
+assert cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to True"
+
+try:
+    cfg['environment']['num_threads'] = cfg['environment']['evaluate_num_threads']
+except:
+    pass
+
 # user command samping
 user_command = UserCommand(cfg, cfg['environment']['num_envs'])
-command_sampler = Command_sampler(user_command)
+# command_sampler = Command_sampler(user_command)
+command_sampler = Time_correlated_command_sampler(user_command)
 
 # create environment from the configuration file
 env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
@@ -154,7 +162,7 @@ else:
 assert command_tracking_weight_path != '', "Pre-trained command tracking policy weight path should be determined."
 command_tracking_policy = ppo_module.MLP(cfg['architecture']['command_tracking_policy_net'], nn.LeakyReLU,
                                          command_tracking_ob_dim, command_tracking_act_dim)
-command_tracking_policy.load_state_dict(torch.load(command_tracking_weight_path)['actor_architecture_state_dict'])
+command_tracking_policy.load_state_dict(torch.load(command_tracking_weight_path, map_location=device)['actor_architecture_state_dict'])
 command_tracking_policy.to(device)
 command_tracking_weight_dir = command_tracking_weight_path.rsplit('/', 1)[0] + '/'
 iteration_number = command_tracking_weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0]
@@ -170,7 +178,7 @@ loaded_environment_model = Lidar_environment_model(COM_encoding_config=cfg["arch
                                                    recurrence_config=cfg["architecture"]["recurrence"],
                                                    prediction_config=cfg["architecture"]["traj_predictor"],
                                                    device=device)
-loaded_environment_model.load_state_dict(torch.load(weight_path)['model_architecture_state_dict'])
+loaded_environment_model.load_state_dict(torch.load(weight_path, map_location=device)['model_architecture_state_dict'])
 loaded_environment_model.eval()
 loaded_environment_model.to(device)
 
@@ -178,7 +186,7 @@ final_P_col_accuracy = []
 final_col_accuracy = []
 final_not_col_accuracy = []
 final_coordinate_error = []
-num_test = 1000
+num_test = 100
 
 for n_test in range(num_test):
     env.initialize_n_step()
