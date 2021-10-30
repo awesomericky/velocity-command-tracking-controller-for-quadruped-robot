@@ -144,7 +144,9 @@ else:
                       max_grad_norm=cfg["training"]["max_gradient_norm"],
                       device=device,
                       logging=False,
-                      P_col_interpolate=cfg["training"]["interpolate_probability"])
+                      P_col_interpolate=cfg["training"]["interpolate_probability"],
+                      prioritized_data_update=cfg["data_collection"]["prioritized_data_update"],
+                      prioritized_data_update_magnitude=cfg["data_collection"]["prioritized_data_update_magnitude"])
 
 iteration_number = weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0]
 weight_dir = weight_path.rsplit('/', 1)[0] + '/'
