@@ -78,12 +78,12 @@ home_path = task_path + "/../../../../.."
 cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 
 assert cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to True"
-assert not cfg["environment"]["random_initialize"], "Change cfg[environment][evaluate] to False"
+assert not cfg["environment"]["random_initialize"], "Change cfg[environment][random_initialize] to False"
 assert cfg["environment"]["point_goal_initialize"], "Change cfg[environment][point_goal_initialize] to True"
 assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environment][safe_control_initialize] to False"
 
 # user command sampling
-user_command = UserCommand(cfg, cfg['environment']['num_envs'])
+user_command = UserCommand(cfg, cfg['evaluating']['number_of_sample'])
 
 # create environment from the configuration file
 cfg['environment']['num_envs'] = 1
@@ -174,25 +174,24 @@ else:
     #                                                        noise=False,
     #                                                        action_dim=command_dim)
 
-    # user_command = UserCommand(cfg, cfg["evaluating"]["number_of_sample"])
-    # action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation(command_range=cfg["environment"]["command"],
-    #                                                                           n_sample=cfg["evaluating"]["number_of_sample"],
-    #                                                                           n_horizon=n_prediction_step,
-    #                                                                           n_bin=cfg["evaluating"]["number_of_bin"],
-    #                                                                           beta=cfg["evaluating"]["beta"],
-    #                                                                           gamma=cfg["evaluating"]["gamma"],
-    #                                                                           noise_sigma=0.1,
-    #                                                                           noise=False,
-    #                                                                           action_dim=command_dim,
-    #                                                                           random_command_sampler=user_command)
+    action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation(command_range=cfg["environment"]["command"],
+                                                                              n_sample=cfg["evaluating"]["number_of_sample"],
+                                                                              n_horizon=n_prediction_step,
+                                                                              n_bin=cfg["evaluating"]["number_of_bin"],
+                                                                              beta=cfg["evaluating"]["beta"],
+                                                                              gamma=cfg["evaluating"]["gamma"],
+                                                                              noise_sigma=0.1,
+                                                                              noise=False,
+                                                                              action_dim=command_dim,
+                                                                              random_command_sampler=user_command)
 
-    action_planner = Zeroth_action_planner(command_range=cfg["environment"]["command"],
-                                           n_sample=cfg["evaluating"]["number_of_sample"],
-                                           n_horizon=n_prediction_step,
-                                           sigma=1,
-                                           gamma=cfg["evaluating"]["gamma"],
-                                           beta=0.5,
-                                           action_dim=3)
+    # action_planner = Zeroth_action_planner(command_range=cfg["environment"]["command"],
+    #                                        n_sample=cfg["evaluating"]["number_of_sample"],
+    #                                        n_horizon=n_prediction_step,
+    #                                        sigma=1,
+    #                                        gamma=cfg["evaluating"]["gamma"],
+    #                                        beta=0.5,
+    #                                        action_dim=3)
 
     env.initialize_n_step()
     env.reset()
@@ -284,8 +283,8 @@ else:
             action_size = np.sqrt((action_candidates[0, :, 0] / 1) ** 2 + (action_candidates[0, :, 1] / 0.4) ** 2 + (action_candidates[0, :, 2] / 1.2) ** 2)
             action_size /= np.max(action_size)
 
-            # reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
-            reward = 1.0 * goal_reward + 1.0 * safety_reward  # weighted sum for computing rewards
+            reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
+            # reward = 1.0 * goal_reward + 1.0 * safety_reward  # weighted sum for computing rewards
             coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
 
             if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:

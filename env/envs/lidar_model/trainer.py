@@ -221,8 +221,8 @@ class Trainer:
                     if n_total_not_col != 0:
                         not_col_prediction_accuracy = torch.sum(torch.where(col_state + ground_truth_col_state == 0, 1, 0)) / n_total_not_col
                 else:
-                    col_state = torch.where(predicted_P_cols > 0.5, 1, 0)
-                    ground_truth_col_state = torch.where(P_cols_batch > 0.5, 1, 0)
+                    col_state = torch.where(predicted_P_cols > 0.99, 1, 0)
+                    ground_truth_col_state = torch.where(P_cols_batch > 0.99, 1, 0)
                     n_total_col = torch.sum(ground_truth_col_state)
                     n_total_not_col = torch.sum(1 - ground_truth_col_state)
                     if n_total_col != 0:
@@ -369,7 +369,7 @@ class Trainer:
             not_coll_correct_idx = np.where(col_state + ground_truth_col_state == 0, 1, 0)
             total_col_prediction_accuracy = np.sum(coll_correct_idx + not_coll_correct_idx) / (n_total_col + n_total_not_col)
         else:
-            col_state = np.where(predicted_P_cols > 0.5, 1, 0)
+            col_state = np.where(predicted_P_cols > 0.99, 1, 0)
             ground_truth_col_state = np.where(real_P_cols == 1., 1, 0)
             n_total_col = np.sum(ground_truth_col_state)
             n_total_not_col = np.sum(1 - ground_truth_col_state)

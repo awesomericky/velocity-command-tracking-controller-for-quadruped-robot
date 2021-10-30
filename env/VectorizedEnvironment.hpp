@@ -98,7 +98,7 @@ class VectorizedEnvironment {
         environments_.back()->setSimulationTimeStep(cfg_["simulation_dt"].template As<double>());
         environments_.back()->setControlTimeStep(cfg_["control_dt"].template As<double>());
         rewardInformation_.push_back(environments_.back()->getRewards().getStdMap());
-        std::cout << "env " << i << "complete" << "\n";
+//        std::cout << "env " << i << "complete" << "\n";
     }
 
 //    /// Set seed for generating random environment

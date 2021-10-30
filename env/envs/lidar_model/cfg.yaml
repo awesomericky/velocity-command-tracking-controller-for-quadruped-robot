@@ -5,7 +5,7 @@ logging: True
 environment:
   render: True
   # just testing commenting
-  evaluate: True
+  evaluate: False
   num_envs: 500
   max_n_update: 30000
   eval_every_n: 100
@@ -14,8 +14,8 @@ environment:
     train: 0
     evaluate: 600
   num_threads: 12
-  evaluate_num_threads: 3  # Number of threads for evaluating model prediction
-  test_num_threads: 12  # Number of threads for evaluating model based RL
+  evaluate_num_threads: 12  # Number of threads for evaluating model prediction
+  test_num_threads: 3  # Number of threads for evaluating model based RL
   simulation_dt: 0.0025
   control_dt: 0.01
   max_time: 9.0
@@ -52,7 +52,7 @@ training:
   loss_weight:
     collision: 2.0 #1.67
     coordinate: 1.0
-  interpolate_probability: True
+  interpolate_probability: False
 
 evaluating:
   command_period: 3.0

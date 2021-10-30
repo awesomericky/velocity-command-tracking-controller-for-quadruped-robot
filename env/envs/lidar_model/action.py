@@ -44,10 +44,13 @@ class Normal_time_correlated_command_sampler:
 
     Time coorelation factor is controlled with 'sigma'.
     """
-    def __init__(self, random_command_sampler):
+    def __init__(self, random_command_sampler, cfg_command):
         self.old_command = None
         self.random_command_sampler = random_command_sampler
-        self.sigma = np.array([0.2, 0.08, 0.24]) # one-tenth of available command range
+        self.cfg_command = cfg_command
+        self.max_sigma = 0.5 * np.array([cfg_command["forward_vel"]["max"] - cfg_command["forward_vel"]["min"],
+                                         cfg_command["lateral_vel"]["max"] - cfg_command["lateral_vel"]["min"],
+                                         cfg_command["yaw_rate"]["max"] - cfg_command["yaw_rate"]["min"]])
 
     def random_sample(self, training=True):
         if training:
@@ -60,7 +63,12 @@ class Normal_time_correlated_command_sampler:
         if isinstance(self.old_command, type(None)):
             modified_command = self.random_sample()
         else:
-            modified_command = np.random.normal(self.old_command, self.sigma)
+            sigma_scale = np.random.uniform(0, 1, (self.random_command_sampler.n_envs, 3))  # sample command std scale (uniform distribution)
+            sigma = self.max_sigma * sigma_scale
+            modified_command = np.random.normal(self.old_command, sigma)  # sample command (normal distribution)
+            modified_command = np.clip(modified_command,
+                                       [self.cfg_command["forward_vel"]["min"], self.cfg_command["lateral_vel"]["min"], self.cfg_command["yaw_rate"]["min"]],
+                                       [self.cfg_command["forward_vel"]["max"], self.cfg_command["lateral_vel"]["max"], self.cfg_command["yaw_rate"]["max"]])
         self.old_command = modified_command
         return modified_command
 
@@ -224,7 +232,9 @@ class Modified_zeroth_action_planner:
         self.max_lateral_vel = command_range["lateral_vel"]["max"]
         self.min_yaw_rate = command_range["yaw_rate"]["min"]
         self.max_yaw_rate = command_range["yaw_rate"]["max"]
-        self.delta = 0.5 * np.array([self.max_forward_vel - self.min_forward_vel, self.max_lateral_vel - self.min_lateral_vel, self.max_yaw_rate - self.min_yaw_rate])
+        self.sigma = 0.5 * np.array([self.max_forward_vel - self.min_forward_vel,
+                                     self.max_lateral_vel - self.min_lateral_vel,
+                                     self.max_yaw_rate - self.min_yaw_rate])
 
         self.n_sample = n_sample
         self.n_horizon = n_horizon
@@ -240,7 +250,7 @@ class Modified_zeroth_action_planner:
 
     def sample(self):
         epsil = np.random.normal(0.0, self.sigma, size=(self.n_sample, self.action_dim))
-        epsil = self.delta * epsil
+        epsil = self.sigma * epsil  # same as sampling from ~ N(0, self.sigma)
         epsil = np.broadcast_to(epsil[:, np.newaxis, :], (self.n_sample, self.n_horizon, self.action_dim)).copy()
 
         for h in range(self.n_horizon):
@@ -254,13 +264,17 @@ class Modified_zeroth_action_planner:
                 self.a_tilda[:, h, :] = self.beta * (self.a_hat[h + 1, :] + epsil[:, h, :]) \
                                         + (1 - self.beta) * self.a_tilda[:, h - 1, :]
 
+            self.a_tilda[:, h, :] = np.clip(self.a_tilda[:, h, :],
+                                            a_min=[self.min_forward_vel, self.min_lateral_vel, self.min_yaw_rate],
+                                            a_max=[self.max_forward_vel, self.max_lateral_vel, self.max_yaw_rate])
+
         if self.noise:
             noise_epsil = np.random.normal(0.0, self.noise_sigma, size=(self.n_sample, self.n_horizon - 1, self.action_dim))
             self.a_tilda[:, 1:, :] += noise_epsil
 
-        self.a_tilda[:, :, 0] = np.clip(self.a_tilda[:, :, 0], a_min=self.min_forward_vel, a_max=self.max_forward_vel)
-        self.a_tilda[:, :, 1] = np.clip(self.a_tilda[:, :, 1], a_min=self.min_lateral_vel, a_max=self.max_lateral_vel)
-        self.a_tilda[:, :, 2] = np.clip(self.a_tilda[:, :, 2], a_min=self.min_yaw_rate, a_max=self.max_yaw_rate)
+        self.a_tilda = np.clip(self.a_tilda,
+                                a_min=[self.min_forward_vel, self.min_lateral_vel, self.min_yaw_rate],
+                                a_max=[self.max_forward_vel, self.max_lateral_vel, self.max_yaw_rate])
 
         return self.a_tilda
 
