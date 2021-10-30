@@ -43,7 +43,7 @@ namespace raisim
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
 	    // hm_sizeX = 21., hm_sizeY = 21.;
-	    hm_sizeX = 40., hm_sizeY = 40.;
+	        hm_sizeX = 40., hm_sizeY = 40.;
 //            double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
             double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
             double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;

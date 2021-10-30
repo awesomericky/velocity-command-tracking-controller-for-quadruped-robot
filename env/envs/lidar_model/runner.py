@@ -47,6 +47,9 @@ home_path = task_path + "/../../../../.."
 cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 
 assert not cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to False"
+assert cfg["environment"]["random_initialize"], "Change cfg[environment][evaluate] to True"
+assert not cfg["environment"]["point_goal_initialize"], "Change cfg[environment][point_goal_initialize] to False"
+assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environment][safe_control_initialize] to False"
 
 # user command samping
 user_command = UserCommand(cfg, cfg['environment']['num_envs'])

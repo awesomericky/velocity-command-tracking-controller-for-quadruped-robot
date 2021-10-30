@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import pandas as pd
 from ruamel.yaml import YAML, dump, RoundTripDumper
 from raisimGymTorch.env.bin import lidar_model
 from raisimGymTorch.env.RaisimGymVecEnv import RaisimGymVecEnv as VecEnv
@@ -49,6 +48,9 @@ home_path = task_path + "/../../../../.."
 cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 
 assert cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to True"
+assert cfg["environment"]["random_initialize"], "Change cfg[environment][evaluate] to True"
+assert not cfg["environment"]["point_goal_initialize"], "Change cfg[environment][point_goal_initialize] to False"
+assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environment][safe_control_initialize] to False"
 
 try:
     cfg['environment']['num_threads'] = cfg['environment']['evaluate_num_threads']

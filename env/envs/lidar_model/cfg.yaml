@@ -14,8 +14,8 @@ environment:
     train: 0
     evaluate: 600
   num_threads: 12
-  evaluate_num_threads: 12  # Number of threads for evaluating model prediction
-  test_num_threads: 2  # Number of threads for evaluating model based RL
+  evaluate_num_threads: 3  # Number of threads for evaluating model prediction
+  test_num_threads: 12  # Number of threads for evaluating model based RL
   simulation_dt: 0.0025
   control_dt: 0.01
   max_time: 9.0
@@ -36,9 +36,9 @@ environment:
       min: -1.2
       max: 1.2
   randomization: False  # 1) Base COM position, 2) Mass of links, 3) Joint position
-  random_initialize: False #True  # yaw angle is only randomized
+  random_initialize: True #True  # yaw angle is only randomized
   random_external_force: False  # 50N force for 1s for lateral direction
-  point_goal_initialize: True
+  point_goal_initialize: False
   safe_control_initialize: False
 
 training:
