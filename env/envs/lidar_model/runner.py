@@ -53,9 +53,9 @@ assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environmen
 
 # user command samping
 user_command = UserCommand(cfg, cfg['environment']['num_envs'])
-# command_sampler = Command_sampler(user_command)
+command_sampler = Command_sampler(user_command)
 # command_sampler = Time_correlated_command_sampler(user_command)
-command_sampler = Normal_time_correlated_command_sampler(user_command, cfg["environment"]["command"])
+# command_sampler = Normal_time_correlated_command_sampler(user_command, cfg["environment"]["command"])
 
 # create environment from the configuration file
 env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)

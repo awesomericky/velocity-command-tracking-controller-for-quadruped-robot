@@ -53,6 +53,8 @@ training:
     collision: 2.0 #1.67
     coordinate: 1.0
   interpolate_probability: False
+  weight_decay: True
+  weight_decay_lamda: 0.1
 
 evaluating:
   command_period: 3.0

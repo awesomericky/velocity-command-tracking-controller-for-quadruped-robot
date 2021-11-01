@@ -30,7 +30,9 @@ class Trainer:
                  logging=True,
                  P_col_interpolate=False,
                  prioritized_data_update=True,
-                 prioritized_data_update_magnitude=0.5):
+                 prioritized_data_update_magnitude=0.5,
+                 weight_decay=True,
+                 weight_decay_lamda=0.1):
 
         self.n_prediction_step = int(prediction_period / delta_prediction_time)
         self.state_dim = state_dim
@@ -59,7 +61,11 @@ class Trainer:
         else:
             self.batch_sampler = self.storage.mini_batch_generator_inorder
 
-        self.optimizer = optim.Adam([*self.environment_model.parameters()], lr=learning_rate)
+        if weight_decay:
+            self.optimizer = optim.Adam([*self.environment_model.parameters()], lr=learning_rate, weight_decay=weight_decay_lamda)
+        else:
+            self.optimizer = optim.Adam([*self.environment_model.parameters()], lr=learning_rate)
+
         self.device = device
         self.logging = logging
         self.P_col_interpolate = P_col_interpolate

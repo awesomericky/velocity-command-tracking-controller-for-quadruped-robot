@@ -284,7 +284,7 @@ else:
             action_size /= np.max(action_size)
 
             reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
-            # reward = 1.0 * goal_reward + 1.0 * safety_reward  # weighted sum for computing rewards
+            # reward = 0.1 * goal_reward + 1.0 * safety_reward  # weighted sum for computing rewards
             coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
 
             if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
