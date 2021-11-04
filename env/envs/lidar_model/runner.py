@@ -155,6 +155,7 @@ saver = ConfigurationSaver(log_dir=home_path + "/raisimGymTorch/data/"+task_name
 # wandb initialize
 if logging:
     wandb.init(name=task_name + "_retrain", project="Quadruped_RL")
+    wandb.watch(environment_model, log='gradients', log_freq=300)
 
 if mode == 'retrain':
     load_enviroment_model_param(weight_path, environment_model, trainer.optimizer, saver.data_dir)

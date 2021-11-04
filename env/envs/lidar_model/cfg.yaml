@@ -42,7 +42,7 @@ environment:
   safe_control_initialize: False
 
 training:
-  learning_rate: 3e-4
+  learning_rate: 6e-4
   batch_size: 512
   storage_size: 9000 #3150
   num_epochs: 5
@@ -50,7 +50,7 @@ training:
   clip_gradient: False
   max_gradient_norm: 0.5
   loss_weight:
-    collision: 1.8
+    collision: 2.0
     coordinate: 1.0
   interpolate_probability: False
   weight_decay: False

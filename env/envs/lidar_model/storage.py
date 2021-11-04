@@ -60,7 +60,7 @@ class DataStorage:
             self.coordinates[:, :second_step, :].copy_(torch.from_numpy(coordinate[:, first_step:, :]).to(self.device))
             self.step = second_step
 
-        self.balance_data()
+        # self.balance_data()
 
     def update_buffer_data(self, new_states, new_commands, new_P_cols, new_coordinates):
         self.states.copy_(new_states)
@@ -68,14 +68,14 @@ class DataStorage:
         self.P_cols.copy_(new_P_cols)
         self.coordinates.copy_(new_coordinates)
 
-        self.balance_data()
+        # self.balance_data()
 
     def balance_data(self):
         self.total_sampled_idx = []
         P_col_sum = torch.sum(self.P_cols, dim=0)
         self.col_idx = np.array(list(set((P_col_sum != 0).nonzero()[:, 0].cpu().numpy())))
         self.not_col_idx = np.array(list(set((P_col_sum == 0).nonzero()[:, 0].cpu().numpy())))
-        # print("{}/ {}".format(len(self.col_idx), len(self.not_col_idx)))
+        print("{}/ {}".format(len(self.col_idx), len(self.not_col_idx)))
         if len(self.col_idx) > len(self.not_col_idx):
             half_sample_size = len(self.not_col_idx)
             self.total_sampled_idx.extend(self.not_col_idx)
@@ -95,7 +95,13 @@ class DataStorage:
         return self.states, self.commands, self.P_cols, self.coordinates
 
     def mini_batch_generator_shuffle(self, mini_batch_size):
-        for indices in BatchSampler(SubsetRandomSampler(self.total_sampled_idx), mini_batch_size, drop_last=True):
+        if len(self.total_sampled_idx) == 0:
+            sample_idx_list = range(self.max_storage_size)
+        else:
+            sample_idx_list = self.total_sampled_idx
+            print("Balancing data is on")
+
+        for indices in BatchSampler(SubsetRandomSampler(sample_idx_list), mini_batch_size, drop_last=True):
             states_batch = self.states[indices]
             commands_batch = self.commands[:, indices, :]
             P_cols_batch = self.P_cols[:, indices, :]
@@ -103,7 +109,13 @@ class DataStorage:
             yield states_batch, commands_batch, P_cols_batch, coordinates_batch
 
     def mini_batch_generator_inorder(self, mini_batch_size):
-        for indices in BatchSampler(SequentialSampler(self.total_sampled_idx), mini_batch_size, drop_last=True):
+        if len(self.total_sampled_idx) == 0:
+            sample_idx_list = range(self.max_storage_size)
+        else:
+            sample_idx_list = self.total_sampled_idx
+            print("Balancing data is on")
+
+        for indices in BatchSampler(SequentialSampler(sample_idx_list), mini_batch_size, drop_last=True):
             states_batch = self.states[indices]
             commands_batch = self.commands[:, indices, :]
             P_cols_batch = self.P_cols[:, indices, :]
