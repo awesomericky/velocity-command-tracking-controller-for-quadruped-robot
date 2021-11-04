@@ -45,19 +45,19 @@ training:
   learning_rate: 3e-4
   batch_size: 512
   storage_size: 9000 #3150
-  num_epochs: 3 #5
+  num_epochs: 5
   shuffle_batch: True
   clip_gradient: False
   max_gradient_norm: 0.5
   loss_weight:
-    collision: 2.0 #1.67
+    collision: 1.8
     coordinate: 1.0
   interpolate_probability: False
-  weight_decay: True
+  weight_decay: False
   weight_decay_lamda: 0.1
 
 evaluating:
-  command_period: 3.0
+#  command_period: 3.0
   sigma: 1.0
   number_of_sample: 2000
   gamma: 7

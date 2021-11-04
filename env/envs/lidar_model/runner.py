@@ -145,7 +145,9 @@ else:
                       logging=logging,
                       P_col_interpolate=cfg["training"]["interpolate_probability"],
                       prioritized_data_update=cfg["data_collection"]["prioritized_data_update"],
-                      prioritized_data_update_magnitude=cfg["data_collection"]["prioritized_data_update_magnitude"])
+                      prioritized_data_update_magnitude=cfg["data_collection"]["prioritized_data_update_magnitude"],
+                      weight_decay=cfg["training"]["weight_decay"],
+                      weight_decay_lamda=cfg["training"]["weight_decay_lamda"])
 
 saver = ConfigurationSaver(log_dir=home_path + "/raisimGymTorch/data/"+task_name,
                            save_items=[task_path + "/cfg.yaml", task_path + "/Environment.hpp"])
