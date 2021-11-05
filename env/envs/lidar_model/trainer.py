@@ -215,11 +215,10 @@ class Trainer:
             for states_batch, commands_batch, P_cols_batch, coordinates_batch \
                     in self.batch_sampler(self.mini_batch_size):
                 predicted_P_cols, predicted_coordinates = self.environment_model(states_batch, commands_batch, training=True)
-
                 traj_len = predicted_P_cols.shape[0]
                 if self.P_col_interpolate:
                     col_state = torch.where(predicted_P_cols > 0.99, 1, 0)
-                    ground_truth_col_state = torch.where(P_cols_batch > 0.99, 1, 0)
+                    ground_truth_col_state = torch.where(P_cols_batch == 1., 1, 0)
                     n_total_col = torch.sum(ground_truth_col_state)
                     n_total_not_col = torch.sum(1 - ground_truth_col_state)
                     if n_total_col != 0:
@@ -228,7 +227,7 @@ class Trainer:
                         not_col_prediction_accuracy = torch.sum(torch.where(col_state + ground_truth_col_state == 0, 1, 0)) / n_total_not_col
                 else:
                     col_state = torch.where(predicted_P_cols > 0.99, 1, 0)
-                    ground_truth_col_state = torch.where(P_cols_batch > 0.99, 1, 0)
+                    ground_truth_col_state = torch.where(P_cols_batch == 1., 1, 0)
                     n_total_col = torch.sum(ground_truth_col_state)
                     n_total_not_col = torch.sum(1 - ground_truth_col_state)
                     if n_total_col != 0:

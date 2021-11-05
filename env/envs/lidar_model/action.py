@@ -10,8 +10,10 @@ class Time_correlated_command_sampler:
     Sample time correlated command (using soft update rule):
 
     Time coorelation factor is controlled with 'beta'.
+    
+    Larger 'beta' == Bigger time correlation
     """
-    def __init__(self, random_command_sampler, beta=0.1):
+    def __init__(self, random_command_sampler, beta=0.7):
         self.old_command = None
         self.new_command = None
         self.random_command_sampler = random_command_sampler
@@ -29,7 +31,7 @@ class Time_correlated_command_sampler:
         if isinstance(self.old_command, type(None)):
             modified_command = self.new_command
         else:
-            modified_command = self.new_command * self.beta + self.old_command * (1 - self.beta)
+            modified_command = self.old_command * self.beta + self.new_command * (1 - self.beta)
         self.old_command = modified_command
         return modified_command
 

@@ -53,8 +53,8 @@ assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environmen
 
 # user command samping
 user_command = UserCommand(cfg, cfg['environment']['num_envs'])
-command_sampler = Command_sampler(user_command)
-# command_sampler = Time_correlated_command_sampler(user_command)
+# command_sampler = Command_sampler(user_command)
+command_sampler = Time_correlated_command_sampler(user_command, beta=cfg["data_collection"]["command_sampler_beta"])
 # command_sampler = Normal_time_correlated_command_sampler(user_command, cfg["environment"]["command"])
 
 # create environment from the configuration file
@@ -154,7 +154,10 @@ saver = ConfigurationSaver(log_dir=home_path + "/raisimGymTorch/data/"+task_name
 
 # wandb initialize
 if logging:
-    wandb.init(name=task_name + "_retrain", project="Quadruped_RL")
+    if mode == 'retrain':
+        wandb.init(name=task_name + "_retrain", project="Quadruped_RL")
+    else:
+        wandb.init(name=task_name, project="Quadruped_RL")
     wandb.watch(environment_model, log='gradients', log_freq=300)
 
 if mode == 'retrain':
@@ -174,7 +177,7 @@ pdb.set_trace()
 
 for update in range(cfg["environment"]["max_n_update"]):
     start = time.time()
-
+    
     # evaluate
     if update % cfg["environment"]["eval_every_n"] == 0:
         print("Evaluating the current environment model")
@@ -362,7 +365,7 @@ for update in range(cfg["environment"]["max_n_update"]):
         cfg["environment"]["seed"]["train"] = update + 2000
         env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
         env.load_scaling(command_tracking_weight_dir, int(iteration_number))
-
+    
     # prepare for training
     env.initialize_n_step()
     env.reset()

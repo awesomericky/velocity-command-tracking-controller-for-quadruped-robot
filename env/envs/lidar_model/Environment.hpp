@@ -43,7 +43,7 @@ namespace raisim
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
 	    // hm_sizeX = 21., hm_sizeY = 21.;
-	        hm_sizeX = 40., hm_sizeY = 40.;
+	    hm_sizeX = 40., hm_sizeY = 40.;
 //            double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
             double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
             double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
@@ -588,7 +588,7 @@ namespace raisim
     void updateObservation()
     {
         static std::default_random_engine generator(random_seed);
-        std::normal_distribution<> lidar_noise(0, 0.1);
+        std::normal_distribution<> lidar_noise(0., 0.1);
 
         anymal_->getState(gc_, gv_);
         raisim::Vec<4> quat;
@@ -606,7 +606,7 @@ namespace raisim
         raisim::Mat<3,3> lidarOri;
         anymal_->getFramePosition("lidar_cage_to_lidar", lidarPos);
         anymal_->getFrameOrientation("lidar_cage_to_lidar", lidarOri);
-        int ray_length = 10;
+        double ray_length = 10.;
         Eigen::Vector3d direction;
         Eigen::Vector3d rayDirection;
 
@@ -622,7 +622,9 @@ namespace raisim
             if (col.size() > 0) {
                 if (visualizable_)
                     scans[i]->setPosition(col[0].getPosition());
-                lidar_scan_depth[i] = ((lidarPos.e() - col[0].getPosition()).norm() + std::abs(lidar_noise(generator))) / ray_length;
+		double lidar_noise_distance = lidar_noise(generator);
+		double current_lidar_distance = (lidarPos.e() - col[0].getPosition()).norm();
+		lidar_scan_depth[i] = std::max(std::min(current_lidar_distance + lidar_noise_distance, ray_length), 0.) / ray_length;
             }
             else {
                 if (visualizable_)
@@ -765,7 +767,7 @@ namespace raisim
     void visualize_desired_command_traj(Eigen::Ref<EigenRowMajorMat> coordinate_desired_command,
                                         Eigen::Ref<EigenVec> P_col_desired_command)
     {
-        double threshold = 0.8;
+        double threshold = 0.99;
         for (int i=0; i<n_prediction_step; i++) {
             if (P_col_desired_command[i] < threshold) {
                 /// not collide
@@ -786,7 +788,7 @@ namespace raisim
     void visualize_modified_command_traj(Eigen::Ref<EigenRowMajorMat> coordinate_modified_command,
                                          Eigen::Ref<EigenVec> P_col_modified_command)
     {
-        double threshold = 0.8;
+        double threshold = 0.99;
         for (int i=0; i<n_prediction_step; i++) {
             if (P_col_modified_command[i] < threshold) {
                 /// not collide
