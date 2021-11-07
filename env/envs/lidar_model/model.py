@@ -88,8 +88,12 @@ class Lidar_environment_model(nn.Module):
         traj_len, n_sample, encoded_prediction_dim = encoded_prediction.shape
         encoded_prediction = encoded_prediction.reshape(-1, encoded_prediction_dim)
         collision_prob_traj = self.sigmoid(self.Pcol_prediction.architecture(encoded_prediction))
-        delata_coordinate_traj = self.coordinate_prediction.architecture(encoded_prediction)
         collision_prob_traj = collision_prob_traj.reshape(traj_len, n_sample, self.prediction_config["collision"]["output"])
+        
+        coordinate_traj = self.coordinate_prediction.architecture(encoded_prediction)
+        coordinate_traj = coordinate_traj.reshape(traj_len, n_sample, self.prediction_config["coordinate"]["output"])
+        """
+        delata_coordinate_traj = self.coordinate_prediction.architecture(encoded_prediction)
         delata_coordinate_traj = delata_coordinate_traj.reshape(traj_len, n_sample, self.prediction_config["coordinate"]["output"])
 
         coordinate_traj = torch.zeros(traj_len, n_sample, self.prediction_config["coordinate"]["output"]).to(self.device)
@@ -98,7 +102,7 @@ class Lidar_environment_model(nn.Module):
                 coordinate_traj[i, :, :] = delata_coordinate_traj[i, :, :]
             else:
                 coordinate_traj[i, :, :] = coordinate_traj[i - 1, :, :] + delata_coordinate_traj[i, :, :]
-
+        """
         if training:
             # return "device" torch tensor
             return collision_prob_traj, coordinate_traj

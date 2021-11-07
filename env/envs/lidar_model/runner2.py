@@ -53,9 +53,9 @@ assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environmen
 
 # user command samping
 user_command = UserCommand(cfg, cfg['environment']['num_envs'])
-command_sampler = Command_sampler(user_command)
-# command_sampler = Time_correlated_command_sampler(user_command, beta=cfg["data_collection"]["command_sampler_beta"])
-# command_sampler = Normal_time_correlated_command_sampler(user_command, cfg["environment"]["command"])
+command_sampler_constant = Command_sampler(user_command)
+command_sampler_correlated = Time_correlated_command_sampler(user_command, beta=cfg["data_collection"]["time_correlated_command_sampler_beta"])
+command_sampler_normal_correlated = Normal_time_correlated_command_sampler(user_command, cfg["environment"]["command"], sigma=cfg["data_collection"]["normal_time_correlated_command_sampler_sigma"])
 
 # create environment from the configuration file
 env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
@@ -200,9 +200,18 @@ for update in range(cfg["environment"]["max_n_update"]):
         env.initialize_n_step()
         env.reset()
         # env.turn_on_visualization()
-        command_sampler.reset()
+        command_sampler_constant.reset()
+        command_sampler_correlated.reset()
+        command_sampler_normal_correlated.reset()
         COM_buffer.reset()
         # env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_"+str(update)+'.mp4')
+        
+        # sample command sampler type for each environment
+        env_command_sampler_idx = np.random.choice(3, cfg["environment"]["num_envs"])
+        command_sampler_constant_idx = np.where(env_command_sampler_idx == 0)[0]
+        command_sampler_correlated_idx = np.where(env_command_sampler_idx == 1)[0]
+        command_sampler_normal_correlated_idx = np.where(env_command_sampler_idx == 2)[0]
+        sample_user_command = np.zeros((cfg["environment"]["num_envs"], 3)).astype(np.float32)
 
         COM_history_traj = []
         lidar_traj = []
@@ -251,7 +260,12 @@ for update in range(cfg["environment"]["max_n_update"]):
                     temp_COM_history = COM_buffer.return_data(flatten=True)
                     temp_state = np.concatenate((lidar_data, temp_COM_history), axis=1)
 
-                sample_user_command = command_sampler.sample()
+                sample_user_command_constant = command_sampler_constant.sample()
+                sample_user_command_correlated = command_sampler_correlated.sample()
+                sample_user_command_normal_correlated = command_sampler_normal_correlated.sample()
+                sample_user_command[command_sampler_constant_idx, :] = sample_user_command_constant[command_sampler_constant_idx, :]
+                sample_user_command[command_sampler_correlated_idx, :] = sample_user_command_correlated[command_sampler_correlated_idx, :]
+                sample_user_command[command_sampler_normal_correlated_idx, :] = sample_user_command_normal_correlated[command_sampler_normal_correlated_idx, :]
                 temp_command = sample_user_command.copy()
 
             tracking_obs = np.concatenate((sample_user_command, obs[:, :proprioceptive_sensor_dim]), axis=1)
@@ -333,7 +347,6 @@ for update in range(cfg["environment"]["max_n_update"]):
                                    dones_traj=P_col_traj,
                                    coordinate_traj=coordinate_traj,
                                    init_coordinate_traj=init_coordinate_traj)
-
             print('====================================================')
             print('{:>6}th evaluation'.format(update))
             print('{:<40} {:>6}'.format("total collision accuracy: ", '{:0.6f}'.format(total_col_prediction_accuracy)))
@@ -369,8 +382,17 @@ for update in range(cfg["environment"]["max_n_update"]):
     # prepare for training
     env.initialize_n_step()
     env.reset()
-    command_sampler.reset()
+    command_sampler_constant.reset()
+    command_sampler_correlated.reset()
+    command_sampler_normal_correlated.reset()
     COM_buffer.reset()
+
+    # sample command sampler type for each environment
+    env_command_sampler_idx = np.random.choice(3, cfg["environment"]["num_envs"])
+    command_sampler_constant_idx = np.where(env_command_sampler_idx == 0)[0]
+    command_sampler_correlated_idx = np.where(env_command_sampler_idx == 1)[0]
+    command_sampler_normal_correlated_idx = np.where(env_command_sampler_idx == 2)[0]
+    sample_user_command = np.zeros((cfg["environment"]["num_envs"], 3)).astype(np.float32)
 
     COM_history_traj = []
     lidar_traj = []
@@ -419,8 +441,14 @@ for update in range(cfg["environment"]["max_n_update"]):
             else:
                 temp_COM_history = COM_buffer.return_data(flatten=True)
                 temp_state = np.concatenate((lidar_data, temp_COM_history), axis=1)
-
-            sample_user_command = command_sampler.sample()
+            
+            sample_user_command_constant = command_sampler_constant.sample()
+            sample_user_command_correlated = command_sampler_correlated.sample()
+            sample_user_command_normal_correlated = command_sampler_normal_correlated.sample()
+            sample_user_command[command_sampler_constant_idx, :] = sample_user_command_constant[command_sampler_constant_idx, :]
+            sample_user_command[command_sampler_correlated_idx, :] = sample_user_command_correlated[command_sampler_correlated_idx, :]
+            sample_user_command[command_sampler_normal_correlated_idx, :] = sample_user_command_normal_correlated[command_sampler_normal_correlated_idx, :]
+            
             temp_command = sample_user_command.copy()
 
 

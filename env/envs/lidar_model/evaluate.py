@@ -193,6 +193,8 @@ final_not_col_accuracy = []
 final_coordinate_error = []
 num_test = 100
 
+pdb.set_trace()
+
 for n_test in range(num_test):
     env.initialize_n_step()
     env.reset()
@@ -329,7 +331,8 @@ for n_test in range(num_test):
                                command_traj=command_traj,
                                dones_traj=P_col_traj,
                                coordinate_traj=coordinate_traj,
-                               init_coordinate_traj=init_coordinate_traj)
+                               init_coordinate_traj=init_coordinate_traj,
+                               collision_threshold=0.99)
 
         final_P_col_accuracy.append(mean_total_col_prediction_accuracy)
         if mean_col_prediction_accuracy != -1:

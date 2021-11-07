@@ -17,7 +17,7 @@ class Time_correlated_command_sampler:
         self.old_command = None
         self.new_command = None
         self.random_command_sampler = random_command_sampler
-        self.beta = beta
+        self.max_beta = beta
 
     def random_sample(self, training=True):
         if training:
@@ -31,7 +31,8 @@ class Time_correlated_command_sampler:
         if isinstance(self.old_command, type(None)):
             modified_command = self.new_command
         else:
-            modified_command = self.old_command * self.beta + self.new_command * (1 - self.beta)
+            opposite_beta = np.random.uniform(0, 1 - self.max_beta, (self.random_command_sampler.n_envs, 3))
+            modified_command = self.old_command * (1- opposite_beta) + self.new_command * opposite_beta
         self.old_command = modified_command
         return modified_command
 
@@ -46,13 +47,14 @@ class Normal_time_correlated_command_sampler:
 
     Time coorelation factor is controlled with 'sigma'.
     """
-    def __init__(self, random_command_sampler, cfg_command):
+    def __init__(self, random_command_sampler, cfg_command, sigma=0.3):
         self.old_command = None
         self.random_command_sampler = random_command_sampler
         self.cfg_command = cfg_command
         self.max_sigma = 0.5 * np.array([cfg_command["forward_vel"]["max"] - cfg_command["forward_vel"]["min"],
                                          cfg_command["lateral_vel"]["max"] - cfg_command["lateral_vel"]["min"],
                                          cfg_command["yaw_rate"]["max"] - cfg_command["yaw_rate"]["min"]])
+        self.max_sigma_scale = sigma
 
     def random_sample(self, training=True):
         if training:
@@ -65,7 +67,7 @@ class Normal_time_correlated_command_sampler:
         if isinstance(self.old_command, type(None)):
             modified_command = self.random_sample()
         else:
-            sigma_scale = np.random.uniform(0, 1, (self.random_command_sampler.n_envs, 3))  # sample command std scale (uniform distribution)
+            sigma_scale = np.random.uniform(0, self.max_sigma_scale, (self.random_command_sampler.n_envs, 3))  # sample command std scale (uniform distribution)
             sigma = self.max_sigma * sigma_scale
             modified_command = np.random.normal(self.old_command, sigma)  # sample command (normal distribution)
             modified_command = np.clip(modified_command,

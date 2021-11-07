@@ -50,7 +50,7 @@ training:
   clip_gradient: False
   max_gradient_norm: 0.5
   loss_weight:
-    collision: 2.0
+    collision: 1.7
     coordinate: 1.0
   interpolate_probability: True
   weight_decay: False
@@ -65,12 +65,12 @@ evaluating:
   number_of_bin: 10
 
 data_collection:
-  command_sampler_beta: 0.7  # time correlation factor
-  command_sampler_sigma: 0.1
+  time_correlated_command_sampler_beta: 0.7
+  normal_time_correlated_command_sampler_sigma: 0.3
   prediction_period: 6  # [s]
   command_period: 0.5  # [s]
   prioritized_data_update: True
-  prioritized_data_update_magnitude: 0.5
+  prioritized_data_update_magnitude: 0.8
 
 architecture:
   command_tracking_policy_net: [128, 128]

@@ -288,7 +288,7 @@ class Trainer:
 
         return mean_loss, mean_P_col_loss, mean_coordinate_loss, mean_col_prediction_accuracy, mean_not_col_prediction_accuracy
 
-    def evaluate(self, environment_model, state_traj, command_traj, dones_traj, coordinate_traj, init_coordinate_traj):
+    def evaluate(self, environment_model, state_traj, command_traj, dones_traj, coordinate_traj, init_coordinate_traj, collision_threshold=0.99):
         """
 
         :param state_traj: (traj_len, n_env, state_dim)
@@ -358,7 +358,7 @@ class Trainer:
 
         # compute collision prediction accuracy
         if self.P_col_interpolate:
-            col_state = np.where(predicted_P_cols > 0.99, 1, 0)
+            col_state = np.where(predicted_P_cols > collision_threshold, 1, 0)
             ground_truth_col_state = np.where(real_P_cols == 1., 1, 0)
             n_total_col = np.sum(ground_truth_col_state)
             n_total_not_col = np.sum(1 - ground_truth_col_state)
@@ -374,7 +374,7 @@ class Trainer:
             not_coll_correct_idx = np.where(col_state + ground_truth_col_state == 0, 1, 0)
             total_col_prediction_accuracy = np.sum(coll_correct_idx + not_coll_correct_idx) / (n_total_col + n_total_not_col)
         else:
-            col_state = np.where(predicted_P_cols > 0.99, 1, 0)
+            col_state = np.where(predicted_P_cols > collision_threshold, 1, 0)
             ground_truth_col_state = np.where(real_P_cols == 1., 1, 0)
             n_total_col = np.sum(ground_truth_col_state)
             n_total_not_col = np.sum(1 - ground_truth_col_state)
