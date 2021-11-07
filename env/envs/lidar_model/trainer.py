@@ -185,7 +185,12 @@ class Trainer:
                 PER_prob = loss ** self.prioritized_data_update_magnitude
                 PER_prob /= torch.sum(PER_prob)
 
+                # sample idx and compute the new sample ratio
                 PER_sampled_idx = torch.multinomial(PER_prob, self.max_storage_size, replacement=False)
+                PER_sampled_idx_np = PER_sampled_idx.cpu().numpy()
+                new_sample_ratio = np.where(PER_sampled_idx_np < (n_traj_step_samples * n_env))[0].shape[0] / (n_traj_step_samples * n_env)
+                self.log({"Loss/New_sample_ratio": new_sample_ratio})
+
                 new_buffer_states = total_new_state[PER_sampled_idx, :]
                 new_buffer_commands = total_new_command[:, PER_sampled_idx, :]
                 new_buffer_P_cols = total_new_P_col[:, PER_sampled_idx, :]
@@ -205,11 +210,9 @@ class Trainer:
         mean_loss = 0
         mean_P_col_loss = 0
         mean_coordinate_loss = 0
-        mean_col_prediction_accuracy = 0
-        mean_not_col_prediction_accuracy = 0
+        col_prediction_accuracy_log = []
+        not_col_prediction_accuracy_log = []
         n_update = 0
-        n_col_prediction_acc_mean = 0
-        n_not_col_prediction_acc_mean = 0
 
         for epoch in range(self.num_learning_epochs):
             for states_batch, commands_batch, P_cols_batch, coordinates_batch \
@@ -255,11 +258,9 @@ class Trainer:
                 mean_P_col_loss += P_col_loss.item()
                 mean_coordinate_loss += coordinate_loss.item()
                 if n_total_col != 0:
-                    mean_col_prediction_accuracy += col_prediction_accuracy.item()
-                    n_col_prediction_acc_mean += 1
+                    col_prediction_accuracy_log.append(col_prediction_accuracy.item())
                 if n_total_not_col != 0:
-                    mean_not_col_prediction_accuracy += not_col_prediction_accuracy.item()
-                    n_not_col_prediction_acc_mean += 1
+                    not_col_prediction_accuracy_log.append(not_col_prediction_accuracy.item())
 
                 n_update += 1
         
@@ -272,15 +273,25 @@ class Trainer:
         logging_data['Loss/Collision'] = mean_P_col_loss
         logging_data['Loss/Coordinate'] = mean_coordinate_loss
 
-        if n_col_prediction_acc_mean != 0:
-            mean_col_prediction_accuracy /= n_col_prediction_acc_mean
+        if len(col_prediction_accuracy_log) != 0:
+            col_prediction_accuracy_log = np.array(col_prediction_accuracy_log)
+            mean_col_prediction_accuracy = np.mean(col_prediction_accuracy_log)
+            max_col_prediction_accuracy = np.max(col_prediction_accuracy_log)
+            min_col_prediction_accuracy = np.min(col_prediction_accuracy_log)
             logging_data['Loss/Collision_accuracy'] = mean_col_prediction_accuracy
+            logging_data['Loss/Max_collision_accuracy'] = max_col_prediction_accuracy
+            logging_data['Loss/Min_collision_accuracy'] = min_col_prediction_accuracy
         else:
             mean_col_prediction_accuracy = 0
 
-        if n_not_col_prediction_acc_mean != 0:
-            mean_not_col_prediction_accuracy /= n_not_col_prediction_acc_mean
+        if len(not_col_prediction_accuracy_log) != 0:
+            not_col_prediction_accuracy_log = np.array(not_col_prediction_accuracy_log)
+            mean_not_col_prediction_accuracy = np.mean(not_col_prediction_accuracy_log)
+            max_not_col_prediction_accuracy = np.max(not_col_prediction_accuracy_log)
+            min_not_col_prediction_accuracy = np.min(not_col_prediction_accuracy_log)
             logging_data['Loss/No_Collision_accuracy'] = mean_not_col_prediction_accuracy
+            logging_data['Loss/Max_no_collision_accuracy'] = max_not_col_prediction_accuracy
+            logging_data['Loss/Min_no_collision_accuracy'] = min_not_col_prediction_accuracy
         else:
             mean_not_col_prediction_accuracy = 0
 

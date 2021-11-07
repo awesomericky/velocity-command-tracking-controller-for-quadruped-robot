@@ -44,7 +44,7 @@ environment:
 training:
   learning_rate: 3e-4
   batch_size: 512
-  storage_size: 9000 #3150
+  storage_size: 9000 # 3150
   num_epochs: 3
   shuffle_batch: True
   clip_gradient: False
