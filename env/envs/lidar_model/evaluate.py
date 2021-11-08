@@ -59,9 +59,9 @@ except:
 
 # user command samping
 user_command = UserCommand(cfg, cfg['environment']['num_envs'])
-command_sampler = Command_sampler(user_command)
+# command_sampler = Command_sampler(user_command)
 # command_sampler = Time_correlated_command_sampler(user_command)
-# command_sampler = Normal_time_correlated_command_sampler(user_command, cfg["environment"]["command"])
+command_sampler = Normal_time_correlated_command_sampler(user_command, cfg["environment"]["command"])
 
 # create environment from the configuration file
 env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
@@ -332,7 +332,7 @@ for n_test in range(num_test):
                                dones_traj=P_col_traj,
                                coordinate_traj=coordinate_traj,
                                init_coordinate_traj=init_coordinate_traj,
-                               collision_threshold=0.99)
+                               collision_threshold=0.7)
 
         final_P_col_accuracy.append(mean_total_col_prediction_accuracy)
         if mean_col_prediction_accuracy != -1:

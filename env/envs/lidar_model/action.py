@@ -34,7 +34,7 @@ class Time_correlated_command_sampler:
             opposite_beta = np.random.uniform(0, 1 - self.max_beta, (self.random_command_sampler.n_envs, 3))
             modified_command = self.old_command * (1- opposite_beta) + self.new_command * opposite_beta
         self.old_command = modified_command
-        return modified_command
+        return np.ascontiguousarray(modified_command).astype(np.float32)
 
     def reset(self):
         self.old_command = None

@@ -43,14 +43,14 @@ environment:
 
 training:
   learning_rate: 3e-4
-  batch_size: 512
+  batch_size: 256
   storage_size: 9000 # 3150
-  num_epochs: 3
+  num_epochs: 5
   shuffle_batch: True
-  clip_gradient: False
-  max_gradient_norm: 0.5
+  clip_gradient: True
+  max_gradient_norm: 2.0
   loss_weight:
-    collision: 1.7
+    collision: 2.0
     coordinate: 1.0
   interpolate_probability: True
   weight_decay: False

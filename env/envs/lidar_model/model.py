@@ -89,7 +89,7 @@ class Lidar_environment_model(nn.Module):
         encoded_prediction = encoded_prediction.reshape(-1, encoded_prediction_dim)
         collision_prob_traj = self.sigmoid(self.Pcol_prediction.architecture(encoded_prediction))
         collision_prob_traj = collision_prob_traj.reshape(traj_len, n_sample, self.prediction_config["collision"]["output"])
-        
+         
         coordinate_traj = self.coordinate_prediction.architecture(encoded_prediction)
         coordinate_traj = coordinate_traj.reshape(traj_len, n_sample, self.prediction_config["coordinate"]["output"])
         """
