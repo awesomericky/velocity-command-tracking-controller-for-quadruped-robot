@@ -115,3 +115,44 @@ architecture:
       output: 1
     coordinate:
       output: 2
+
+CVAE_architecture:
+  state_encoder: # state = lidar + (encoded COM history)
+    input: 450  # COM_encoder output is included in the input (360 + 32)
+    output: 64
+    shape: [ 256, 256, 128, 128 ]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+  command_encoder:
+    input: 3
+    output: 32
+    shape: [ 64, 64 ]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+  recurrence_encoder:
+    input: 32
+    hidden: 64
+    layer: 1
+  latent_encoder:
+    input: 128  # 64 + 64
+    output: 16  # latent dimension (model outputs 'mean' and 'log_std' each of corresponding size'
+    shape: [64, 32]
+  latent_decoder:
+    input: 80  # 16 + 64
+    shape: [64]
+    output: 32
+  recurrence_decoder:
+    input: 32
+    hidden: 32
+    layer: 1
+  command_decoder:
+    input: 32
+    output: 3
+    shape: [ 64, 64 ]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+
+

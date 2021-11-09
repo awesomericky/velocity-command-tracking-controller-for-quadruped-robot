@@ -4,6 +4,7 @@ import torch.nn as nn
 import numpy as np
 import torch
 from raisimGymTorch.algo.TCN.TCN import TemporalConvNet
+import pdb
 
 
 class Lidar_environment_model(nn.Module):
@@ -38,22 +39,30 @@ class Lidar_environment_model(nn.Module):
         self.state_encoder = MLP(self.state_encoding_config["shape"],
                                  self.activation_map[self.state_encoding_config["activation"]],
                                  self.state_encoding_config["input"],
-                                 self.state_encoding_config["output"])
+                                 self.state_encoding_config["output"],
+                                 dropout=self.state_encoding_config["dropout"],
+                                 batchnorm=self.state_encoding_config["batchnorm"])
         self.command_encoder = MLP(self.command_encoding_config["shape"],
                                    self.activation_map[self.command_encoding_config["activation"]],
                                    self.command_encoding_config["input"],
-                                   self.command_encoding_config["output"])
+                                   self.command_encoding_config["output"],
+                                   dropout=self.command_encoding_config["dropout"],
+                                   batchnorm=self.command_encoding_config["batchnorm"])
         self.recurrence = torch.nn.LSTM(self.recurrence_config["input"],
                                         self.recurrence_config["hidden"],
                                         self.recurrence_config["layer"])
         self.Pcol_prediction = MLP(self.prediction_config["shape"],
                                    self.activation_map[self.prediction_config["activation"]],
                                    self.prediction_config["input"],
-                                   self.prediction_config["collision"]["output"])
+                                   self.prediction_config["collision"]["output"],
+                                   dropout=self.prediction_config["dropout"],
+                                   batchnorm=self.prediction_config["batchnorm"])
         self.coordinate_prediction = MLP(self.prediction_config["shape"],
                                          self.activation_map[self.prediction_config["activation"]],
                                          self.prediction_config["input"],
-                                         self.prediction_config["coordinate"]["output"])
+                                         self.prediction_config["coordinate"]["output"],
+                                         dropout=self.prediction_config["dropout"],
+                                         batchnorm=self.prediction_config["batchnorm"])
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, *args, training=False):
@@ -90,9 +99,9 @@ class Lidar_environment_model(nn.Module):
         collision_prob_traj = self.sigmoid(self.Pcol_prediction.architecture(encoded_prediction))
         collision_prob_traj = collision_prob_traj.reshape(traj_len, n_sample, self.prediction_config["collision"]["output"])
          
-        coordinate_traj = self.coordinate_prediction.architecture(encoded_prediction)
-        coordinate_traj = coordinate_traj.reshape(traj_len, n_sample, self.prediction_config["coordinate"]["output"])
-        """
+        # coordinate_traj = self.coordinate_prediction.architecture(encoded_prediction)
+        # coordinate_traj = coordinate_traj.reshape(traj_len, n_sample, self.prediction_config["coordinate"]["output"])
+
         delata_coordinate_traj = self.coordinate_prediction.architecture(encoded_prediction)
         delata_coordinate_traj = delata_coordinate_traj.reshape(traj_len, n_sample, self.prediction_config["coordinate"]["output"])
 
@@ -102,13 +111,93 @@ class Lidar_environment_model(nn.Module):
                 coordinate_traj[i, :, :] = delata_coordinate_traj[i, :, :]
             else:
                 coordinate_traj[i, :, :] = coordinate_traj[i - 1, :, :] + delata_coordinate_traj[i, :, :]
-        """
+
         if training:
             # return "device" torch tensor
             return collision_prob_traj, coordinate_traj
         else:
             # return "cpu" numpy tensor
             return collision_prob_traj.cpu().detach().numpy(), coordinate_traj.cpu().detach().numpy()
+
+class CVAE_implicit_distribution(nn.Module):
+    def __init__(self,
+                 state_encoding_config,
+                 command_encoding_config,
+                 recurrence_encoding_config,
+                 latent_encoding_config,
+                 latent_decoding_config,
+                 recurrence_decoding_config,
+                 command_decoding_config,
+                 device,
+                 pretrained_weight,
+                 state_encoder_fixed=True,
+                 command_encoder_fixed=True,
+                 command_encoder_decoder_tied=False):
+
+        super(CVAE_implicit_distribution, self).__init__()
+
+        self.state_encoding_config = state_encoding_config
+        self.command_encoding_config = command_encoding_config
+        self.recurrence_encoding_config = recurrence_encoding_config
+        self.latent_encoding_config = latent_encoding_config
+        self.latent_decoding_config = latent_decoding_config
+        self.recurrence_decoding_config = recurrence_decoding_config
+        self.command_decoding_config = command_decoding_config
+        self.device = device
+        self.pretrained_weight = pretrained_weight
+        self.state_encoder_fixed = state_encoder_fixed
+        self.command_encoder_fixed = command_encoder_fixed
+        self.command_encoder_decoder_tied = command_encoder_decoder_tied
+        self.activation_map = {"relu": nn.ReLU, "tanh": nn.Tanh, "leakyrelu": nn.LeakyReLU}
+
+        assert self.state_encoder_fixed, "State encoder is recommanded to be fixed"
+        assert (self.command_encoder_fixed and not self.command_encoder_decoder_tied) or (not self.command_encoder_fixed and self.command_encoder_decoder_tied), "Command encoder not available configuration"
+
+        assert self.state_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
+        assert self.command_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
+        assert self.recurrence_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
+        assert self.latent_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
+        assert self.latent_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
+        assert self.recurrence_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
+        assert self.command_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
+
+        self.set_module()
+
+    def set_module(self):
+        self.state_encoder = MLP(self.state_encoding_config["shape"],
+                                 self.activation_map[self.state_encoding_config["activation"]],
+                                 self.state_encoding_config["input"],
+                                 self.state_encoding_config["output"])
+        self.command_encoder = MLP(self.command_encoding_config["shape"],
+                                   self.activation_map[self.command_encoding_config["activation"]],
+                                   self.command_encoding_config["input"],
+                                   self.command_encoding_config["output"])
+        self.recurrence_encoder = torch.nn.LSTM(self.recurrence_encoding_config["input"],
+                                                self.recurrence_encoding_config["hidden"],
+                                                self.recurrence_encoding_config["layer"])
+        self.latent_encoder = MLP(self.latent_encoding_config["shape"],
+                                  self.activation_map[self.latent_encoding_config["activation"]],
+                                  self.latent_encoding_config["input"],
+                                  self.latent_encoding_config["output"])
+        self.latent_decoder = MLP(self.latent_decoding_config["shape"],
+                                  self.activation_map[self.latent_decoding_config["activation"]],
+                                  self.latent_decoding_config["input"],
+                                  self.latent_decoding_config["output"])
+        self.recurrence_decoder = torch.nn.LSTM(self.recurrence_decoding_config["input"],
+                                                self.recurrence_decoding_config["hidden"],
+                                                self.recurrence_decoding_config["layer"])
+        self.command_decoder = MLP(self.command_decoding_config["shape"],
+                                   self.activation_map[self.command_decoding_config["activation"]],
+                                   self.command_decoding_config["input"],
+                                   self.command_decoding_config["output"])
+
+        if self.state_encoder_fixed:
+            # load pretrained state encoder
+            state_encoder_state_dict = self.state_encoder.state_dict()
+            pretrained_state_encoder_state_dict = {k: v for k, v in self.pretrained_weight.items() if k in state_encoder_state_dict}
+            state_encoder_state_dict.update(pretrained_state_encoder_state_dict)
+            self.state_encoder.load_state_dict(state_encoder_state_dict)
+            self.state_encoder.eval()
 
 
 class MLP(nn.Module):
