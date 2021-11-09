@@ -139,10 +139,16 @@ CVAE_architecture:
     input: 128  # 64 + 64
     output: 16  # latent dimension (model outputs 'mean' and 'log_std' each of corresponding size'
     shape: [64, 32]
+    activation: leakyrelu
+    dropout: 0.0
+    batchnorm: False
   latent_decoder:
     input: 80  # 16 + 64
     shape: [64]
     output: 32
+    activation: leakyrelu
+    dropout: 0.0
+    batchnorm: False
   recurrence_decoder:
     input: 32
     hidden: 32
@@ -152,7 +158,7 @@ CVAE_architecture:
     output: 3
     shape: [ 64, 64 ]
     activation: leakyrelu
-    dropout: 0.2
-    batchnorm: True
+    dropout: 0.0
+    batchnorm: False
 
 

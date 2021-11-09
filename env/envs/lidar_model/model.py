@@ -119,6 +119,7 @@ class Lidar_environment_model(nn.Module):
             # return "cpu" numpy tensor
             return collision_prob_traj.cpu().detach().numpy(), coordinate_traj.cpu().detach().numpy()
 
+
 class CVAE_implicit_distribution(nn.Module):
     def __init__(self,
                  state_encoding_config,
@@ -131,8 +132,7 @@ class CVAE_implicit_distribution(nn.Module):
                  device,
                  pretrained_weight,
                  state_encoder_fixed=True,
-                 command_encoder_fixed=True,
-                 command_encoder_decoder_tied=False):
+                 command_encoder_fixed=True):
 
         super(CVAE_implicit_distribution, self).__init__()
 
@@ -147,11 +147,10 @@ class CVAE_implicit_distribution(nn.Module):
         self.pretrained_weight = pretrained_weight
         self.state_encoder_fixed = state_encoder_fixed
         self.command_encoder_fixed = command_encoder_fixed
-        self.command_encoder_decoder_tied = command_encoder_decoder_tied
         self.activation_map = {"relu": nn.ReLU, "tanh": nn.Tanh, "leakyrelu": nn.LeakyReLU}
 
         assert self.state_encoder_fixed, "State encoder is recommanded to be fixed"
-        assert (self.command_encoder_fixed and not self.command_encoder_decoder_tied) or (not self.command_encoder_fixed and self.command_encoder_decoder_tied), "Command encoder not available configuration"
+        assert self.command_encoder_fixed, "Command encoder is recommanded to be fixed"
 
         assert self.state_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
         assert self.command_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
@@ -167,29 +166,45 @@ class CVAE_implicit_distribution(nn.Module):
         self.state_encoder = MLP(self.state_encoding_config["shape"],
                                  self.activation_map[self.state_encoding_config["activation"]],
                                  self.state_encoding_config["input"],
-                                 self.state_encoding_config["output"])
+                                 self.state_encoding_config["output"],
+                                 dropout=self.state_encoding_config["dropout"],
+                                 batchnorm=self.state_encoding_config["batchnorm"])
         self.command_encoder = MLP(self.command_encoding_config["shape"],
                                    self.activation_map[self.command_encoding_config["activation"]],
                                    self.command_encoding_config["input"],
-                                   self.command_encoding_config["output"])
-        self.recurrence_encoder = torch.nn.LSTM(self.recurrence_encoding_config["input"],
+                                   self.command_encoding_config["output"],
+                                   dropout=self.state_encoding_config["dropout"],
+                                   batchnorm=self.state_encoding_config["batchnorm"])
+        self.recurrence_encoder = torch.nn.GRU(self.recurrence_encoding_config["input"],
                                                 self.recurrence_encoding_config["hidden"],
                                                 self.recurrence_encoding_config["layer"])
-        self.latent_encoder = MLP(self.latent_encoding_config["shape"],
-                                  self.activation_map[self.latent_encoding_config["activation"]],
-                                  self.latent_encoding_config["input"],
-                                  self.latent_encoding_config["output"])
+        self.latent_mean_encoder = MLP(self.latent_encoding_config["shape"],
+                                       self.activation_map[self.latent_encoding_config["activation"]],
+                                       self.latent_encoding_config["input"],
+                                       self.latent_encoding_config["output"],
+                                       dropout=self.state_encoding_config["dropout"],
+                                       batchnorm=self.state_encoding_config["batchnorm"])
+        self.latent_log_var_encoder = MLP(self.latent_encoding_config["shape"],
+                                          self.activation_map[self.latent_encoding_config["activation"]],
+                                          self.latent_encoding_config["input"],
+                                          self.latent_encoding_config["output"],
+                                          dropout=self.state_encoding_config["dropout"],
+                                          batchnorm=self.state_encoding_config["batchnorm"])
         self.latent_decoder = MLP(self.latent_decoding_config["shape"],
                                   self.activation_map[self.latent_decoding_config["activation"]],
                                   self.latent_decoding_config["input"],
-                                  self.latent_decoding_config["output"])
-        self.recurrence_decoder = torch.nn.LSTM(self.recurrence_decoding_config["input"],
-                                                self.recurrence_decoding_config["hidden"],
-                                                self.recurrence_decoding_config["layer"])
+                                  self.latent_decoding_config["output"],
+                                  dropout=self.state_encoding_config["dropout"],
+                                  batchnorm=self.state_encoding_config["batchnorm"])
+        self.recurrence_decoder = torch.nn.GRU(self.recurrence_decoding_config["input"],
+                                               self.recurrence_decoding_config["hidden"],
+                                               self.recurrence_decoding_config["layer"])
         self.command_decoder = MLP(self.command_decoding_config["shape"],
                                    self.activation_map[self.command_decoding_config["activation"]],
                                    self.command_decoding_config["input"],
-                                   self.command_decoding_config["output"])
+                                   self.command_decoding_config["output"],
+                                   dropout=self.state_encoding_config["dropout"],
+                                   batchnorm=self.state_encoding_config["batchnorm"])
 
         if self.state_encoder_fixed:
             # load pretrained state encoder
@@ -198,6 +213,192 @@ class CVAE_implicit_distribution(nn.Module):
             state_encoder_state_dict.update(pretrained_state_encoder_state_dict)
             self.state_encoder.load_state_dict(state_encoder_state_dict)
             self.state_encoder.eval()
+
+        if self.command_encoder_fixed:
+            # load pretrained state encoder
+            command_encoder_state_dict = self.command_encoder.state_dict()
+            pretrained_command_encoder_state_dict = {k: v for k, v in self.pretrained_weight.items() if k in command_encoder_state_dict}
+            command_encoder_state_dict.update(pretrained_command_encoder_state_dict)
+            self.command_encoder.load_state_dict(command_encoder_state_dict)
+            self.command_encoder.eval()
+
+    def forward(self, *args, training=False):
+        """
+
+            :param state: (n_sample, state_dim)
+            :param command_traj: (traj_len, n_sample, single_command_dim)
+
+            :return:
+            latent_mean: (n_sample, latent_dim)
+            latent_log_var: (n_sample, latent_dim)
+            sampled_command_traj: (traj_len, n_sample, 3)
+        """
+        state, command_traj = args
+
+        # state encoding
+        if self.state_encoder_fixed:
+            with torch.no_grad():
+                encoded_state = self.state_encoder.architecture(state)
+        else:
+            encoded_state = self.state_encoder.architecture(state)
+
+        # command encoding
+        traj_len, n_sample, single_command_dim = command_traj.shape
+        command_traj = command_traj.reshape(-1, single_command_dim)
+        if self.command_encoder_fixed:
+            with torch.no_grad():
+                encoded_command = self.command_encoder.architecture(command_traj).reshape(traj_len, n_sample, -1)
+        else:
+            encoded_command = self.command_encoder.architecture(command_traj).reshape(traj_len, n_sample, -1)
+
+        # command trajectory encoding
+        _, encoded_command_traj = self.recurrence_encoder(encoded_command)
+        encoded_command_traj = encoded_command_traj.squeeze(0)
+
+        # predict posterior distribution in latent space
+        total_encoded_result = torch.cat((encoded_state, encoded_command_traj), dim=1)  # (n_sample, encoded_dim)
+        latent_mean = self.latent_mean_encoder.architecture(total_encoded_result)
+        latent_log_var = self.latent_log_var_encoder.architecture(total_encoded_result)
+
+        # sample with reparameterization trick
+        latent_std = torch.exp(0.5 * latent_log_var)
+        eps = torch.rand_like(latent_std)
+        sample = latent_mean + (eps * latent_std)
+
+        # decode command trajectory
+        total_decoded_result = torch.cat((encoded_state, sample), dim=1)
+        hidden_state = self.latent_decoder.architecture(total_decoded_result).unsqueeze(0)
+        decoded_traj = torch.zeros(traj_len, n_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
+        input = torch.zeros(1, n_sample, self.recurrence_decoding_config["input"]).to(self.device)
+
+        for i in range(traj_len):
+            output, hidden_state = self.recurrence_decoder(input, hidden_state)
+            output = output.squeeze(0)
+            decoded_traj[i] = output
+            input = decoded_traj[i]
+
+        decoded_traj = decoded_traj.reshape(-1, self.recurrence_decoding_config["hidden"])
+        sampled_command_traj = self.command_decoder.architecture(decoded_traj)
+        sampled_command_traj = sampled_command_traj.reshape(traj_len, n_sample, -1)
+
+        if training:
+            return latent_mean, latent_log_var, sampled_command_traj
+        else:
+            return latent_mean.cpu().detach().numpy(), latent_log_var.cpu().detach().numpy(), sampled_command_traj.cpu().detach().numpy()
+
+
+class CVAE_implicit_distribution_inference(nn.Module):
+    def __init__(self,
+                 state_encoding_config,
+                 latent_decoding_config,
+                 recurrence_decoding_config,
+                 command_decoding_config,
+                 device,
+                 trained_weight,
+                 cfg_command):
+
+        super(CVAE_implicit_distribution_inference, self).__init__()
+
+        self.state_encoding_config = state_encoding_config
+        self.latent_decoding_config = latent_decoding_config
+        self.recurrence_decoding_config = recurrence_decoding_config
+        self.command_decoding_config = command_decoding_config
+        self.device = device
+        self.trained_weight = trained_weight
+        self.cfg_command = cfg_command
+        self.activation_map = {"relu": nn.ReLU, "tanh": nn.Tanh, "leakyrelu": nn.LeakyReLU}
+        self.latent_dim = self.latent_decoding_config["input"] - self.state_encoding_config["output"]
+
+        assert self.state_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
+        assert self.latent_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
+        assert self.recurrence_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
+        assert self.command_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
+
+        self.set_module()
+
+    def set_module(self):
+        self.state_encoder = MLP(self.state_encoding_config["shape"],
+                                 self.activation_map[self.state_encoding_config["activation"]],
+                                 self.state_encoding_config["input"],
+                                 self.state_encoding_config["output"],
+                                 dropout=self.state_encoding_config["dropout"],
+                                 batchnorm=self.state_encoding_config["batchnorm"])
+        self.latent_decoder = MLP(self.latent_decoding_config["shape"],
+                                  self.activation_map[self.latent_decoding_config["activation"]],
+                                  self.latent_decoding_config["input"],
+                                  self.latent_decoding_config["output"],
+                                  dropout=self.state_encoding_config["dropout"],
+                                  batchnorm=self.state_encoding_config["batchnorm"])
+        self.recurrence_decoder = torch.nn.GRU(self.recurrence_decoding_config["input"],
+                                               self.recurrence_decoding_config["hidden"],
+                                               self.recurrence_decoding_config["layer"])
+        self.command_decoder = MLP(self.command_decoding_config["shape"],
+                                   self.activation_map[self.command_decoding_config["activation"]],
+                                   self.command_decoding_config["input"],
+                                   self.command_decoding_config["output"],
+                                   dropout=self.state_encoding_config["dropout"],
+                                   batchnorm=self.state_encoding_config["batchnorm"])
+
+        # load weight
+        state_encoder_state_dict = self.state_encoder.state_dict()
+        trained_state_encoder_state_dict = {k: v for k, v in self.trained_weight.items() if k in state_encoder_state_dict}
+        state_encoder_state_dict.update(trained_state_encoder_state_dict)
+        self.state_encoder.load_state_dict(state_encoder_state_dict)
+        self.state_encoder.eval()
+
+        latent_decoder_state_dict = self.latent_decoder.state_dict()
+        trained_latent_decoder_state_dict = {k: v for k, v in self.trained_weight.items() if k in latent_decoder_state_dict}
+        latent_decoder_state_dict.update(trained_latent_decoder_state_dict)
+        self.latent_decoder.load_state_dict(latent_decoder_state_dict)
+        self.latent_decoder.eval()
+
+        recurrence_decoder_state_dict = self.recurrence_decoder.state_dict()
+        trained_recurrence_decoder_state_dict = {k: v for k, v in self.trained_weight.items() if k in recurrence_decoder_state_dict}
+        recurrence_decoder_state_dict.update(trained_recurrence_decoder_state_dict)
+        self.recurrence_decoder.load_state_dict(recurrence_decoder_state_dict)
+        self.recurrence_decoder.eval()
+
+        command_decoder_state_dict = self.command_decoder.state_dict()
+        trained_command_decoder_state_dict = {k: v for k, v in self.trained_weight.items() if k in command_decoder_state_dict}
+        command_decoder_state_dict.update(trained_command_decoder_state_dict)
+        self.command_decoder.load_state_dict(command_decoder_state_dict)
+        self.command_decoder.eval()
+
+    def forward(self, state, n_sample, traj_len):
+        """
+
+        :param state: (n_sample, state_dim)
+        :param n_sample: int
+        :param traj_len: int
+        :return:
+        """
+        with torch.no_grad():
+            encoded_state = self.state_encoder.architecture(state)
+            sample = torch.rand((n_sample, self.latent_dim),
+                                 dtype=encoded_state.type, layout=encoded_state.layout, device=self.device)
+
+            # decode command trajectory
+            total_decoded_result = torch.cat((encoded_state, sample), dim=1)
+            hidden_state = self.latent_decoder.architecture(total_decoded_result).unsqueeze(0)
+            decoded_traj = torch.zeros(traj_len, n_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
+            input = torch.zeros(1, n_sample, self.recurrence_decoding_config["input"]).to(self.device)
+
+            for i in range(traj_len):
+                output, hidden_state = self.recurrence_decoder(input, hidden_state)
+                output = output.squeeze(0)
+                decoded_traj[i] = output
+                input = decoded_traj[i]
+
+            decoded_traj = decoded_traj.reshape(-1, self.recurrence_decoding_config["hidden"])
+            sampled_command_traj = self.command_decoder.architecture(decoded_traj)
+            sampled_command_traj = sampled_command_traj.reshape(traj_len, n_sample, -1)
+
+            sampled_command_traj = sampled_command_traj.cpu().detach().numpy()
+            sampled_command_traj = np.clip(sampled_command_traj,
+                                           [self.cfg_command["forward_vel"]["min"], self.cfg_command["lateral_vel"]["min"], self.cfg_command["yaw_rate"]["min"]],
+                                           [self.cfg_command["forward_vel"]["max"], self.cfg_command["lateral_vel"]["max"], self.cfg_command["yaw_rate"]["max"]])
+
+            return sampled_command_traj
 
 
 class MLP(nn.Module):
