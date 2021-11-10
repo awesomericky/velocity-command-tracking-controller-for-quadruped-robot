@@ -131,6 +131,7 @@ class CVAE_implicit_distribution(nn.Module):
                  command_decoding_config,
                  device,
                  pretrained_weight,
+                 n_latent_sample=1,
                  state_encoder_fixed=True,
                  command_encoder_fixed=True):
 
@@ -145,9 +146,11 @@ class CVAE_implicit_distribution(nn.Module):
         self.command_decoding_config = command_decoding_config
         self.device = device
         self.pretrained_weight = pretrained_weight
+        self.n_latent_sample = n_latent_sample
         self.state_encoder_fixed = state_encoder_fixed
         self.command_encoder_fixed = command_encoder_fixed
         self.activation_map = {"relu": nn.ReLU, "tanh": nn.Tanh, "leakyrelu": nn.LeakyReLU}
+        self.latent_dim = self.latent_encoding_config["output"]
 
         assert self.state_encoder_fixed, "State encoder is recommanded to be fixed"
         assert self.command_encoder_fixed, "Command encoder is recommanded to be fixed"
@@ -206,6 +209,7 @@ class CVAE_implicit_distribution(nn.Module):
                                    dropout=self.state_encoding_config["dropout"],
                                    batchnorm=self.state_encoding_config["batchnorm"])
 
+        # Load pretrained weight and set mode for each part
         if self.state_encoder_fixed:
             # load pretrained state encoder
             state_encoder_state_dict = self.state_encoder.state_dict()
@@ -213,6 +217,8 @@ class CVAE_implicit_distribution(nn.Module):
             state_encoder_state_dict.update(pretrained_state_encoder_state_dict)
             self.state_encoder.load_state_dict(state_encoder_state_dict)
             self.state_encoder.eval()
+        for param in self.state_encoder.parameters():
+            param.requires_grad = False
 
         if self.command_encoder_fixed:
             # load pretrained state encoder
@@ -221,8 +227,17 @@ class CVAE_implicit_distribution(nn.Module):
             command_encoder_state_dict.update(pretrained_command_encoder_state_dict)
             self.command_encoder.load_state_dict(command_encoder_state_dict)
             self.command_encoder.eval()
+        for param in self.command_encoder.parameters():
+            param.requires_grad = False
 
-    def forward(self, *args, training=False):
+        self.recurrence_encoder.train()
+        self.latent_mean_encoder.train()
+        self.latent_log_var_encoder.train()
+        self.latent_decoder.train()
+        self.recurrence_decoder.train()
+        self.command_decoder.train()
+
+    def forward(self, state, goal_position, command_traj, training=True):
         """
 
             :param state: (n_sample, state_dim)
@@ -232,9 +247,12 @@ class CVAE_implicit_distribution(nn.Module):
             :return:
             latent_mean: (n_sample, latent_dim)
             latent_log_var: (n_sample, latent_dim)
-            sampled_command_traj: (traj_len, n_sample, 3)
+
+            if self.n_latent_sample == 1:
+                sampled_command_traj: (traj_len, n_sample, single_command_dim)
+            else:
+                sampled_command_traj: (traj_len, n_sample, self.n_latent_sample, single_command_dim)
         """
-        state, goal_position, command_traj = args
 
         # state encoding
         if self.state_encoder_fixed:
@@ -261,31 +279,66 @@ class CVAE_implicit_distribution(nn.Module):
         latent_mean = self.latent_mean_encoder.architecture(total_encoded_result)
         latent_log_var = self.latent_log_var_encoder.architecture(total_encoded_result)
 
-        # sample with reparameterization trick
-        latent_std = torch.exp(0.5 * latent_log_var)
-        eps = torch.rand_like(latent_std)
-        sample = latent_mean + (eps * latent_std)
+        if self.n_latent_sample == 1:
+            # sample with reparameterization trick
+            latent_std = torch.exp(0.5 * latent_log_var)
+            eps = torch.rand_like(latent_std)
+            sample = latent_mean + (eps * latent_std)
 
-        # decode command trajectory
-        total_decoded_result = torch.cat((encoded_state, goal_position, sample), dim=1)
-        hidden_state = self.latent_decoder.architecture(total_decoded_result).unsqueeze(0)
-        decoded_traj = torch.zeros(traj_len, n_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
-        input = torch.zeros(1, n_sample, self.recurrence_decoding_config["input"]).to(self.device)
+            # decode command trajectory
+            total_decoded_result = torch.cat((encoded_state, goal_position, sample), dim=1)
+            hidden_state = self.latent_decoder.architecture(total_decoded_result).unsqueeze(0)
+            decoded_traj = torch.zeros(traj_len, n_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
+            input = torch.zeros(1, n_sample, self.recurrence_decoding_config["input"]).to(self.device)
 
-        for i in range(traj_len):
-            output, hidden_state = self.recurrence_decoder(input, hidden_state)
-            output = output.squeeze(0)
-            decoded_traj[i] = output
-            input = decoded_traj[i]
+            for i in range(traj_len):
+                output, hidden_state = self.recurrence_decoder(input, hidden_state)
+                output = output.squeeze(0)
+                decoded_traj[i] = output
+                input = decoded_traj[i]
 
-        decoded_traj = decoded_traj.reshape(-1, self.recurrence_decoding_config["hidden"])
-        sampled_command_traj = self.command_decoder.architecture(decoded_traj)
-        sampled_command_traj = sampled_command_traj.reshape(traj_len, n_sample, -1)
+            decoded_traj = decoded_traj.reshape(-1, self.recurrence_decoding_config["hidden"])
+            sampled_command_traj = self.command_decoder.architecture(decoded_traj)
+            sampled_command_traj = sampled_command_traj.reshape(traj_len, n_sample, -1)
 
-        if training:
-            return latent_mean, latent_log_var, sampled_command_traj
+            if training:
+                return latent_mean, latent_log_var, sampled_command_traj
+            else:
+                return latent_mean.cpu().detach().numpy(), latent_log_var.cpu().detach().numpy(), sampled_command_traj.cpu().detach().numpy()
         else:
-            return latent_mean.cpu().detach().numpy(), latent_log_var.cpu().detach().numpy(), sampled_command_traj.cpu().detach().numpy()
+            """
+            Should check whether the reshaping works well!!!!!!!!!
+            """
+            # sample with reparameterization trick
+            latent_std = torch.exp(0.5 * latent_log_var)
+            eps = torch.rand((n_sample, self.n_latent_sample, self.latent_dim),
+                              dtype=latent_std.type, layout=latent_std.layout, device=self.device)
+            sample = latent_mean.unsqueeze(1) + (eps * latent_std.unsqueeze(1))   # (n_sample, self.n_latent_sample, latent_dim)
+
+            # decode command trajectory
+            encoded_state = torch.broadcast_to(encoded_state.unsqueeze(1), (n_sample, self.n_latent_sample, encoded_state.shape[-1]))
+            goal_position = torch.broadcast_to(goal_position.unsqueeze(1), (n_sample, self.n_latent_sample, goal_position.shape[-1]))
+            total_decoded_result = torch.cat((encoded_state, goal_position, sample), dim=-1)
+            total_decoded_result = total_decoded_result.reshape(n_sample * self.n_latent_sample, -1)
+            hidden_state = self.latent_decoder.architecture(total_decoded_result).unsqueeze(0)
+            decoded_traj = torch.zeros(traj_len, n_sample * self.n_latent_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
+            input = torch.zeros(1, n_sample * self.n_latent_sample, self.recurrence_decoding_config["input"]).to(self.device)
+
+            for i in range(traj_len):
+                output, hidden_state = self.recurrence_decoder(input, hidden_state)
+                output = output.squeeze(0)
+                decoded_traj[i] = output
+                input = decoded_traj[i]
+
+            decoded_traj = decoded_traj.reshape(-1, self.recurrence_decoding_config["hidden"])
+            sampled_command_traj = self.command_decoder.architecture(decoded_traj)
+            sampled_command_traj = sampled_command_traj.reshape(traj_len, n_sample * self.n_latent_sample, -1)
+            sampled_command_traj = sampled_command_traj.reshape(traj_len, n_sample, self.n_latent_sample, -1)
+
+            if training:
+                return latent_mean, latent_log_var, sampled_command_traj
+            else:
+                return latent_mean.cpu().detach().numpy(), latent_log_var.cpu().detach().numpy(), sampled_command_traj.cpu().detach().numpy()
 
 
 class CVAE_implicit_distribution_inference(nn.Module):
@@ -308,7 +361,7 @@ class CVAE_implicit_distribution_inference(nn.Module):
         self.trained_weight = trained_weight
         self.cfg_command = cfg_command
         self.activation_map = {"relu": nn.ReLU, "tanh": nn.Tanh, "leakyrelu": nn.LeakyReLU}
-        self.latent_dim = self.latent_decoding_config["input"] - self.state_encoding_config["output"]
+        self.latent_dim = self.latent_decoding_config["input"] - self.state_encoding_config["output"] - 2
 
         assert self.state_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
         assert self.latent_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."

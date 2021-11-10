@@ -211,10 +211,9 @@ for env_type in [1, 2, 3]:
         current_num_fail_goals = 0
         current_num_success_but_short_goals = 0
 
-        # Initialize data container to be saved
-        dataset_observation = []
-        dataset_goal_posision = []
-        dataset_command_traj = []
+        # Count number of saved data in single environment
+        # (maximum "num_max_sucess_goals_in_one_env" * "num_max_data_in_one_goal")
+        data_count = 0
 
         while current_num_success_goals < num_max_sucess_goals_in_one_env:
             env.initialize_n_step()
@@ -342,22 +341,20 @@ for env_type in [1, 2, 3]:
                     if n_max_available_steps >= num_max_data_in_one_goal:
                         sample_ids = np.random.choice(n_max_available_steps, num_max_data_in_one_goal, replace=False)
                         for sample_id in sample_ids:
-                            dataset_observation.append(observation_traj[sample_id])
-                            dataset_goal_posision.append(goal_position_traj[sample_id])
-                            dataset_command_traj.append(np.stack(command_traj[sample_id:sample_id + n_prediction_step]))
+                            data_count += 1
+
+                            data_observation = observation_traj[sample_id]  # (observation_dim,)
+                            data_goal_position = goal_position_traj[sample_id]  # (goal_position_dim,)
+                            data_command_traj = np.stack(command_traj[sample_id:sample_id + n_prediction_step])  # (traj_len, command_dim)
+
+                            # Save data
+                            file_name = f"{env_type}_{i+1}_{data_count}"
+                            np.savez_compressed(f"{folder_name}/{file_name}", observation=data_observation, goal_position=data_goal_position, command_traj=data_command_traj)
 
                         current_num_success_goals += 1
                     else:
                         current_num_success_but_short_goals += 1
                     break
-
-        # Save recorded data
-        dataset_observation = np.stack(dataset_observation)  # (n_sample, observation_dim)
-        dataset_goal_posision = np.stack(dataset_goal_posision)  # (n_sample, goal_position_dim)
-        dataset_command_traj = np.stack(dataset_command_traj)
-        dataset_command_traj = np.swapaxes(dataset_command_traj, 0, 1)  # (traj_len, n_sample, command_dim)
-        file_name = f"{env_type}_{i+1}"
-        np.savez_compressed(f"{folder_name}/{file_name}", observation=dataset_observation, goal_position=dataset_goal_posision, command_traj=dataset_command_traj)
 
         env_end = time.time()
 
