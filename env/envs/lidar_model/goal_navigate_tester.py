@@ -85,6 +85,7 @@ home_path = task_path + "/../../../../.."
 # config
 cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 
+assert cfg["environment"]["determine_env"] in [1, 2, 3], "Unavailable env type"
 assert cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to True"
 assert not cfg["environment"]["random_initialize"], "Change cfg[environment][random_initialize] to False"
 assert cfg["environment"]["point_goal_initialize"], "Change cfg[environment][point_goal_initialize] to True"

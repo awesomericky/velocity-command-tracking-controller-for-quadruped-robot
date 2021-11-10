@@ -63,14 +63,19 @@ class VectorizedEnvironment {
     std::vector<int> env_type = {};
     std::vector<double> obstacle_grid_size_seq = {};
     std::vector<double> obstacle_dr_seq = {};
+    int cfg_determine_env = cfg_["determine_env"].template As<int>();
     for (int i=0; i<num_envs_; i++) {
         seed_seq.push_back(seed_uniform(generator));
-        if (i <= int(num_envs_ / 3))
-            env_type.push_back(1);
-        else if (i <= int(2 * num_envs_ / 3))
-            env_type.push_back(2);
-        else
-            env_type.push_back(3);
+        if (cfg_determine_env == 0) {
+            if (i <= int(num_envs_ / 3))
+                env_type.push_back(1);
+            else if (i <= int(2 * num_envs_ / 3))
+                env_type.push_back(2);
+            else
+                env_type.push_back(3);
+        } else {
+            env_type.push_back(cfg_determine_env)
+        }
         obstacle_grid_size_seq.push_back(obstacle_grid_size_uniform(generator));
         obstacle_dr_seq.push_back(obstacle_dr_uniform(generator));
     }
@@ -98,24 +103,7 @@ class VectorizedEnvironment {
         environments_.back()->setSimulationTimeStep(cfg_["simulation_dt"].template As<double>());
         environments_.back()->setControlTimeStep(cfg_["control_dt"].template As<double>());
         rewardInformation_.push_back(environments_.back()->getRewards().getStdMap());
-//        std::cout << "env " << i << "complete" << "\n";
     }
-
-//    /// Set seed for generating random environment
-//    std::default_random_engine generator(0);  /// Change the main seed to change the generated environment
-//    std::uniform_int_distribution<> seed_uniform(0, 10000);
-//    std::vector<int> seed_seq = {};
-//    for (int i=0; i<num_envs_; i++)
-//        seed_seq.push_back(seed_uniform(generator));
-//
-//    environments_.reserve(num_envs_);
-//    rewardInformation_.reserve(num_envs_);
-//    for (int i = 0; i < num_envs_; i++) {
-//      environments_.push_back(new ChildEnvironment(resourceDir_, cfg_, render_ && i == 0, seed_seq[i]));
-//      environments_.back()->setSimulationTimeStep(cfg_["simulation_dt"].template As<double>());
-//      environments_.back()->setControlTimeStep(cfg_["control_dt"].template As<double>());
-//      rewardInformation_.push_back(environments_.back()->getRewards().getStdMap());
-//    }
 
     setSeed(0);
 

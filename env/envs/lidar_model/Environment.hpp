@@ -43,7 +43,7 @@ namespace raisim
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
 	    // hm_sizeX = 21., hm_sizeY = 21.;
-	    hm_sizeX = 40., hm_sizeY = 40.;
+	        hm_sizeX = 40., hm_sizeY = 40.;
 //            double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
             double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
             double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
@@ -117,7 +117,7 @@ namespace raisim
                         if (!not_available_init) {
                             init_set.push_back({x, y});
 
-                            if (sqrt(pow(x, 2) + pow(y, 2)) > 7)
+                            if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
                                 goal_set.push_back({x, y});
                         }
                     }
@@ -163,7 +163,7 @@ namespace raisim
                         if (!not_available_init) {
                             init_set.push_back({x, y});
 
-                            if (sqrt(pow(x, 2) + pow(y, 2)) > 7)
+                            if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
                                 goal_set.push_back({x, y});
                         }
                     }
@@ -238,13 +238,15 @@ namespace raisim
 
             n_init_set = init_set.size();
             n_goal_set = goal_set.size();
-            int total_n_point_goal = 12;
+//            int total_n_point_goal = 12;
+            int total_n_point_goal = 8;
 
             assert(n_init_set > 0);
             assert(n_goal_set >= total_n_point_goal);
 
             /// initialization for each specific task
             point_goal_initialize = cfg["point_goal_initialize"].template As<bool>();
+            CVAE_data_collection_initialize = cfg["CVAE_data_collection_initialize"].template As<bool>();
             safe_control_initialize = cfg["safe_control_initialize"].template As<bool>();
 
             if (point_goal_initialize) {
@@ -451,7 +453,7 @@ namespace raisim
                     modified_command_traj.push_back(server_->addVisualBox("modified_command_pos" + std::to_string(i), 0.08, 0.08, 0.08, 0, 0, 1));  // blue
                 }
 
-                if (point_goal_initialize) {
+                if (point_goal_initialize || CVAE_data_collection_initialize) {
                     /// goal
                     server_->addVisualCylinder("goal", 0.4, 0.8, 2, 1, 0);
                 }
@@ -467,7 +469,7 @@ namespace raisim
     {
         static std::default_random_engine generator(random_seed);
 
-        if (random_initialize) {
+        if (random_initialize || CVAE_data_collection_initialize) {
             if (current_n_step == 0) {
                 /// Random initialization by sampling available x, y position
                 std::uniform_int_distribution<> uniform_init(0, n_init_set-1);
@@ -906,9 +908,17 @@ namespace raisim
         Eigen::VectorXd goal_pos_;
         goal_pos_.setZero(2);
 
-        // Gaol position
-        for (int i=0; i<2; i++) {
-            goal_pos_[i] = goal_set[sampled_goal_set[current_n_goal]][i];
+        // Goal position
+        if (point_goal_initialize) {
+            for (int i=0; i<2; i++)
+                goal_pos_[i] = goal_set[sampled_goal_set[current_n_goal]][i];
+        }
+        else if (CVAE_data_collection_initialize) {
+            static std::default_random_engine generator(random_seed + current_n_goal * 10);
+            std::uniform_int_distribution<> uniform_sample_goal(0, n_goal_set-1);
+            int sampled_goal_idx = uniform_sample_goal(generator);
+            for (int i=0; i<2; i++)
+                goal_pos_[i] = goal_set[sampled_goal_idx][i];
         }
 
         goal_pos = goal_pos_.cast<float>();
@@ -1029,7 +1039,7 @@ namespace raisim
     std::vector<raisim::Visuals *> desired_command_traj, modified_command_traj;
 
     /// Task specific initialization for evaluation
-    bool point_goal_initialize= false, safe_control_initialize= false;
+    bool point_goal_initialize= false, CVAE_data_collection_initialize= false, safe_control_initialize= false;
     raisim::Vec<2> point_goal_init;
 
     /// goal position

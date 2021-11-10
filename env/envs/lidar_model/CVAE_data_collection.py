@@ -2,6 +2,7 @@ from ruamel.yaml import YAML, dump, RoundTripDumper
 from raisimGymTorch.env.bin import lidar_model
 from raisimGymTorch.env.RaisimGymVecEnv import RaisimGymVecEnv as VecEnv
 from raisimGymTorch.helper.raisim_gym_helper import ConfigurationSaver, load_enviroment_model_param, UserCommand
+from raisimGymTorch.helper.utils_plot import check_saving_folder
 import os
 import math
 import time
@@ -14,6 +15,13 @@ import pdb
 from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
 from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_uniform_bin
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
+
+"""
+Must check 
+(1) robot initialize position (should not be same throughout the env!) 
+(2) goal position (should not be same throughout the env!)
+(3) in all types of env (cylinder, box, corridor)
+"""
 
 def transform_coordinate_LW(w_init_coordinate, l_coordinate_traj):
     """
@@ -49,7 +57,7 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
 np.random.seed(0)
 
 # task specification
-task_name = "lidar_environment_model"
+task_name = "CVAE_data_collection"
 
 # configuration
 parser = argparse.ArgumentParser()
@@ -71,21 +79,17 @@ home_path = task_path + "/../../../../.."
 # config
 cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 
-assert cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to True"
+assert not cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to False"
 assert not cfg["environment"]["random_initialize"], "Change cfg[environment][random_initialize] to False"
-assert cfg["environment"]["point_goal_initialize"], "Change cfg[environment][point_goal_initialize] to True"
+assert not cfg["environment"]["point_goal_initialize"], "Change cfg[environment][point_goal_initialize] to False"
+assert cfg["environment"]["CVAE_data_collection_initialize"], "Change cfg[environment][ CVAE_data_collection_initialize] to True"
 assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environment][safe_control_initialize] to False"
 
 # user command sampling
 user_command = UserCommand(cfg, cfg['evaluating']['number_of_sample'])
 
-# create environment from the configuration file
+# create single environment from the configuration file
 cfg['environment']['num_envs'] = 1
-
-try:
-    cfg['environment']['num_threads'] = cfg['environment']['test_num_threads']
-except:
-    pass
 
 # create environment from the configuration file
 env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
@@ -160,7 +164,7 @@ action_planner = Stochastic_action_planner_uniform_bin(command_range=cfg["enviro
                                                        action_dim=command_dim)
 
 num_max_env = 1000
-num_max_sucess_goals_in_one_env = 8
+num_max_sucess_goals_in_one_env = 8   # Should also change 'total_n_point_goal' in Environment.hpp if you change this value
 num_max_data_in_one_goal = 5
 print(f"Check important data collection parameters: num_max_env - {num_max_env} / num_max_sucess_goals_in_one_env - {num_max_sucess_goals_in_one_env} / num_max_data_in_one_goal = {num_max_data_in_one_goal}")
 pdb.set_trace()
@@ -174,169 +178,199 @@ goal_time_limit = 180.
 
 # IMPORTANT PARAMETERS
 collision_threshold = 0.8
-goal_distance_threshold = 10
+goal_distance_threshold = 10   # Should change goal_set distance condition in Environment.hpp if you change this value (current: 10 for env1 & anv2, 5 for env3
 print(f"Check important action parameters: collision_threshold - {collision_threshold} / goal_distance_threshold - {goal_distance_threshold}")
 pdb.set_trace()
 
-for i in range(num_max_env):
-    # create environment from the configuration file
-    cfg["environment"]["seed"]["train"] = i + 2000   # used seed: 2000 ~ 3000
-    env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
-    env.load_scaling(command_tracking_weight_dir, int(iteration_number))
-    # env.turn_on_visualization()
+# Monitor total saved data size
+saved_data_size = {'env1': 0, 'env2': 0, 'env3': 0}
 
-    current_num_success_goals = 0
+# Make the folder to save recorded data
+folder_name = "CVAE_data"
+check_saving_folder(folder_name)
 
-    # Initialize data container to be saved
-    dataset_observation = []
-    dataset_goal_posision = []
-    dataset_command_traj = []
+for env_type in [1, 2, 3]:
+    # Set environment type
+    # 1: cylinder
+    # 2: box
+    # 3: corridor
+    cfg["environment"]["determine_env"] = env_type
+    print("==============================================")
+    print(f"Environment {env_type} data collection started")
+    for i in range(num_max_env):
+        print(f"{i+1} / {num_max_env} ==>", end=' ')
+        env_start = time.time()
 
-    while current_num_success_goals < num_max_sucess_goals_in_one_env:
-        env.initialize_n_step()
-        env.reset()
-        action_planner.reset()
-        goal_position = env.set_goal()[np.newaxis, :]
-        COM_buffer.reset()
+        # Create environment from the configuration file
+        cfg["environment"]["seed"]["train"] = i + 2000   # used seed: 2000 ~ 3000
+        env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
+        env.load_scaling(command_tracking_weight_dir, int(iteration_number))
+        # env.turn_on_visualization()
 
-        # intialize counting variables
-        goal_current_duration = 0.
-        step = 0
-        sample_user_command = np.zeros(3)
+        current_num_success_goals = 0
+        current_num_fail_goals = 0
+        current_num_success_but_short_goals = 0
 
-        # initialize data container
-        observation_traj = []
-        goal_position_traj = []
-        command_traj = []
+        # Initialize data container to be saved
+        dataset_observation = []
+        dataset_goal_posision = []
+        dataset_command_traj = []
 
-        while True:
-            frame_start = time.time()
-            new_action_time = step % command_period_steps == 0
+        while current_num_success_goals < num_max_sucess_goals_in_one_env:
+            env.initialize_n_step()
+            env.reset()
+            action_planner.reset()
+            goal_position = env.set_goal()[np.newaxis, :]
+            COM_buffer.reset()
 
-            obs, _ = env.observe(False)  # observation before taking step
-            if step % COM_history_update_period == 0:
-                COM_feature = np.concatenate((obs[:, :3], obs[:, 15:21]), axis=1)
-                COM_buffer.update(COM_feature)
+            # intialize counting variables
+            goal_current_duration = 0.
+            step = 0
+            sample_user_command = np.zeros(3)
 
-            if new_action_time:
-                lidar_data = obs[0, proprioceptive_sensor_dim:]
-                action_candidates = action_planner.sample()
-                action_candidates = np.swapaxes(action_candidates, 0, 1)
-                action_candidates = action_candidates.astype(np.float32)
-                init_coordinate_obs = env.coordinate_observe()
+            # initialize data container
+            observation_traj = []
+            goal_position_traj = []
+            command_traj = []
 
-                COM_history_feature = COM_buffer.return_data(flatten=True)[0, :]
-                state = np.tile(np.concatenate((lidar_data, COM_history_feature)), (cfg["evaluating"]["number_of_sample"], 1))
-                state = state.astype(np.float32)
-                predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
-                                                                                   torch.from_numpy(action_candidates).to(device),
-                                                                                   training=False)
+            while True:
+                frame_start = time.time()
+                new_action_time = step % command_period_steps == 0
 
-                predicted_P_cols = np.squeeze(predicted_P_cols, axis=-1)
+                obs, _ = env.observe(False)  # observation before taking step
+                if step % COM_history_update_period == 0:
+                    COM_feature = np.concatenate((obs[:, :3], obs[:, 15:21]), axis=1)
+                    COM_buffer.update(COM_feature)
 
-                # compute reward (goal reward + safety reward)
-                goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
-                current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
-                if current_goal_distance > goal_distance_threshold:
-                    goal_position_L *= (goal_distance_threshold / current_goal_distance)
-                delta_goal_distance = current_goal_distance - np.sqrt(np.sum(np.power(predicted_coordinates - goal_position_L, 2), axis=-1))
+                if new_action_time:
+                    lidar_data = obs[0, proprioceptive_sensor_dim:]
+                    action_candidates = action_planner.sample()
+                    action_candidates = np.swapaxes(action_candidates, 0, 1)
+                    action_candidates = action_candidates.astype(np.float32)
+                    init_coordinate_obs = env.coordinate_observe()
 
-                goal_reward = np.sum(delta_goal_distance, axis=0)
-                goal_reward -= np.min(goal_reward)
-                goal_reward /= np.max(goal_reward) + 1e-5  # normalize reward
+                    COM_history_feature = COM_buffer.return_data(flatten=True)[0, :]
+                    state = np.tile(np.concatenate((lidar_data, COM_history_feature)), (cfg["evaluating"]["number_of_sample"], 1))
+                    state = state.astype(np.float32)
+                    predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
+                                                                                       torch.from_numpy(action_candidates).to(device),
+                                                                                       training=False)
 
-                safety_reward = 1 - predicted_P_cols
-                safety_reward = np.mean(safety_reward, axis=0)
-                safety_reward /= np.max(safety_reward) + 1e-5  # normalize reward
+                    predicted_P_cols = np.squeeze(predicted_P_cols, axis=-1)
 
-                action_size = np.sqrt((action_candidates[0, :, 0] / 1) ** 2 + (action_candidates[0, :, 1] / 0.4) ** 2 + (action_candidates[0, :, 2] / 1.2) ** 2)
-                action_size /= np.max(action_size)
+                    # compute reward (goal reward + safety reward)
+                    goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
+                    current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
+                    if current_goal_distance > goal_distance_threshold:
+                        goal_position_L *= (goal_distance_threshold / current_goal_distance)
+                    delta_goal_distance = current_goal_distance - np.sqrt(np.sum(np.power(predicted_coordinates - goal_position_L, 2), axis=-1))
 
-                reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
-                coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
+                    goal_reward = np.sum(delta_goal_distance, axis=0)
+                    goal_reward -= np.min(goal_reward)
+                    goal_reward /= np.max(goal_reward) + 1e-5  # normalize reward
 
-                if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
-                    reward[coll_idx] = 0  # exclude trajectory that collides with obstacle
+                    safety_reward = 1 - predicted_P_cols
+                    safety_reward = np.mean(safety_reward, axis=0)
+                    safety_reward /= np.max(safety_reward) + 1e-5  # normalize reward
 
-                cand_sample_user_command, sample_user_command_traj = action_planner.action(reward)
+                    action_size = np.sqrt((action_candidates[0, :, 0] / 1) ** 2 + (action_candidates[0, :, 1] / 0.4) ** 2 + (action_candidates[0, :, 2] / 1.2) ** 2)
+                    action_size /= np.max(action_size)
 
-                sample_user_command = cand_sample_user_command.copy()
+                    reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
+                    coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
 
-                # # visualize predicted modified command trajectory
-                # state = state[0, :][np.newaxis, :]
-                # predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
-                #                                                                    torch.from_numpy(sample_user_command_traj[:, np.newaxis, :]).to(device),
-                #                                                                    training=False)
-                # w_coordinate_modified_command_path = transform_coordinate_LW(init_coordinate_obs, predicted_coordinates[:, 0, :])
-                # P_col_modified_command_path = predicted_P_cols[:, 0, :]
-                # env.visualize_modified_command_traj(w_coordinate_modified_command_path,
-                #                                     P_col_modified_command_path)
-                # prev_coordinate_obs = init_coordinate_obs.copy()
+                    if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
+                        reward[coll_idx] = 0  # exclude trajectory that collides with obstacle
 
-                # record data needed for training CVAE
-                observation_traj.append(state)
-                goal_position_traj.append(goal_position_L)
-                command_traj.append(sample_user_command)
-                print("Check shape and dtype of recorded data!!")
-                pdb.set_trace()
+                    cand_sample_user_command, sample_user_command_traj = action_planner.action(reward)
 
-            tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
-            tracking_obs = env.force_normalize_observation(tracking_obs, type=1)
-            tracking_obs = tracking_obs.astype(np.float32)
+                    sample_user_command = cand_sample_user_command.copy()
 
-            with torch.no_grad():
-                tracking_action = command_tracking_policy.architecture(torch.from_numpy(tracking_obs).to(device))
+                    # # Visualize predicted modified command trajectory
+                    # state = state[0, :][np.newaxis, :]
+                    # predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
+                    #                                                                    torch.from_numpy(sample_user_command_traj[:, np.newaxis, :]).to(device),
+                    #                                                                    training=False)
+                    # w_coordinate_modified_command_path = transform_coordinate_LW(init_coordinate_obs, predicted_coordinates[:, 0, :])
+                    # P_col_modified_command_path = predicted_P_cols[:, 0, :]
+                    # env.visualize_modified_command_traj(w_coordinate_modified_command_path,
+                    #                                     P_col_modified_command_path)
+                    # prev_coordinate_obs = init_coordinate_obs.copy()
 
-            _, done = env.step(tracking_action.cpu().detach().numpy())
+                    # Record data needed for training CVAE
+                    observation_traj.append(state)
+                    goal_position_traj.append(goal_position_L)
+                    command_traj.append(sample_user_command)
+                    print("Check shape and dtype of recorded data!!")
+                    pdb.set_trace()
 
-            step += 1
+                tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
+                tracking_obs = env.force_normalize_observation(tracking_obs, type=1)
+                tracking_obs = tracking_obs.astype(np.float32)
 
-            frame_end = time.time()
-            wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
+                with torch.no_grad():
+                    tracking_action = command_tracking_policy.architecture(torch.from_numpy(tracking_obs).to(device))
 
-            if wait_time > 0.:
-                time.sleep(wait_time)
+                _, done = env.step(tracking_action.cpu().detach().numpy())
 
-            if wait_time > 0.:
-                goal_current_duration += cfg['environment']['control_dt']
-            else:
-                goal_current_duration += (frame_end - frame_start)
+                step += 1
 
-            if goal_current_duration > goal_time_limit:
-                done[0] = True
+                frame_end = time.time()
+                wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
-            # fail
-            if done[0] == True:
-                # Will not record failure case
-                break
-            # success
-            elif current_goal_distance < 0.5:
-                # Will record (sampled) success case
-                n_steps = len(observation_traj)
-                n_max_available_steps = n_steps - n_prediction_step
-                sample_ids = np.random.choice(n_max_available_steps, num_max_data_in_one_goal, replace=False)
+                if wait_time > 0.:
+                    time.sleep(wait_time)
 
-                for sample_id in sample_ids:
-                    dataset_observation.append(observation_traj[sample_id])
-                    dataset_goal_posision.append(goal_position_traj[sample_id])
-                    dataset_command_traj.append(np.stack(command_traj[sample_id:sample_id + n_prediction_step]))
+                if wait_time > 0.:
+                    goal_current_duration += cfg['environment']['control_dt']
+                else:
+                    goal_current_duration += (frame_end - frame_start)
 
-                current_num_success_goals += 1
-                break
+                if goal_current_duration > goal_time_limit:
+                    done[0] = True
 
-    # save recorded data
-    dataset_observation = np.stack(dataset_observation)  # (n_sample, observation_dim)
-    dataset_goal_posision = np.stack(dataset_goal_posision)  # (n_sample, goal_position_dim)
-    dataset_command_traj = np.stack(dataset_command_traj)
-    dataset_command_traj = np.swapaxes(dataset_command_traj, 0, 1)  # (traj_len, n_sample, command_dim)
-    """
-    0) add the part for selecting environment type
-    1) set folder
-    2) set filename
-    3) save
-    """
-    np.savez_compressed()
+                # fail
+                if done[0] == True:
+                    # Will not record failure case
+                    current_num_fail_goals += 1
+                    break
+                # success
+                elif current_goal_distance < 0.5:
+                    # Will record (sampled) success case
+                    n_steps = len(observation_traj)
+                    n_max_available_steps = n_steps - n_prediction_step
+                    if n_max_available_steps >= num_max_data_in_one_goal:
+                        sample_ids = np.random.choice(n_max_available_steps, num_max_data_in_one_goal, replace=False)
+                        for sample_id in sample_ids:
+                            dataset_observation.append(observation_traj[sample_id])
+                            dataset_goal_posision.append(goal_position_traj[sample_id])
+                            dataset_command_traj.append(np.stack(command_traj[sample_id:sample_id + n_prediction_step]))
 
+                        current_num_success_goals += 1
+                    else:
+                        current_num_success_but_short_goals += 1
+                    break
+
+        # Save recorded data
+        dataset_observation = np.stack(dataset_observation)  # (n_sample, observation_dim)
+        dataset_goal_posision = np.stack(dataset_goal_posision)  # (n_sample, goal_position_dim)
+        dataset_command_traj = np.stack(dataset_command_traj)
+        dataset_command_traj = np.swapaxes(dataset_command_traj, 0, 1)  # (traj_len, n_sample, command_dim)
+        file_name = f"{env_type}_{i+1}"
+        np.savez_compressed(f"{folder_name}/{file_name}", observation=dataset_observation, goal_position=dataset_goal_posision, command_traj=dataset_command_traj)
+
+        env_end = time.time()
+
+        assert current_num_success_goals + current_num_fail_goals == num_max_sucess_goals_in_one_env, "Bug exists in computing SR."
+
+        # Print elapse time and success rate to monitor data collection progress
+        elapse_time_seconds = env_end - env_start
+        elaspe_time_minutes = int(elapse_time_seconds / 60)
+        elapse_time_seconds -= (elaspe_time_minutes * 60)
+        elapse_time_seconds = int(elapse_time_seconds)
+        saved_data_size[f'env{env_type}'] += (current_num_success_goals * num_max_data_in_one_goal)
+        print(f"Time: {elaspe_time_minutes}m {elapse_time_seconds}s", "||" , f"SR: {num_max_sucess_goals_in_one_env} / {num_max_sucess_goals_in_one_env + current_num_fail_goals + current_num_success_but_short_goals} ({current_num_success_but_short_goals})",
+            "||", f"Dataset: {saved_data_size['env1']} / {saved_data_size['env2']} / {saved_data_size['env3']}", sep=" ")
 
 # env.stop_video_recording()
 env.turn_off_visualization()

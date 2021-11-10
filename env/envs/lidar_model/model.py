@@ -226,6 +226,7 @@ class CVAE_implicit_distribution(nn.Module):
         """
 
             :param state: (n_sample, state_dim)
+            :param goal_position: (n_sample, goal_position_dim)
             :param command_traj: (traj_len, n_sample, single_command_dim)
 
             :return:
@@ -233,7 +234,7 @@ class CVAE_implicit_distribution(nn.Module):
             latent_log_var: (n_sample, latent_dim)
             sampled_command_traj: (traj_len, n_sample, 3)
         """
-        state, command_traj = args
+        state, goal_position, command_traj = args
 
         # state encoding
         if self.state_encoder_fixed:
@@ -256,7 +257,7 @@ class CVAE_implicit_distribution(nn.Module):
         encoded_command_traj = encoded_command_traj.squeeze(0)
 
         # predict posterior distribution in latent space
-        total_encoded_result = torch.cat((encoded_state, encoded_command_traj), dim=1)  # (n_sample, encoded_dim)
+        total_encoded_result = torch.cat((encoded_state, goal_position, encoded_command_traj), dim=1)  # (n_sample, encoded_dim)
         latent_mean = self.latent_mean_encoder.architecture(total_encoded_result)
         latent_log_var = self.latent_log_var_encoder.architecture(total_encoded_result)
 
@@ -266,7 +267,7 @@ class CVAE_implicit_distribution(nn.Module):
         sample = latent_mean + (eps * latent_std)
 
         # decode command trajectory
-        total_decoded_result = torch.cat((encoded_state, sample), dim=1)
+        total_decoded_result = torch.cat((encoded_state, goal_position, sample), dim=1)
         hidden_state = self.latent_decoder.architecture(total_decoded_result).unsqueeze(0)
         decoded_traj = torch.zeros(traj_len, n_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
         input = torch.zeros(1, n_sample, self.recurrence_decoding_config["input"]).to(self.device)
@@ -364,10 +365,11 @@ class CVAE_implicit_distribution_inference(nn.Module):
         self.command_decoder.load_state_dict(command_decoder_state_dict)
         self.command_decoder.eval()
 
-    def forward(self, state, n_sample, traj_len):
+    def forward(self, state, goal_position, n_sample, traj_len):
         """
 
-        :param state: (n_sample, state_dim)
+        :param state: (n_sample', state_dim)
+        :param goal_position: (n_sample', goal_position_dim)
         :param n_sample: int
         :param traj_len: int
         :return:
@@ -378,7 +380,7 @@ class CVAE_implicit_distribution_inference(nn.Module):
                                  dtype=encoded_state.type, layout=encoded_state.layout, device=self.device)
 
             # decode command trajectory
-            total_decoded_result = torch.cat((encoded_state, sample), dim=1)
+            total_decoded_result = torch.cat((encoded_state, goal_position, sample), dim=1)
             hidden_state = self.latent_decoder.architecture(total_decoded_result).unsqueeze(0)
             decoded_traj = torch.zeros(traj_len, n_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
             input = torch.zeros(1, n_sample, self.recurrence_decoding_config["input"]).to(self.device)

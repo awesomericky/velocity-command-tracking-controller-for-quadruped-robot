@@ -6,6 +6,7 @@ environment:
   render: True
   # just testing commenting
   evaluate: False
+  determine_env: 1  # 0: not determine / 1: circle / 2: box / 3: corridor
   num_envs: 500
   max_n_update: 30000
   eval_every_n: 100
@@ -39,6 +40,7 @@ environment:
   random_initialize: True #True  # yaw angle is only randomized
   random_external_force: False  # 50N force for 1s for lateral direction
   point_goal_initialize: False
+  CVAE_data_collection_initialize: True
   safe_control_initialize: False
 
 training:
@@ -136,14 +138,14 @@ CVAE_architecture:
     hidden: 64
     layer: 1
   latent_encoder:
-    input: 128  # 64 + 64
+    input: 130  # 64 + 64 + 2 (goal_position)
     output: 16  # latent dimension (model outputs 'mean' and 'log_std' each of corresponding size'
     shape: [64, 32]
     activation: leakyrelu
     dropout: 0.0
     batchnorm: False
   latent_decoder:
-    input: 80  # 16 + 64
+    input: 82  # 16 + 64 + 2 (goal_position)
     shape: [64]
     output: 32
     activation: leakyrelu
