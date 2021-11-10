@@ -39,7 +39,6 @@ namespace raisim
 
             /// environment type to be generated
             env_type = sample_env_type;  // 1: scattered circle, 2: scattered box, 3: cross corridor
-//            env_type = 3;
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
 	    // hm_sizeX = 21., hm_sizeY = 21.;
