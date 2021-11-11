@@ -333,7 +333,7 @@ for n_test in range(num_test):
                                dones_traj=P_col_traj,
                                coordinate_traj=coordinate_traj,
                                init_coordinate_traj=init_coordinate_traj,
-                               collision_threshold=0.7)
+                               collision_threshold=0.8)
 
         final_P_col_accuracy.append(mean_total_col_prediction_accuracy)
         if mean_col_prediction_accuracy != -1:

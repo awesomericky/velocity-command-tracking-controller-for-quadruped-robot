@@ -1,12 +1,12 @@
 seed: 1
 record_video: yes
-logging: True
+logging: False
 
 environment:
   render: True
   # just testing commenting
-  evaluate: False
-  determine_env: 1  # 0: not determine / 1: circle / 2: box / 3: corridor
+  evaluate: True
+  determine_env: 0  # 0: not determine / 1: circle / 2: box / 3: corridor
   num_envs: 500
   max_n_update: 30000
   eval_every_n: 100
