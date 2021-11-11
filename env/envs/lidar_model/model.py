@@ -50,7 +50,8 @@ class Lidar_environment_model(nn.Module):
                                    batchnorm=self.command_encoding_config["batchnorm"])
         self.recurrence = torch.nn.LSTM(self.recurrence_config["input"],
                                         self.recurrence_config["hidden"],
-                                        self.recurrence_config["layer"])
+                                        self.recurrence_config["layer"],
+                                        dropout=self.recurrence_config["dropout"])
         self.Pcol_prediction = MLP(self.prediction_config["shape"],
                                    self.activation_map[self.prediction_config["activation"]],
                                    self.prediction_config["input"],
@@ -89,11 +90,15 @@ class Lidar_environment_model(nn.Module):
             """
             state, command_traj = args
 
-        encoded_state = self.state_encoder.architecture(state).unsqueeze(0)
+        encoded_state = self.state_encoder.architecture(state)
+        initial_cell_state = torch.broadcast_to(encoded_state, (self.recurrence_config["layer"], *encoded_state.shape)).contiguous()
+        initial_hidden_state = torch.zeros_like(initial_cell_state).to(self.device)
+
         traj_len, n_sample, single_command_dim = command_traj.shape
         command_traj = command_traj.reshape(-1, single_command_dim)
         encoded_command = self.command_encoder.architecture(command_traj).reshape(traj_len, n_sample, -1)
-        encoded_prediction, (_, _) = self.recurrence(encoded_command, (encoded_state, encoded_state))
+
+        encoded_prediction, (_, _) = self.recurrence(encoded_command, (initial_hidden_state, initial_cell_state))
         traj_len, n_sample, encoded_prediction_dim = encoded_prediction.shape
         encoded_prediction = encoded_prediction.reshape(-1, encoded_prediction_dim)
         collision_prob_traj = self.sigmoid(self.Pcol_prediction.architecture(encoded_prediction))
