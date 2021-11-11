@@ -41,9 +41,9 @@ namespace raisim
             env_type = sample_env_type;  // 1: scattered circle, 2: scattered box, 3: cross corridor
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
-	    // hm_sizeX = 21., hm_sizeY = 21.;
-	        hm_sizeX = 40., hm_sizeY = 40.;
-//            double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
+	    //hm_sizeX = 21., hm_sizeY = 21.;
+	    hm_sizeX = 40., hm_sizeY = 40.;
+            // double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
             double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
             double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
             double obstacle_height = 2;
@@ -52,8 +52,8 @@ namespace raisim
             static std::default_random_engine env_generator(random_seed);
 
             /// sample obstacle center
-            double obstacle_grid_size = sample_obstacle_grid_size;;
-            // double obstacle_grid_size = 3.;
+            // double obstacle_grid_size = sample_obstacle_grid_size;;
+            double obstacle_grid_size = 3.;
             int n_x_grid = int(hm_sizeX / obstacle_grid_size);
             int n_y_grid = int(hm_sizeY / obstacle_grid_size);
             n_obstacle = n_x_grid * n_y_grid;
@@ -82,8 +82,8 @@ namespace raisim
                 Eigen::VectorXd obstacle_circle_dr;
                 obstacle_circle_dr.setZero(n_obstacle);
                 for (int i=0; i<n_obstacle; i++) {
-                    // obstacle_circle_dr[i] = 0.4;
-                    obstacle_circle_dr[i] = uniform_obstacle(env_generator);
+                    obstacle_circle_dr[i] = 0.4;
+                    // obstacle_circle_dr[i] = uniform_obstacle(env_generator);
                 }
 
                 // set raw height value

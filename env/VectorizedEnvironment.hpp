@@ -74,7 +74,7 @@ class VectorizedEnvironment {
             else
                 env_type.push_back(3);
         } else {
-            env_type.push_back(cfg_determine_env)
+            env_type.push_back(cfg_determine_env);
         }
         obstacle_grid_size_seq.push_back(obstacle_grid_size_uniform(generator));
         obstacle_dr_seq.push_back(obstacle_dr_uniform(generator));
