@@ -53,16 +53,13 @@ assert cfg["environment"]["random_initialize"], "Change cfg[environment][random_
 assert not cfg["environment"]["point_goal_initialize"], "Change cfg[environment][point_goal_initialize] to False"
 assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environment][safe_control_initialize] to False"
 
-try:
-    cfg['environment']['num_threads'] = cfg['environment']['evaluate_num_threads']
-except:
-    pass
+cfg['environment']['num_threads'] = cfg['environment']['evaluate_num_threads']
 
 # user command samping
 user_command = UserCommand(cfg, cfg['environment']['num_envs'])
-# command_sampler = Command_sampler(user_command)
+command_sampler = Command_sampler(user_command)
 # command_sampler = Time_correlated_command_sampler(user_command)
-command_sampler = Normal_time_correlated_command_sampler(user_command, cfg["environment"]["command"])
+# command_sampler = Normal_time_correlated_command_sampler(user_command, cfg["environment"]["command"])
 
 # create environment from the configuration file
 env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
@@ -333,7 +330,7 @@ for n_test in range(num_test):
                                dones_traj=P_col_traj,
                                coordinate_traj=coordinate_traj,
                                init_coordinate_traj=init_coordinate_traj,
-                               collision_threshold=0.8)
+                               collision_threshold=0.5)
 
         final_P_col_accuracy.append(mean_total_col_prediction_accuracy)
         if mean_col_prediction_accuracy != -1:
