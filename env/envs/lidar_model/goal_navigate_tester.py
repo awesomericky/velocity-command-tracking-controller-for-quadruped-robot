@@ -60,7 +60,7 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     l_coordinate_traj = np.matmul(l_coordinate_traj, transition_matrix.T)
     return l_coordinate_traj
 
-np.random.seed(0)
+np.random.seed(1)
 
 # task specification
 task_name = "lidar_environment_model"
@@ -88,7 +88,7 @@ cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 assert cfg["environment"]["determine_env"] in [1, 2, 3], "Unavailable env type"
 assert cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to True"
 assert not cfg["environment"]["random_initialize"], "Change cfg[environment][random_initialize] to False"
-assert cfg["environment"]["point_goal_initialize"], "Change cfg[environment][point_goal_initialize] to True"
+assert cfg["environment"]["point_goal_initialize"] or cfg["environment"]["CVAE_data_collection_initialize"], "Change cfg[environment][point_goal_initialize] or cfg[environment][CVAE_data_collection_initialize] to True"
 assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environment][safe_control_initialize] to False"
 
 # user command sampling
@@ -173,27 +173,27 @@ else:
 
     # Load action planner
     n_prediction_step = int(cfg["data_collection"]["prediction_period"] / cfg["data_collection"]["command_period"])
-#    action_planner = Stochastic_action_planner_uniform_bin(command_range=cfg["environment"]["command"],
-#                                                           n_sample=cfg["evaluating"]["number_of_sample"],
-#                                                           n_horizon=n_prediction_step,
-#                                                           n_bin=cfg["evaluating"]["number_of_bin"],
-#                                                           beta=cfg["evaluating"]["beta"],
-#                                                           gamma=cfg["evaluating"]["gamma"],
-#                                                           noise_sigma=0.1,
-#                                                           noise=False,
-#                                                           action_dim=command_dim)
-#
-#    action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation(command_range=cfg["environment"]["command"],
-#                                                                              n_sample=cfg["evaluating"]["number_of_sample"],
-#                                                                              n_horizon=n_prediction_step,
-#                                                                              n_bin=cfg["evaluating"]["number_of_bin"],
-#                                                                              beta=cfg["evaluating"]["beta"],
-#                                                                              gamma=cfg["evaluating"]["gamma"],
-#                                                                              noise_sigma=0.1,
-#                                                                              time_correlation_beta=cfg["evaluating"]["time_correlation_beta"],
-#                                                                              noise=False,
-#                                                                              action_dim=command_dim,
-#                                                                              random_command_sampler=user_command)
+    # action_planner = Stochastic_action_planner_uniform_bin(command_range=cfg["environment"]["command"],
+    #                                                        n_sample=cfg["evaluating"]["number_of_sample"],
+    #                                                        n_horizon=n_prediction_step,
+    #                                                        n_bin=cfg["evaluating"]["number_of_bin"],
+    #                                                        beta=cfg["evaluating"]["beta"],
+    #                                                        gamma=cfg["evaluating"]["gamma"],
+    #                                                        noise_sigma=0.1,
+    #                                                        noise=False,
+    #                                                        action_dim=command_dim)
+
+    # action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation(command_range=cfg["environment"]["command"],
+    #                                                                           n_sample=cfg["evaluating"]["number_of_sample"],
+    #                                                                           n_horizon=n_prediction_step,
+    #                                                                           n_bin=cfg["evaluating"]["number_of_bin"],
+    #                                                                           beta=cfg["evaluating"]["beta"],
+    #                                                                           gamma=cfg["evaluating"]["gamma"],
+    #                                                                           noise_sigma=0.1,
+    #                                                                           time_correlation_beta=cfg["evaluating"]["time_correlation_beta"],
+    #                                                                           noise=False,
+    #                                                                           action_dim=command_dim,
+    #                                                                           random_command_sampler=user_command)
 #
     action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal(command_range=cfg["environment"]["command"],
                                                                                      n_sample=cfg["evaluating"]["number_of_sample"],
@@ -201,18 +201,19 @@ else:
                                                                                      n_bin=cfg["evaluating"]["number_of_bin"],
                                                                                      beta=cfg["evaluating"]["beta"],
                                                                                      gamma=cfg["evaluating"]["gamma"],
+                                                                                     sigma=cfg["evaluating"]["sigma"],
                                                                                      noise_sigma=0.1,
                                                                                      noise=False,
                                                                                      action_dim=command_dim,
                                                                                      random_command_sampler=user_command)
 
-#    action_planner = Zeroth_action_planner(command_range=cfg["environment"]["command"],
-#                                           n_sample=cfg["evaluating"]["number_of_sample"],
-#                                           n_horizon=n_prediction_step,
-#                                           sigma=0.1,
-#                                           gamma=cfg["evaluating"]["gamma"],
-#                                           beta=0.5,
-#                                           action_dim=3)
+    # action_planner = Zeroth_action_planner(command_range=cfg["environment"]["command"],
+    #                                        n_sample=cfg["evaluating"]["number_of_sample"],
+    #                                        n_horizon=n_prediction_step,
+    #                                        sigma=0.3,
+    #                                        gamma=cfg["evaluating"]["gamma"],
+    #                                        beta=0.6,
+    #                                        action_dim=3)
 #
     env.initialize_n_step()
     env.reset()
@@ -232,7 +233,7 @@ else:
     num_goals = 12
 
     # MUST safe period from collision
-    MUST_safety_period = 2.0
+    MUST_safety_period = 3.0
     MUST_safety_period_n_steps = int(MUST_safety_period / cfg['data_collection']['command_period'])
     sample_user_command = np.zeros(3)
     prev_coordinate_obs = np.zeros((1, 3))
@@ -241,12 +242,13 @@ else:
 
     eval_start = time.time()
 
-    collision_threshold = 0.7
+    collision_threshold = 0.05
+    goal_distance_threshold = 10
 
     goal_time_limit = 180.
     goal_current_duration = 0.
 
-    # time_check = []
+    command_log = []
 
     while n_test_case < num_goals:
         frame_start = time.time()
@@ -284,9 +286,19 @@ else:
 
             predicted_P_cols = np.squeeze(predicted_P_cols, axis=-1)
 
+            # # Test
+            # predicted_P_cols_label = np.where(predicted_P_cols > collision_threshold, 1, 0)
+            # for sample_id in range(2000):
+            #     total_collision_idx = np.argwhere(predicted_P_cols_label[:, sample_id])
+            #     if len(total_collision_idx) != 0:
+            #         first_collision_idx = np.min(total_collision_idx)
+            #         predicted_coordinates[first_collision_idx+1:, sample_id, :] = np.tile(predicted_coordinates[first_collision_idx, sample_id, :], (12 - first_collision_idx - 1, 1))
+
             # compute reward (goal reward + safety reward)
             goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
             current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
+            if current_goal_distance > goal_distance_threshold:
+                goal_position_L *= (goal_distance_threshold / current_goal_distance)
             delta_goal_distance = current_goal_distance - np.sqrt(np.sum(np.power(predicted_coordinates - goal_position_L, 2), axis=-1))
 
             goal_reward = np.sum(delta_goal_distance, axis=0)
@@ -304,10 +316,13 @@ else:
             action_size = np.sqrt((action_candidates[0, :, 0] / 1) ** 2 + (action_candidates[0, :, 1] / 0.4) ** 2 + (action_candidates[0, :, 2] / 1.2) ** 2)
             action_size /= np.max(action_size)
 
-            reward = 1.0 * goal_reward + 0.8 * safety_reward + 0.0 * action_size  # weighted sum for computing rewards
-            # reward = 0.1 * goal_reward + 1.0 * safety_reward  # weighted sum for computing rewards
+            # reward = 1.0 * goal_reward * safety_reward
+            reward = 1.0 * goal_reward * safety_reward + 0.2 * safety_reward
+            # reward = 1.0 * goal_reward + 1.0 * safety_reward + 0.0 * action_size  # weighted sum for computing rewards
+            # reward = 1.0 * goal_reward + 0.5 * safety_reward  # weighted sum for computing rewards
             coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
 
+            print(len(coll_idx))
             if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
                 reward[coll_idx] = 0  # exclude trajectory that collides with obstacle
 
@@ -342,7 +357,8 @@ else:
             w_coordinate_modified_command_path = transform_coordinate_LW(init_coordinate_obs, predicted_coordinates[:, 0, :])
             P_col_modified_command_path = predicted_P_cols[:, 0, :]
             env.visualize_modified_command_traj(w_coordinate_modified_command_path,
-                                                P_col_modified_command_path)
+                                                P_col_modified_command_path,
+                                                collision_threshold)
 
             # # reset action planner if stuck in local optimum
             # current_pos_change = np.sqrt(np.sum(np.power(init_coordinate_obs[0, :2] - prev_coordinate_obs[0, :2], 2)))
@@ -351,6 +367,7 @@ else:
 
             prev_coordinate_obs = init_coordinate_obs.copy()
 
+        command_log.append(sample_user_command)
         tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
         tracking_obs = env.force_normalize_observation(tracking_obs, type=1)
         tracking_obs = tracking_obs.astype(np.float32)
@@ -392,6 +409,7 @@ else:
 
         # fail
         if done[0] == True:
+            env.initialize_n_step()
             env.reset()
             COM_buffer.reset()
             action_planner.reset()
@@ -404,6 +422,7 @@ else:
             print(f"Intermediate result : {n_success_test_case} / {n_test_case}")
         # success
         elif current_goal_distance < 0.5:
+            env.initialize_n_step()
             env.reset()
             # plot command trajectory
             command_traj = np.array(command_traj)
@@ -417,6 +436,14 @@ else:
             n_success_test_case += 1
             goal_current_duration = 0.
             print(f"Intermediate result : {n_success_test_case} / {n_test_case}")
+
+            plot_command_result(command_traj=np.array(command_log),
+                                folder_name="command_trajectory",
+                                task_name=task_name,
+                                run_name="zeroth_action_planner",
+                                n_update=n_test_case,
+                                control_dt=cfg["environment"]["control_dt"])
+            command_log = []
 
     eval_end = time.time()
 

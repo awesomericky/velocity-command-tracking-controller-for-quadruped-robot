@@ -163,7 +163,7 @@ class RaisimGymVecEnv:
     def curriculum_callback(self):
         self.wrapper.curriculumUpdate()
 
-    def visualize_desired_command_traj(self, coordinate_desired_command_traj, P_col_desired_command):
+    def visualize_desired_command_traj(self, coordinate_desired_command_traj, P_col_desired_command, collision_threshold):
         """
 
         :param coordinate_desired_command_traj: (n_prediction_step, 2)
@@ -172,12 +172,12 @@ class RaisimGymVecEnv:
         """
         coordinate_desired_command_traj = np.ascontiguousarray(coordinate_desired_command_traj)
         P_col_desired_command = np.ascontiguousarray(P_col_desired_command)
-        self.wrapper.visualize_desired_command_traj(coordinate_desired_command_traj, P_col_desired_command)
+        self.wrapper.visualize_desired_command_traj(coordinate_desired_command_traj, P_col_desired_command, collision_threshold)
 
-    def visualize_modified_command_traj(self, coordinate_modified_command, P_col_modified_command):
+    def visualize_modified_command_traj(self, coordinate_modified_command, P_col_modified_command, collision_threshold):
         coordinate_modified_command = np.ascontiguousarray(coordinate_modified_command)
         P_col_modified_command = np.ascontiguousarray(P_col_modified_command)
-        self.wrapper.visualize_modified_command_traj(coordinate_modified_command, P_col_modified_command)
+        self.wrapper.visualize_modified_command_traj(coordinate_modified_command, P_col_modified_command, collision_threshold)
 
     def set_goal(self):
         self.wrapper.set_goal(self._goal)

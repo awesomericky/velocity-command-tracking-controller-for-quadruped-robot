@@ -214,13 +214,15 @@ class VectorizedEnvironment {
 
   ////// optional methods //////
   void visualize_desired_command_traj(Eigen::Ref<EigenRowMajorMat> &coordinate_desired_command,
-                                      Eigen::Ref<EigenVec> &P_col_desired_command) {
-      environments_[0]->visualize_desired_command_traj(coordinate_desired_command, P_col_desired_command);
+                                      Eigen::Ref<EigenVec> &P_col_desired_command,
+                                      double collision_threshold) {
+      environments_[0]->visualize_desired_command_traj(coordinate_desired_command, P_col_desired_command, collision_threshold);
   }
 
   void visualize_modified_command_traj(Eigen::Ref<EigenRowMajorMat> &coordinate_modified_command,
-                                       Eigen::Ref<EigenVec> &P_col_modified_command) {
-      environments_[0]->visualize_modified_command_traj(coordinate_modified_command, P_col_modified_command);
+                                       Eigen::Ref<EigenVec> &P_col_modified_command,
+                                       double collision_threshold) {
+      environments_[0]->visualize_modified_command_traj(coordinate_modified_command, P_col_modified_command, collision_threshold);
   }
 
   void curriculumUpdate() {

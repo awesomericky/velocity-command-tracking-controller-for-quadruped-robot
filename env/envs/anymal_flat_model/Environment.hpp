@@ -456,10 +456,12 @@ namespace raisim
     }
 
     void visualize_desired_command_traj(Eigen::Ref<EigenRowMajorMat> coordinate_desired_command,
-                                        Eigen::Ref<EigenVec> P_col_desired_command) {}
+                                        Eigen::Ref<EigenVec> P_col_desired_command,
+                                        double collision_threshold) {}
 
     void visualize_modified_command_traj(Eigen::Ref<EigenRowMajorMat> coordinate_modified_command,
-                                         Eigen::Ref<EigenVec> P_col_modified_command) {}
+                                         Eigen::Ref<EigenVec> P_col_modified_command,
+                                         double collision_threshold) {}
 
     void set_user_command(Eigen::Ref<EigenVec> command) {}
 

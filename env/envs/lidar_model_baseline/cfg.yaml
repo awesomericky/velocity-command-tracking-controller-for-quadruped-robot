@@ -5,14 +5,15 @@ environment:
   render: True
   # just testing commenting
   evaluate: True
+  determine_env: 1  # 0: not determine / 1: circle / 2: box / 3: corridor
   num_envs: 300
   seed:
     train: 0
-    evaluate: 700
+    evaluate: 600
   max_n_update: 10000
   eval_every_n: 50
-  num_threads: 4
-  test_num_threads: 4
+  num_threads: 3
+  test_num_threads: 3
   simulation_dt: 0.0025
   control_dt: 0.01
   max_time: 9.0
@@ -53,8 +54,8 @@ training:
 evaluating:
   command_period: 3.0
   sigma: 1.0
-  number_of_sample: 90
-  gamma: 7
+  number_of_sample: 2000 # 90
+  gamma: 20
   beta: 0.5
   number_of_bin: 4
 

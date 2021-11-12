@@ -542,7 +542,7 @@ class Stochastic_action_planner_uniform_bin_w_time_correlation:
 
 
 class Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal:
-    def __init__(self, command_range, n_sample, n_horizon, n_bin, beta, gamma,
+    def __init__(self, command_range, n_sample, n_horizon, n_bin, beta, gamma, sigma,
                  random_command_sampler, time_correlation_beta=0.1,
                  noise_sigma=0.1, noise=False, action_dim=3):
         # Available command limit
@@ -568,6 +568,7 @@ class Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal:
         self.n_bin = n_bin
         self.beta = beta
         self.gamma = gamma
+        self.max_sigma_scale = sigma
         self.n_horizon = n_horizon
         self.noise_sigma = noise_sigma
         self.action_dim = action_dim
@@ -601,7 +602,8 @@ class Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal:
         self.a_tilda = np.broadcast_to(self.a_tilda, (self.n_sample, self.n_horizon, self.action_dim)).copy()
 
         for i in range(1, self.n_horizon):
-            sigma_scale = np.random.uniform(0, 0.5, (self.random_command_sampler.n_envs, 3))  # sample command std scale (uniform distribution)
+            # sigma_scale = np.random.uniform(0, self.max_sigma_scale, (self.random_command_sampler.n_envs, 3))  # sample command std scale (uniform distribution)
+            sigma_scale = self.max_sigma_scale
             sigma = self.max_sigma * sigma_scale
             self.a_tilda[:, i, :] = np.random.normal(self.a_tilda[:, i-1, :], sigma)  # sample command (normal distribution)
             self.a_tilda[:, i, :] = np.clip(self.a_tilda[:, i, :],

@@ -42,7 +42,7 @@ namespace raisim
 //            env_type = 3;
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
-            hm_sizeX = 21., hm_sizeY = 21.;
+            hm_sizeX = 40., hm_sizeY = 40.;
             double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
             double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
             double obstacle_height = 2;
@@ -54,7 +54,7 @@ namespace raisim
             /// sample obstacle center
 //            double obstacle_grid_size = sample_obstacle_grid_size;
 //            obstacle_dr = sample_obstacle_dr;
-            double obstacle_grid_size = 4.;
+            double obstacle_grid_size = 3.;
             int n_x_grid = int(hm_sizeX / obstacle_grid_size);
             int n_y_grid = int(hm_sizeY / obstacle_grid_size);
             n_obstacle = n_x_grid * n_y_grid;
@@ -837,10 +837,11 @@ namespace raisim
     }
 
     void visualize_desired_command_traj(Eigen::Ref<EigenRowMajorMat> coordinate_desired_command,
-                                        Eigen::Ref<EigenVec> P_col_desired_command)
+                                        Eigen::Ref<EigenVec> P_col_desired_command,
+                                        double collision_threshold)
     {
         for (int i=0; i<n_prediction_step; i++) {
-            if (P_col_desired_command[i] < 0.5) {
+            if (P_col_desired_command[i] < collision_threshold) {
                 /// not collide
                 desired_command_traj[i]->setColor(1, 1, 0, 1);  // yellow
             }
@@ -857,10 +858,11 @@ namespace raisim
     }
 
     void visualize_modified_command_traj(Eigen::Ref<EigenRowMajorMat> coordinate_modified_command,
-                                         Eigen::Ref<EigenVec> P_col_modified_command)
+                                         Eigen::Ref<EigenVec> P_col_modified_command,
+                                         double collision_threshold)
     {
         for (int i=0; i<n_prediction_step; i++) {
-            if (P_col_modified_command[i] < 0.5) {
+            if (P_col_modified_command[i] < collision_threshold) {
                 /// not collide
                 modified_command_traj[i]->setColor(0, 0, 1, 1);  // blue
             }

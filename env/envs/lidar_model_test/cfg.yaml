@@ -4,6 +4,7 @@ record_video: yes
 environment:
   render: True
   evaluate: True
+  determine_env: 0  # 0: not determine / 1: circle / 2: box / 3: corridor
   type: 2
   #    1 : 90 degree maze
   #    2 : diagonal maze (env1)  ===
@@ -17,6 +18,9 @@ environment:
   num_envs: 300
   max_n_update: 10000
   eval_every_n: 50
+  seed:
+    train: 0
+    evaluate: 600
   num_threads: 4
   test_num_threads: 4
   simulation_dt: 0.0025
@@ -55,18 +59,20 @@ training:
     coordinate: 1
 
 evaluating:
-  command_period: 3.0
-  sigma: 1.0
   number_of_sample: 2000
-  gamma: 7
-  beta: 0.5
+  gamma: 20
+  beta: 0.5  # 0.8  # bigger == more consider a_hat
+  time_correlation_beta: 0.1   # 0.1
+  sigma: 0.3
   number_of_bin: 10
 
 data_collection:
-  command_sampler_beta: 0.2
-  command_sampler_sigma: 0.1
+  time_correlated_command_sampler_beta: 0.7
+  normal_time_correlated_command_sampler_sigma: 0.3
   prediction_period: 6  # [s]
   command_period: 0.5  # [s]
+  prioritized_data_update: True
+  prioritized_data_update_magnitude: 0.8
 
 architecture:
   command_tracking_policy_net: [128, 128]
@@ -85,25 +91,26 @@ architecture:
       update_period: 0.05  # [s]
   state_encoder:  # state = lidar + (encoded COM history)
     input: 450  # COM_encoder output is included in the input  (360 + 32)
-    output: 64
+    output: 100
     shape: [256, 256, 128, 128]
     activation: leakyrelu
     dropout: 0.2
     batchnorm: True
   command_encoder:
     input: 3
-    output: 32
-    shape: [64, 64]
+    output: 64
+    shape: [32]
     activation: leakyrelu
     dropout: 0.2
     batchnorm: True
   recurrence:
-    input: 32
-    hidden: 64
-    layer: 1
-  traj_predictor:
     input: 64
-    shape: [32, 32]
+    hidden: 100
+    layer: 2
+    dropout: 0.2
+  traj_predictor:
+    input: 100
+    shape: [64, 32, 16]
     activation: leakyrelu
     dropout: 0.2
     batchnorm: True

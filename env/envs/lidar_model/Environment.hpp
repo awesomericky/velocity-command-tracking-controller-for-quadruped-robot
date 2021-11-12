@@ -41,9 +41,9 @@ namespace raisim
             env_type = sample_env_type;  // 1: scattered circle, 2: scattered box, 3: cross corridor
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
-	    //hm_sizeX = 21., hm_sizeY = 21.;
-	    hm_sizeX = 40., hm_sizeY = 40.;
-            // double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
+            hm_sizeX = 30., hm_sizeY = 30.;
+//            hm_sizeX = 40., hm_sizeY = 40.;
+//            double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
             double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
             double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
             double obstacle_height = 2;
@@ -52,8 +52,8 @@ namespace raisim
             static std::default_random_engine env_generator(random_seed);
 
             /// sample obstacle center
-            double obstacle_grid_size = sample_obstacle_grid_size;;
-            // double obstacle_grid_size = 3.;
+//            double obstacle_grid_size = sample_obstacle_grid_size;;
+            double obstacle_grid_size = 2.5;
             int n_x_grid = int(hm_sizeX / obstacle_grid_size);
             int n_y_grid = int(hm_sizeY / obstacle_grid_size);
             n_obstacle = n_x_grid * n_y_grid;
@@ -82,8 +82,8 @@ namespace raisim
                 Eigen::VectorXd obstacle_circle_dr;
                 obstacle_circle_dr.setZero(n_obstacle);
                 for (int i=0; i<n_obstacle; i++) {
-                    // obstacle_circle_dr[i] = 0.4;
-                    obstacle_circle_dr[i] = uniform_obstacle(env_generator);
+                    obstacle_circle_dr[i] = 0.4;
+//                    obstacle_circle_dr[i] = uniform_obstacle(env_generator);
                 }
 
                 // set raw height value
@@ -129,8 +129,8 @@ namespace raisim
                 Eigen::VectorXd obstacle_box_size;
                 obstacle_box_size.setZero(n_obstacle);
                 for (int i=0; i<n_obstacle; i++) {
-                    // obstacle_box_size[i] = 0.8;
-                    obstacle_box_size[i] = uniform_obstacle(env_generator);
+                     obstacle_box_size[i] = 0.8;
+//                    obstacle_box_size[i] = uniform_obstacle(env_generator);
                 }
 
                 for (int j=0; j<hm_samplesY; j++) {
@@ -169,9 +169,10 @@ namespace raisim
                 }
             }
             else {
-                // sample obstacle size
+                // sample environment size
                 std::uniform_real_distribution<> uniform_obstacle_short(2.0, 4.0);
-                std::uniform_real_distribution<> uniform_obstacle_long(8.0, 12.0);
+//                std::uniform_real_distribution<> uniform_obstacle_long(8.0, 12.0);
+                std::uniform_real_distribution<> uniform_obstacle_long(18.0, 22.0);
                 double obstacle_corridor_short = uniform_obstacle_short(env_generator);
                 double obstacle_corridor_long = uniform_obstacle_long(env_generator);
 //                double obstacle_corridor_short = 2.0;
@@ -182,6 +183,49 @@ namespace raisim
                 hm_samplesX = int(hm_sizeX * 12), hm_samplesY = int(hm_sizeY * 12);
                 unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
                 obstacle_height = 2;
+
+                /// sample obstacle center for cross-corridor
+                double obstacle_grid_size = sample_obstacle_grid_size;;
+//            double obstacle_grid_size = 3.;
+                int n_x_grid = int(hm_sizeX / obstacle_grid_size);
+                int n_y_grid = int(hm_sizeY / obstacle_grid_size);
+                n_obstacle = n_x_grid * n_y_grid;
+
+                obstacle_centers.setZero(n_obstacle, 2);
+                std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
+                // std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
+                for (int i=0; i<n_obstacle; i++) {
+                    int current_n_y = int(i / n_x_grid);
+                    int current_n_x = i - current_n_y * n_x_grid;
+                    double sampled_x = uniform(env_generator);
+                    double sampled_y = uniform(env_generator);
+                    sampled_x +=  obstacle_grid_size * current_n_x;
+                    sampled_x -= hm_sizeX/2;
+                    sampled_y += obstacle_grid_size * current_n_y;
+                    sampled_y -= hm_sizeY/2;
+                    obstacle_centers(i, 0) = sampled_x;
+                    obstacle_centers(i, 1) = sampled_y;
+                }
+
+                /// sample obstacle size
+                std::uniform_int_distribution<> random_obstacle_sampling(1, 2);
+                std::uniform_real_distribution<> uniform_cylinder_obstacle(0.3, 0.5);
+                std::uniform_real_distribution<> uniform_box_obstacle(0.6, 1.0);
+                Eigen::VectorXd obstacle_type_list, obstacle_circle_dr, obstacle_box_size;
+                obstacle_type_list.setZero(n_obstacle);
+                obstacle_circle_dr.setZero(n_obstacle);
+                obstacle_box_size.setZero(n_obstacle);
+                for (int i=0; i<n_obstacle; i++) {
+                    int random_obstacle = random_obstacle_sampling(env_generator);
+                    obstacle_type_list[i] = random_obstacle;
+                    if (random_obstacle == 1) {
+                        /// generate cylinder
+                        obstacle_circle_dr[i] = uniform_cylinder_obstacle(env_generator);
+                    } else {
+                        /// generate box
+                        obstacle_box_size[i] = uniform_box_obstacle(env_generator);
+                    }
+                }
 
                 double obstacle_idx_big = obstacle_corridor_short / 2;
                 double obstacle_idx_small = - obstacle_corridor_short / 2;
@@ -220,6 +264,25 @@ namespace raisim
                              y < (- hm_sizeY/2 + 1) || (hm_sizeY/2 - 1) < y)
                             available_init = false;
 
+                        /// consider box and cylinder obstacle
+                        for (int k=0; k<n_obstacle; k++) {
+                            double obstacle_x = obstacle_centers(k, 0), obstacle_y = obstacle_centers(k, 1);
+
+                            if (obstacle_type_list[k] == 1) {
+                                /// cylinder obstacle
+                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < obstacle_circle_dr[k])
+                                    available_obstacle = true;
+                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < (obstacle_circle_dr[k] + 0.6))
+                                    available_init = false;
+                            } else {
+                                /// box obstacle
+                                if (abs(x - obstacle_x) <= obstacle_box_size[k]/2 && abs(y - obstacle_y) <= obstacle_box_size[k]/2)
+                                    available_obstacle = true;
+                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < ((obstacle_box_size[k] * sqrt(2)) / 2 + 0.6))
+                                    available_init = false;
+                            }
+                        }
+
                         if (!available_obstacle)
                             hm_raw_value.push_back(0.0);
                         else
@@ -237,6 +300,8 @@ namespace raisim
 
             n_init_set = init_set.size();
             n_goal_set = goal_set.size();
+            std::cout << n_init_set << "\n";
+            std::cout << n_goal_set << "\n";
 //            int total_n_point_goal = 12;
             int total_n_point_goal = 8;
 
@@ -623,9 +688,9 @@ namespace raisim
             if (col.size() > 0) {
                 if (visualizable_)
                     scans[i]->setPosition(col[0].getPosition());
-		double lidar_noise_distance = lidar_noise(generator);
-		double current_lidar_distance = (lidarPos.e() - col[0].getPosition()).norm();
-		lidar_scan_depth[i] = std::max(std::min(current_lidar_distance + lidar_noise_distance, ray_length), 0.) / ray_length;
+                double lidar_noise_distance = lidar_noise(generator);
+                double current_lidar_distance = (lidarPos.e() - col[0].getPosition()).norm();
+                lidar_scan_depth[i] = std::max(std::min(current_lidar_distance + lidar_noise_distance, ray_length), 0.) / ray_length;
             }
             else {
                 if (visualizable_)
@@ -766,9 +831,10 @@ namespace raisim
     }
 
     void visualize_desired_command_traj(Eigen::Ref<EigenRowMajorMat> coordinate_desired_command,
-                                        Eigen::Ref<EigenVec> P_col_desired_command)
+                                        Eigen::Ref<EigenVec> P_col_desired_command,
+                                        double collision_threshold=0.99)
     {
-        double threshold = 0.99;
+        double threshold = collision_threshold;
         for (int i=0; i<n_prediction_step; i++) {
             if (P_col_desired_command[i] < threshold) {
                 /// not collide
@@ -787,9 +853,10 @@ namespace raisim
     }
 
     void visualize_modified_command_traj(Eigen::Ref<EigenRowMajorMat> coordinate_modified_command,
-                                         Eigen::Ref<EigenVec> P_col_modified_command)
+                                         Eigen::Ref<EigenVec> P_col_modified_command,
+                                         double collision_threshold=0.99)
     {
-        double threshold = 0.99;
+        double threshold = collision_threshold;
         for (int i=0; i<n_prediction_step; i++) {
             if (P_col_modified_command[i] < threshold) {
                 /// not collide

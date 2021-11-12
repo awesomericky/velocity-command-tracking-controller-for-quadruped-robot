@@ -18,7 +18,7 @@ from collections import defaultdict
 import pdb
 from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
 from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin
-from raisimGymTorch.env.envs.lidar_model.action import Zeroth_action_planner, Modified_zeroth_action_planner
+from raisimGymTorch.env.envs.lidar_model.action import Zeroth_action_planner, Modified_zeroth_action_planner, Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 
 
@@ -102,7 +102,7 @@ assert env.num_obs == proprioceptive_sensor_dim + lidar_dim, "Check configured s
 n_steps = math.floor(cfg['environment']['max_time'] / cfg['environment']['control_dt'])
 command_period_steps = math.floor(cfg['data_collection']['command_period'] / cfg['environment']['control_dt'])
 # command_period_steps = math.floor(0.25 / cfg['environment']['control_dt'])
-evaluate_command_sampling_steps = math.floor(cfg['evaluating']['command_period'] / cfg['environment']['control_dt'])
+# evaluate_command_sampling_steps = math.floor(cfg['evaluating']['command_period'] / cfg['environment']['control_dt'])
 
 state_dim = cfg["architecture"]["state_encoder"]["input"]
 command_dim = cfg["architecture"]["command_encoder"]["input"]
@@ -161,15 +161,26 @@ else:
 
     # Load action planner
     n_prediction_step = int(cfg["data_collection"]["prediction_period"] / cfg["data_collection"]["command_period"])
-    action_planner = Stochastic_action_planner_uniform_bin(command_range=cfg["environment"]["command"],
-                                                           n_sample=cfg["evaluating"]["number_of_sample"],
-                                                           n_horizon=n_prediction_step,
-                                                           n_bin=cfg["evaluating"]["number_of_bin"],
-                                                           beta=cfg["evaluating"]["beta"],
-                                                           gamma=cfg["evaluating"]["gamma"],
-                                                           noise_sigma=0.1,
-                                                           noise=False,
-                                                           action_dim=command_dim)
+    # action_planner = Stochastic_action_planner_uniform_bin(command_range=cfg["environment"]["command"],
+    #                                                        n_sample=cfg["evaluating"]["number_of_sample"],
+    #                                                        n_horizon=n_prediction_step,
+    #                                                        n_bin=cfg["evaluating"]["number_of_bin"],
+    #                                                        beta=cfg["evaluating"]["beta"],
+    #                                                        gamma=cfg["evaluating"]["gamma"],
+    #                                                        noise_sigma=0.1,
+    #                                                        noise=False,
+    #                                                        action_dim=command_dim)
+    action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal(command_range=cfg["environment"]["command"],
+                                                                                     n_sample=cfg["evaluating"]["number_of_sample"],
+                                                                                     n_horizon=n_prediction_step,
+                                                                                     n_bin=cfg["evaluating"]["number_of_bin"],
+                                                                                     beta=cfg["evaluating"]["beta"],
+                                                                                     gamma=cfg["evaluating"]["gamma"],
+                                                                                     sigma=cfg["evaluating"]["sigma"],
+                                                                                     noise_sigma=0.1,
+                                                                                     noise=False,
+                                                                                     action_dim=command_dim,
+                                                                                     random_command_sampler=user_command)
 
     env.initialize_n_step()
     env.reset()
@@ -191,7 +202,7 @@ else:
         num_goals = 1
 
     # MUST safe period from collision
-    MUST_safety_period = 2.0
+    MUST_safety_period = 3.0
     MUST_safety_period_n_steps = int(MUST_safety_period / cfg['data_collection']['command_period'])
     sample_user_command = np.zeros(3)
     prev_coordinate_obs = np.zeros((1, 3))
@@ -199,7 +210,8 @@ else:
     # Needed for computing real time factor
     total_time = 0
 
-    collision_threshold = 0.8
+    collision_threshold = 0.1
+    goal_distance_threshold = 10
 
     # goal_kernel = [0.98 ** (12 - i - 1) for i in range(12)]
     # goal_kernel = np.array(goal_kernel)[:, np.newaxis]
@@ -247,6 +259,8 @@ else:
             # compute reward (goal reward + safety reward)
             goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
             current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
+            if current_goal_distance > goal_distance_threshold:
+                goal_position_L *= (goal_distance_threshold / current_goal_distance)
             delta_goal_distance = current_goal_distance - np.sqrt(np.sum(np.power(predicted_coordinates - goal_position_L, 2), axis=-1))
             # delta_goal_distance *= goal_kernel
 
@@ -270,8 +284,8 @@ else:
             # action_size = abs(action_candidates[0, :, 0] / 1) + abs(action_candidates[0, :, 1] / 0.4) + abs(action_candidates[0, :, 2] / 1.2)
             # action_size /= 3
 
-            # reward = 1.3 * goal_reward + 0.7 * safety_reward  # final reward term for (env1, 3, 4)
-            reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # final reward term for (env1, 3, 4)
+            reward = 1.0 * goal_reward * safety_reward
+            # reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # final reward term for (env1, 3, 4)
             # reward = 1.4 * goal_reward + 0.7 * safety_reward + 0.4 * action_size  # final reward term for (env1, 3, 4)
             coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
 
@@ -344,7 +358,8 @@ else:
             w_coordinate_modified_command_path = transform_coordinate_LW(init_coordinate_obs, predicted_coordinates[:, 0, :])
             P_col_modified_command_path = predicted_P_cols[:, 0, :]
             env.visualize_modified_command_traj(w_coordinate_modified_command_path,
-                                                P_col_modified_command_path)
+                                                P_col_modified_command_path,
+                                                collision_threshold)
 
             prev_coordinate_obs = init_coordinate_obs.copy()
 

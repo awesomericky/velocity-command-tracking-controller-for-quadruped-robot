@@ -1198,10 +1198,11 @@ namespace raisim
     }
 
     void visualize_desired_command_traj(Eigen::Ref<EigenRowMajorMat> coordinate_desired_command,
-                                        Eigen::Ref<EigenVec> P_col_desired_command)
+                                        Eigen::Ref<EigenVec> P_col_desired_command,
+                                        double collision_threshold)
     {
         for (int i=0; i<n_prediction_step; i++) {
-            if (P_col_desired_command[i] < 0.5) {
+            if (P_col_desired_command[i] < collision_threshold) {
                 /// not collide
                 desired_command_traj[i]->setColor(1, 1, 0, 1);  // yellow
             }
@@ -1218,10 +1219,11 @@ namespace raisim
     }
 
     void visualize_modified_command_traj(Eigen::Ref<EigenRowMajorMat> coordinate_modified_command,
-                                         Eigen::Ref<EigenVec> P_col_modified_command)
+                                         Eigen::Ref<EigenVec> P_col_modified_command,
+                                         double collision_threshold)
     {
         for (int i=0; i<n_prediction_step; i++) {
-            if (P_col_modified_command[i] < 0.5) {
+            if (P_col_modified_command[i] < collision_threshold) {
                 /// not collide
                 modified_command_traj[i]->setColor(0, 0, 1, 1);  // blue
             }

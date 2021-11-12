@@ -125,13 +125,13 @@ start = time.time()
 
 # Load action planner
 n_prediction_step = int(cfg["data_collection"]["prediction_period"] / cfg["data_collection"]["command_period"])
-action_planner = Stochastic_action_planner_uniform_bin_baseline(command_range=cfg["environment"]["command"],
-                                                                n_sample=cfg["evaluating"]["number_of_sample"],
-                                                                n_horizon=n_prediction_step,
-                                                                n_bin=cfg["evaluating"]["number_of_bin"],
-                                                                beta=cfg["evaluating"]["beta"],
-                                                                gamma=cfg["evaluating"]["gamma"],
-                                                                action_dim=command_dim)
+# action_planner = Stochastic_action_planner_uniform_bin_baseline(command_range=cfg["environment"]["command"],
+#                                                                 n_sample=cfg["evaluating"]["number_of_sample"],
+#                                                                 n_horizon=n_prediction_step,
+#                                                                 n_bin=cfg["evaluating"]["number_of_bin"],
+#                                                                 beta=cfg["evaluating"]["beta"],
+#                                                                 gamma=cfg["evaluating"]["gamma"],
+#                                                                 action_dim=command_dim)
 
 env.initialize_n_step()
 env.reset()
@@ -150,7 +150,7 @@ n_success_test_case = 0
 num_goals = 12
 
 # MUST safe period from collision
-MUST_safety_period = 2.
+MUST_safety_period = 3.
 MUST_safety_period_n_steps = int(MUST_safety_period / cfg['data_collection']['command_period'])
 sample_user_command = np.zeros(3)
 prev_coordinate_obs = np.zeros((1, 3))
@@ -165,8 +165,10 @@ local_optimum_start_time = 0
 
 goal_time_limit = 180.
 goal_current_duration = 0.
+command_log = []
 
 while n_test_case < num_goals:
+
     frame_start = time.time()
     new_action_time = step % command_period_steps == 0
 
@@ -212,6 +214,7 @@ while n_test_case < num_goals:
 
         ##### Needed check
         # reward_compute_start = time.time()
+        pdb.set_trace()
         goal_rewards, collision_idx_list = env.baseline_compute_reward(action_candidates, np.swapaxes(goal_position_L, 0, 1), goal_rewards, collision_idx_list,
                                                                        n_prediction_step, cfg["data_collection"]["command_period"], MUST_safety_period)
         # reward_compute_end = time.time()
@@ -241,6 +244,7 @@ while n_test_case < num_goals:
 
         prev_coordinate_obs = init_coordinate_obs.copy()
 
+    command_log.append(sample_user_command.copy())
     tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
     tracking_obs = env.force_normalize_observation(tracking_obs, type=1)
     tracking_obs = tracking_obs.astype(np.float32)
@@ -306,6 +310,14 @@ while n_test_case < num_goals:
         n_success_test_case += 1
         goal_current_duration = 0.
         print(f"Intermediate result : {n_success_test_case} / {n_test_case}")
+
+        plot_command_result(command_traj=np.array(command_log),
+                            folder_name="command_trajectory",
+                            task_name=task_name,
+                            run_name="baseline",
+                            n_update=n_test_case,
+                            control_dt=cfg["environment"]["control_dt"])
+        command_log = []
 
 eval_end = time.time()
 
