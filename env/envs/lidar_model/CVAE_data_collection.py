@@ -165,7 +165,7 @@ action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal
                                                                                  action_dim=command_dim,
                                                                                  random_command_sampler=user_command)
 
-num_max_env = 360
+num_max_env = 240
 num_max_sucess_goals_in_one_env = 8   # Should also change 'total_n_point_goal' in Environment.hpp if you change this value
 num_max_data_in_one_goal = 20
 print(f">> Check important data collection parameters: num_max_env = {num_max_env} / num_max_sucess_goals_in_one_env = {num_max_sucess_goals_in_one_env} / num_max_data_in_one_goal = {num_max_data_in_one_goal}")

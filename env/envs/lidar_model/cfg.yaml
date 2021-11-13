@@ -14,7 +14,7 @@ environment:
   seed:
     train: 0
     evaluate: 600
-  num_threads: 12
+  num_threads: 4
   evaluate_num_threads: 12  # Number of threads for evaluating model prediction
   test_num_threads: 3  # Number of threads for evaluating model based RL
   simulation_dt: 0.0025
