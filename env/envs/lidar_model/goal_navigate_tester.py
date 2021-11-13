@@ -216,9 +216,10 @@ else:
     #                                        action_dim=3)
 #
     env.initialize_n_step()
-    env.reset()
+    pdb.set_trace()
     action_planner.reset()
     goal_position = env.set_goal()[np.newaxis, :]
+    print(goal_position)
     env.turn_on_visualization()
     COM_buffer.reset()
     # env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_" + "lidar_2d_normal_sampling" + '.mp4')
@@ -234,6 +235,7 @@ else:
 
     # MUST safe period from collision
     MUST_safety_period = 3.0
+    # MUST_safety_period = 2.0
     MUST_safety_period_n_steps = int(MUST_safety_period / cfg['data_collection']['command_period'])
     sample_user_command = np.zeros(3)
     prev_coordinate_obs = np.zeros((1, 3))
@@ -243,6 +245,7 @@ else:
     eval_start = time.time()
 
     collision_threshold = 0.05
+    # collision_threshold = 0.8
     goal_distance_threshold = 10
 
     goal_time_limit = 180.
@@ -316,13 +319,11 @@ else:
             action_size = np.sqrt((action_candidates[0, :, 0] / 1) ** 2 + (action_candidates[0, :, 1] / 0.4) ** 2 + (action_candidates[0, :, 2] / 1.2) ** 2)
             action_size /= np.max(action_size)
 
-            # reward = 1.0 * goal_reward * safety_reward
-            reward = 1.0 * goal_reward * safety_reward + 0.2 * safety_reward
-            # reward = 1.0 * goal_reward + 1.0 * safety_reward + 0.0 * action_size  # weighted sum for computing rewards
+            reward = 1.0 * goal_reward * safety_reward + 0.3 * safety_reward
+            # reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
             # reward = 1.0 * goal_reward + 0.5 * safety_reward  # weighted sum for computing rewards
             coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
 
-            print(len(coll_idx))
             if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
                 reward[coll_idx] = 0  # exclude trajectory that collides with obstacle
 
@@ -332,7 +333,6 @@ else:
             # traj_len, n_sample, coor_dim = predicted_coordinates.shape
             # for j in range(n_sample):
             #     plt.plot(predicted_coordinates[:, j, 0], predicted_coordinates[:, j, 1])
-            # # plt.title("Sa,mpled trajectory (n_sample: 2000)")
             # plt.savefig("sampled_traj (ours).png")
             # plt.clf()
             # pdb.set_trace()
@@ -429,6 +429,7 @@ else:
             # reset action planner and set new goal
             action_planner.reset()
             goal_position = env.set_goal()[np.newaxis, :]
+            print(goal_position)
             n_test_case += 1
             step = 0
             command_traj = []
@@ -440,7 +441,7 @@ else:
             plot_command_result(command_traj=np.array(command_log),
                                 folder_name="command_trajectory",
                                 task_name=task_name,
-                                run_name="zeroth_action_planner",
+                                run_name="normal_not_fixed",
                                 n_update=n_test_case,
                                 control_dt=cfg["environment"]["control_dt"])
             command_log = []

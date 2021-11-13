@@ -640,6 +640,10 @@ class Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal:
         if len(safe_idx) != 0:
             probs = np.exp(self.gamma * rewards[safe_idx])
             probs /= np.sum(probs) + 1e-10
+            # plt.hist(probs, density=True, range=(0.02, 0.2))
+            # plt.savefig("reward")
+            # plt.clf()
+            # pdb.set_trace()
             self.a_hat = np.sum(self.a_tilda[safe_idx, :, :] * probs[:, np.newaxis, np.newaxis], axis=0)
         else:
             probs = np.exp(self.gamma * rewards)

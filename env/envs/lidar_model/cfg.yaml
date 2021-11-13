@@ -6,7 +6,7 @@ environment:
   render: True
   # just testing commenting
   evaluate: True
-  determine_env: 2  # 0: not determine / 1: circle / 2: box / 3: corridor
+  determine_env: 3  # 0: not determine / 1: circle / 2: box / 3: corridor
   num_envs: 500
   max_n_update: 30000
   eval_every_n: 100

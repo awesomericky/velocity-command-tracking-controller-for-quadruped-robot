@@ -52,15 +52,15 @@ namespace raisim
             static std::default_random_engine env_generator(random_seed);
 
             /// sample obstacle center
-//            double obstacle_grid_size = sample_obstacle_grid_size;;
-            double obstacle_grid_size = 2.5;
+            double obstacle_grid_size = sample_obstacle_grid_size;;
+//            double obstacle_grid_size = 2.5;
             int n_x_grid = int(hm_sizeX / obstacle_grid_size);
             int n_y_grid = int(hm_sizeY / obstacle_grid_size);
             n_obstacle = n_x_grid * n_y_grid;
 
             obstacle_centers.setZero(n_obstacle, 2); 
-            std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
-            // std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
+//            std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
+             std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
             for (int i=0; i<n_obstacle; i++) {
                 int current_n_y = int(i / n_x_grid);
                 int current_n_x = i - current_n_y * n_x_grid;
@@ -82,8 +82,8 @@ namespace raisim
                 Eigen::VectorXd obstacle_circle_dr;
                 obstacle_circle_dr.setZero(n_obstacle);
                 for (int i=0; i<n_obstacle; i++) {
-                    obstacle_circle_dr[i] = 0.4;
-//                    obstacle_circle_dr[i] = uniform_obstacle(env_generator);
+//                    obstacle_circle_dr[i] = 0.4;
+                    obstacle_circle_dr[i] = uniform_obstacle(env_generator);
                 }
 
                 // set raw height value
@@ -116,6 +116,7 @@ namespace raisim
                         if (!not_available_init) {
                             init_set.push_back({x, y});
 
+                            /// For goal point distance condition, should also consider the "hm_size" because there should be enough goals in all four squares for evaluating in point_goal_initialize
                             if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
                                 goal_set.push_back({x, y});
                         }
@@ -129,8 +130,8 @@ namespace raisim
                 Eigen::VectorXd obstacle_box_size;
                 obstacle_box_size.setZero(n_obstacle);
                 for (int i=0; i<n_obstacle; i++) {
-                     obstacle_box_size[i] = 0.8;
-//                    obstacle_box_size[i] = uniform_obstacle(env_generator);
+//                     obstacle_box_size[i] = 0.8;
+                    obstacle_box_size[i] = uniform_obstacle(env_generator);
                 }
 
                 for (int j=0; j<hm_samplesY; j++) {
@@ -162,6 +163,7 @@ namespace raisim
                         if (!not_available_init) {
                             init_set.push_back({x, y});
 
+                            /// For goal point distance condition, should also consider the "hm_size" because there should be enough goals in all four squares for evaluating in point_goal_initialize
                             if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
                                 goal_set.push_back({x, y});
                         }
@@ -170,7 +172,8 @@ namespace raisim
             }
             else {
                 // sample environment size
-                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 4.0);
+//                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 4.0);
+                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 6.0);
 //                std::uniform_real_distribution<> uniform_obstacle_long(8.0, 12.0);
                 std::uniform_real_distribution<> uniform_obstacle_long(18.0, 22.0);
                 double obstacle_corridor_short = uniform_obstacle_short(env_generator);
@@ -186,7 +189,7 @@ namespace raisim
 
                 /// sample obstacle center for cross-corridor
                 double obstacle_grid_size = sample_obstacle_grid_size;;
-//            double obstacle_grid_size = 3.;
+//                double obstacle_grid_size = 2.5;
                 int n_x_grid = int(hm_sizeX / obstacle_grid_size);
                 int n_y_grid = int(hm_sizeY / obstacle_grid_size);
                 n_obstacle = n_x_grid * n_y_grid;
@@ -272,13 +275,13 @@ namespace raisim
                                 /// cylinder obstacle
                                 if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < obstacle_circle_dr[k])
                                     available_obstacle = true;
-                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < (obstacle_circle_dr[k] + 0.6))
+                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < (obstacle_circle_dr[k] + 0.8))
                                     available_init = false;
                             } else {
                                 /// box obstacle
                                 if (abs(x - obstacle_x) <= obstacle_box_size[k]/2 && abs(y - obstacle_y) <= obstacle_box_size[k]/2)
                                     available_obstacle = true;
-                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < ((obstacle_box_size[k] * sqrt(2)) / 2 + 0.6))
+                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < ((obstacle_box_size[k] * sqrt(2)) / 2 + 0.8))
                                     available_init = false;
                             }
                         }
@@ -291,6 +294,7 @@ namespace raisim
                         if (available_init) {
                             init_set.push_back({x, y});
 
+                            /// For goal point distance condition, should also consider the "hm_size" because there should be enough goals in all four squares for evaluating in point_goal_initialize
                             if (sqrt(pow(x, 2) + pow(y, 2)) > 5)
                                 goal_set.push_back({x, y});
                         }
@@ -302,8 +306,8 @@ namespace raisim
             n_goal_set = goal_set.size();
             std::cout << n_init_set << "\n";
             std::cout << n_goal_set << "\n";
-//            int total_n_point_goal = 12;
-            int total_n_point_goal = 8;
+            int total_n_point_goal = 12;
+//            int total_n_point_goal = 8;
 
             assert(n_init_set > 0);
             assert(n_goal_set >= total_n_point_goal);
@@ -333,6 +337,11 @@ namespace raisim
                 std::uniform_int_distribution<> uniform_two_square_goal(0, two_square_goal.size()-1);
                 std::uniform_int_distribution<> uniform_three_square_goal(0, three_square_goal.size()-1);
                 std::uniform_int_distribution<> uniform_four_square_goal(0, four_square_goal.size()-1);
+
+                std::cout << one_square_goal.size() << "\n";
+                std::cout << two_square_goal.size() << "\n";
+                std::cout << three_square_goal.size() << "\n";
+                std::cout << four_square_goal.size() << "\n";
 
                 int current_sampled_n_goals = 0;
                 while (sampled_goal_set.size() <= total_n_point_goal) {
