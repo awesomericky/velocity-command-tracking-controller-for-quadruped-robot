@@ -173,9 +173,9 @@ namespace raisim
             else {
                 // sample environment size
 //                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 4.0);
-                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 6.0);
+                std::uniform_real_distribution<> uniform_obstacle_short(4.0, 6.0);
 //                std::uniform_real_distribution<> uniform_obstacle_long(8.0, 12.0);
-                std::uniform_real_distribution<> uniform_obstacle_long(18.0, 22.0);
+                std::uniform_real_distribution<> uniform_obstacle_long(26.0, 30.0);
                 double obstacle_corridor_short = uniform_obstacle_short(env_generator);
                 double obstacle_corridor_long = uniform_obstacle_long(env_generator);
 //                double obstacle_corridor_short = 2.0;
@@ -188,7 +188,8 @@ namespace raisim
                 obstacle_height = 2;
 
                 /// sample obstacle center for cross-corridor
-                double obstacle_grid_size = sample_obstacle_grid_size;;
+                std::uniform_real_distribution<> uniform_corridor_grid_size(3., 4.);   // sample different grid size in different available range for data collection stability
+                double obstacle_grid_size = uniform_corridor_grid_size(env_generator);
 //                double obstacle_grid_size = 2.5;
                 int n_x_grid = int(hm_sizeX / obstacle_grid_size);
                 int n_y_grid = int(hm_sizeY / obstacle_grid_size);
@@ -304,8 +305,6 @@ namespace raisim
 
             n_init_set = init_set.size();
             n_goal_set = goal_set.size();
-            std::cout << n_init_set << "\n";
-            std::cout << n_goal_set << "\n";
             int total_n_point_goal = 12;
 //            int total_n_point_goal = 8;
 
@@ -337,11 +336,6 @@ namespace raisim
                 std::uniform_int_distribution<> uniform_two_square_goal(0, two_square_goal.size()-1);
                 std::uniform_int_distribution<> uniform_three_square_goal(0, three_square_goal.size()-1);
                 std::uniform_int_distribution<> uniform_four_square_goal(0, four_square_goal.size()-1);
-
-                std::cout << one_square_goal.size() << "\n";
-                std::cout << two_square_goal.size() << "\n";
-                std::cout << three_square_goal.size() << "\n";
-                std::cout << four_square_goal.size() << "\n";
 
                 int current_sampled_n_goals = 0;
                 while (sampled_goal_set.size() <= total_n_point_goal) {
@@ -444,7 +438,7 @@ namespace raisim
             random_initialize = cfg["random_initialize"].template As<bool>();
             random_external_force = cfg["random_external_force"].template As<bool>();
 
-            if (point_goal_initialize) {
+            if (point_goal_initialize || CVAE_data_collection_initialize) {
                 /// find the point closest to the center
                 double min_distance= 100;
                 double distance;
@@ -542,7 +536,7 @@ namespace raisim
     {
         static std::default_random_engine generator(random_seed);
 
-        if (random_initialize || CVAE_data_collection_initialize) {
+        if (random_initialize) {
             if (current_n_step == 0) {
                 /// Random initialization by sampling available x, y position
                 std::uniform_int_distribution<> uniform_init(0, n_init_set-1);
@@ -575,7 +569,7 @@ namespace raisim
             }
 
         }
-        else if (point_goal_initialize) {
+        else if (point_goal_initialize || CVAE_data_collection_initialize) {
             if (current_n_step == 0) {
                 // position
                 for (int i = 0; i < 2; i++)

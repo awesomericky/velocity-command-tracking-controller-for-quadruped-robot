@@ -5,8 +5,8 @@ logging: False
 environment:
   render: True
   # just testing commenting
-  evaluate: True
-  determine_env: 3  # 0: not determine / 1: circle / 2: box / 3: corridor
+  evaluate: False
+  determine_env: 0  # 0: not determine / 1: circle / 2: box / 3: corridor
   num_envs: 500
   max_n_update: 30000
   eval_every_n: 100
@@ -21,9 +21,9 @@ environment:
   control_dt: 0.01
   max_time: 9.0
   obstacle_grid_size:
-    min: 3
-    max: 4
-  obstacle_dr:
+    min: 2.5
+    max: 4.0
+  obstacle_dr:  # not used
     min: 0.3
     max: 0.6 #0.5
   command:

@@ -216,10 +216,8 @@ else:
     #                                        action_dim=3)
 #
     env.initialize_n_step()
-    pdb.set_trace()
     action_planner.reset()
     goal_position = env.set_goal()[np.newaxis, :]
-    print(goal_position)
     env.turn_on_visualization()
     COM_buffer.reset()
     # env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_" + "lidar_2d_normal_sampling" + '.mp4')
@@ -231,7 +229,7 @@ else:
     step = 0
     n_test_case = 0
     n_success_test_case = 0
-    num_goals = 12
+    num_goals = 8
 
     # MUST safe period from collision
     MUST_safety_period = 3.0
@@ -409,7 +407,7 @@ else:
 
         # fail
         if done[0] == True:
-            env.initialize_n_step()
+            env.initialize_n_step()   # keep start in same initial condiition
             env.reset()
             COM_buffer.reset()
             action_planner.reset()
@@ -422,14 +420,14 @@ else:
             print(f"Intermediate result : {n_success_test_case} / {n_test_case}")
         # success
         elif current_goal_distance < 0.5:
-            env.initialize_n_step()
+            print(goal_current_duration)
+            env.initialize_n_step()  # keep start in same initial condiition
             env.reset()
             # plot command trajectory
             command_traj = np.array(command_traj)
             # reset action planner and set new goal
             action_planner.reset()
             goal_position = env.set_goal()[np.newaxis, :]
-            print(goal_position)
             n_test_case += 1
             step = 0
             command_traj = []

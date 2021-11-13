@@ -5,7 +5,7 @@ environment:
   render: True
   evaluate: True
   determine_env: 0  # 0: not determine / 1: circle / 2: box / 3: corridor
-  type: 2
+  type: 9
   #    1 : 90 degree maze
   #    2 : diagonal maze (env1)  ===
   #    3 : scattered obstacle (seen)
@@ -21,8 +21,8 @@ environment:
   seed:
     train: 0
     evaluate: 600
-  num_threads: 4
-  test_num_threads: 4
+  num_threads: 2
+  test_num_threads: 2
   simulation_dt: 0.0025
   control_dt: 0.01
   max_time: 9.0
@@ -61,7 +61,7 @@ training:
 evaluating:
   number_of_sample: 2000
   gamma: 20
-  beta: 0.5  # 0.8  # bigger == more consider a_hat
+  beta: 0.4  # 0.8  # bigger == more consider a_hat
   time_correlation_beta: 0.1   # 0.1
   sigma: 0.3
   number_of_bin: 10

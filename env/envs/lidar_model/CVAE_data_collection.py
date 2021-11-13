@@ -13,7 +13,7 @@ import torch
 import argparse
 import pdb
 from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
-from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_uniform_bin
+from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_uniform_bin, Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 
 """
@@ -131,8 +131,8 @@ command_tracking_weight_dir = command_tracking_weight_path.rsplit('/', 1)[0] + '
 iteration_number = command_tracking_weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0]
 env.load_scaling(command_tracking_weight_dir, int(iteration_number))
 
-iteration_number = weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0]
-weight_dir = weight_path.rsplit('/', 1)[0] + '/'
+# iteration_number = weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0]
+# weight_dir = weight_path.rsplit('/', 1)[0] + '/'
 
 if weight_path == "":
     raise ValueError("Can't find trained weight, please provide a trained weight with --weight switch")
@@ -153,33 +153,35 @@ loaded_environment_model.to(device)
 
 # Load action planner
 n_prediction_step = int(cfg["data_collection"]["prediction_period"] / cfg["data_collection"]["command_period"])
-action_planner = Stochastic_action_planner_uniform_bin(command_range=cfg["environment"]["command"],
-                                                       n_sample=cfg["evaluating"]["number_of_sample"],
-                                                       n_horizon=n_prediction_step,
-                                                       n_bin=cfg["evaluating"]["number_of_bin"],
-                                                       beta=cfg["evaluating"]["beta"],
-                                                       gamma=cfg["evaluating"]["gamma"],
-                                                       noise_sigma=0.1,
-                                                       noise=False,
-                                                       action_dim=command_dim)
+action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal(command_range=cfg["environment"]["command"],
+                                                                                 n_sample=cfg["evaluating"]["number_of_sample"],
+                                                                                 n_horizon=n_prediction_step,
+                                                                                 n_bin=cfg["evaluating"]["number_of_bin"],
+                                                                                 beta=cfg["evaluating"]["beta"],
+                                                                                 gamma=cfg["evaluating"]["gamma"],
+                                                                                 sigma=cfg["evaluating"]["sigma"],
+                                                                                 noise_sigma=0.1,
+                                                                                 noise=False,
+                                                                                 action_dim=command_dim,
+                                                                                 random_command_sampler=user_command)
 
-num_max_env = 1000
+num_max_env = 360
 num_max_sucess_goals_in_one_env = 8   # Should also change 'total_n_point_goal' in Environment.hpp if you change this value
-num_max_data_in_one_goal = 5
-print(f"Check important data collection parameters: num_max_env - {num_max_env} / num_max_sucess_goals_in_one_env - {num_max_sucess_goals_in_one_env} / num_max_data_in_one_goal = {num_max_data_in_one_goal}")
+num_max_data_in_one_goal = 20
+print(f">> Check important data collection parameters: num_max_env = {num_max_env} / num_max_sucess_goals_in_one_env = {num_max_sucess_goals_in_one_env} / num_max_data_in_one_goal = {num_max_data_in_one_goal}")
 pdb.set_trace()
 
 # MUST safe period from collision
-MUST_safety_period = 2.0
+MUST_safety_period = 3.0
 MUST_safety_period_n_steps = int(MUST_safety_period / cfg['data_collection']['command_period'])
 sample_user_command = np.zeros(3)
 prev_coordinate_obs = np.zeros((1, 3))
-goal_time_limit = 180.
+goal_time_limit = 45.   # too filter trajectories trapped in local optima
 
 # IMPORTANT PARAMETERS
-collision_threshold = 0.8
+collision_threshold = 0.05
 goal_distance_threshold = 10   # Should change goal_set distance condition in Environment.hpp if you change this value (current: 10 for env1 & anv2, 5 for env3
-print(f"Check important action parameters: collision_threshold - {collision_threshold} / goal_distance_threshold - {goal_distance_threshold}")
+print(f">> Check important action parameters: MUST_safety_period = {MUST_safety_period} / collision_threshold = {collision_threshold} / goal_distance_threshold = {goal_distance_threshold}")
 pdb.set_trace()
 
 # Monitor total saved data size
@@ -197,12 +199,12 @@ for env_type in [1, 2, 3]:
     cfg["environment"]["determine_env"] = env_type
     print("==============================================")
     print(f"Environment {env_type} data collection started")
-    for i in range(num_max_env):
+    for i in range(num_max_env):   # Change range value if you want to add more data continuing from previous data collection (ex) range(n) ==> range(n, n'))
         print(f"{i+1} / {num_max_env} ==>", end=' ')
         env_start = time.time()
 
         # Create environment from the configuration file
-        cfg["environment"]["seed"]["train"] = i + 2000   # used seed: 2000 ~ 3000
+        cfg["environment"]["seed"]["train"] = env_type * 10000 + 2000 + i   # used seed: 12000 ~ 12000 + (num_max_env-1) | 22000 ~ 22000 + (num_max_env-1) | 32000 ~ 32000 + (num_max_env-1)
         env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
         env.load_scaling(command_tracking_weight_dir, int(iteration_number))
         # env.turn_on_visualization()
@@ -231,6 +233,10 @@ for env_type in [1, 2, 3]:
             observation_traj = []
             goal_position_traj = []
             command_traj = []
+
+            if (current_num_fail_goals > 10) or (current_num_success_but_short_goals > 10):
+                print("Not appropriate environment sampled")
+                break
 
             while True:
                 frame_start = time.time()
@@ -272,10 +278,10 @@ for env_type in [1, 2, 3]:
                     safety_reward = np.mean(safety_reward, axis=0)
                     safety_reward /= np.max(safety_reward) + 1e-5  # normalize reward
 
-                    action_size = np.sqrt((action_candidates[0, :, 0] / 1) ** 2 + (action_candidates[0, :, 1] / 0.4) ** 2 + (action_candidates[0, :, 2] / 1.2) ** 2)
-                    action_size /= np.max(action_size)
+                    # action_size = np.sqrt((action_candidates[0, :, 0] / 1) ** 2 + (action_candidates[0, :, 1] / 0.4) ** 2 + (action_candidates[0, :, 2] / 1.2) ** 2)
+                    # action_size /= np.max(action_size)
 
-                    reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
+                    reward = 1.0 * goal_reward * safety_reward + 0.3 * safety_reward
                     coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
 
                     if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
@@ -285,23 +291,22 @@ for env_type in [1, 2, 3]:
 
                     sample_user_command = cand_sample_user_command.copy()
 
-                    # # Visualize predicted modified command trajectory
-                    # state = state[0, :][np.newaxis, :]
-                    # predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
-                    #                                                                    torch.from_numpy(sample_user_command_traj[:, np.newaxis, :]).to(device),
-                    #                                                                    training=False)
-                    # w_coordinate_modified_command_path = transform_coordinate_LW(init_coordinate_obs, predicted_coordinates[:, 0, :])
-                    # P_col_modified_command_path = predicted_P_cols[:, 0, :]
-                    # env.visualize_modified_command_traj(w_coordinate_modified_command_path,
-                    #                                     P_col_modified_command_path)
-                    # prev_coordinate_obs = init_coordinate_obs.copy()
+                    # Visualize predicted modified command trajectory
+                    state = state[0, :][np.newaxis, :]
+                    predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
+                                                                                       torch.from_numpy(sample_user_command_traj[:, np.newaxis, :]).to(device),
+                                                                                       training=False)
+                    w_coordinate_modified_command_path = transform_coordinate_LW(init_coordinate_obs, predicted_coordinates[:, 0, :])
+                    P_col_modified_command_path = predicted_P_cols[:, 0, :]
+                    env.visualize_modified_command_traj(w_coordinate_modified_command_path,
+                                                        P_col_modified_command_path,
+                                                        collision_threshold)
+                    prev_coordinate_obs = init_coordinate_obs.copy()
 
                     # Record data needed for training CVAE
-                    observation_traj.append(state)
-                    goal_position_traj.append(goal_position_L)
-                    command_traj.append(sample_user_command)
-                    print("Check shape and dtype of recorded data!!")
-                    pdb.set_trace()
+                    observation_traj.append(state[0].astype(np.float32))  # (state_dim,)
+                    goal_position_traj.append(goal_position_L[0].astype(np.float32))  # (goal_position_L_dim,)
+                    command_traj.append(sample_user_command.astype(np.float32))  # (command_dim,)
 
                 tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
                 tracking_obs = env.force_normalize_observation(tracking_obs, type=1)
@@ -358,15 +363,13 @@ for env_type in [1, 2, 3]:
 
         env_end = time.time()
 
-        assert current_num_success_goals + current_num_fail_goals == num_max_sucess_goals_in_one_env, "Bug exists in computing SR."
-
         # Print elapse time and success rate to monitor data collection progress
         elapse_time_seconds = env_end - env_start
         elaspe_time_minutes = int(elapse_time_seconds / 60)
         elapse_time_seconds -= (elaspe_time_minutes * 60)
         elapse_time_seconds = int(elapse_time_seconds)
         saved_data_size[f'env{env_type}'] += (current_num_success_goals * num_max_data_in_one_goal)
-        print(f"Time: {elaspe_time_minutes}m {elapse_time_seconds}s", "||" , f"SR: {num_max_sucess_goals_in_one_env} / {num_max_sucess_goals_in_one_env + current_num_fail_goals + current_num_success_but_short_goals} ({current_num_success_but_short_goals})",
+        print(f"Time: {elaspe_time_minutes}m {elapse_time_seconds}s", "||" , f"Date SR: {num_max_sucess_goals_in_one_env} / {num_max_sucess_goals_in_one_env + current_num_fail_goals + current_num_success_but_short_goals} ({current_num_success_but_short_goals})",
             "||", f"Dataset: {saved_data_size['env1']} / {saved_data_size['env2']} / {saved_data_size['env3']}", sep=" ")
 
 # env.stop_video_recording()

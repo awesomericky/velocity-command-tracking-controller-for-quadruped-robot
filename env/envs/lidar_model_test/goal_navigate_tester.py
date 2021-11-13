@@ -210,7 +210,7 @@ else:
     # Needed for computing real time factor
     total_time = 0
 
-    collision_threshold = 0.1
+    collision_threshold = 0.05
     goal_distance_threshold = 10
 
     # goal_kernel = [0.98 ** (12 - i - 1) for i in range(12)]
@@ -284,7 +284,7 @@ else:
             # action_size = abs(action_candidates[0, :, 0] / 1) + abs(action_candidates[0, :, 1] / 0.4) + abs(action_candidates[0, :, 2] / 1.2)
             # action_size /= 3
 
-            reward = 1.0 * goal_reward * safety_reward
+            reward = 1.0 * goal_reward * safety_reward + 0.3 * safety_reward
             # reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # final reward term for (env1, 3, 4)
             # reward = 1.4 * goal_reward + 0.7 * safety_reward + 0.4 * action_size  # final reward term for (env1, 3, 4)
             coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]

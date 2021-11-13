@@ -52,8 +52,8 @@ class VectorizedEnvironment {
         generator_seed = cfg_["seed"]["evaluate"].template As<int>();
     else
         generator_seed = cfg_["seed"]["train"].template As<int>();
-    std::cout << "Evaluate: " << evaluate << "\n";
-    std::cout << "Seed: " << generator_seed << "\n";
+//    std::cout << "Evaluate: " << evaluate << "\n";
+//    std::cout << "Seed: " << generator_seed << "\n";
     std::default_random_engine generator(generator_seed);
     std::uniform_int_distribution<> seed_uniform(0, 1000000);
     std::uniform_int_distribution<> env_type_uniform(1, 3);
@@ -92,9 +92,9 @@ class VectorizedEnvironment {
             n_type_3 += 1.;
     }
 
-    std::cout << "Environment 1 (circle): " << std::to_string(n_type_1 / num_envs_) << "\n";
-    std::cout << "Environment 2 (box): " << std::to_string(n_type_2 / num_envs_) << "\n";
-    std::cout << "Environment 3 (corridor): " << std::to_string(n_type_3 / num_envs_) << "\n";
+//    std::cout << "Environment 1 (circle): " << std::to_string(n_type_1 / num_envs_) << "\n";
+//    std::cout << "Environment 2 (box): " << std::to_string(n_type_2 / num_envs_) << "\n";
+//    std::cout << "Environment 3 (corridor): " << std::to_string(n_type_3 / num_envs_) << "\n";
 
     environments_.reserve(num_envs_);
     rewardInformation_.reserve(num_envs_);
