@@ -9,9 +9,12 @@ from raisimGymTorch.helper.raisim_gym_helper import ConfigurationSaver
 import wandb
 import pdb
 import os
+import argparse
 
 # task specification
 task_name = "CVAE_train"
+
+parser = argparse.ArgumentParser()
 parser.add_argument('-pw', '--pretrained_weight', help='pre-trained weight path for state and command encoder', type=str,
                     required=True)
 # pretrained_weight example format
@@ -40,7 +43,7 @@ data_folder_path = "/home/student/quadruped/raisimLib/raisimGymTorch/CVAE_data"
 data_file_list = os.listdir(data_folder_path)
 n_data_files = len(data_file_list)
 train_data_ratio = 0.8
-n_train_data_files = n_data_files * train_data_ratio
+n_train_data_files = int(n_data_files * train_data_ratio)
 n_val_data_files = n_data_files - n_train_data_files
 indices = np.random.permutation(n_data_files)
 train_idx, validation_idx = indices[:n_train_data_files], indices[n_train_data_files:]
@@ -80,7 +83,7 @@ n_latent_sample = cfg["CVAE_training"]["n_latent_sample"]
 loss_weight = {"reconstruction": cfg["CVAE_training"]["loss_weight"]["reconsturction"],
                "KL_posterior": cfg["CVAE_training"]["loss_weight"]["KL_posterior"]}
 
-optimizer = optim.Adam(filter(lambda p: p.requires_grad, cvae_train_model.parameters()), lr=cfg["CVAE_architecture"]["learning_rate"])
+optimizer = optim.Adam(filter(lambda p: p.requires_grad, cvae_train_model.parameters()), lr=cfg["CVAE_training"]["learning_rate"])
 
 saver = ConfigurationSaver(log_dir=home_path + "/raisimGymTorch/data/"+task_name,
                            save_items=[task_path + "/cfg.yaml", task_path + "/Environment.hpp"])
@@ -88,6 +91,8 @@ saver = ConfigurationSaver(log_dir=home_path + "/raisimGymTorch/data/"+task_name
 if cfg["logging"]:
     wandb.init(name=task_name, project="Quadruped_RL")
     wandb.watch(cvae_train_model, log='all', log_freq=200)
+
+pdb.set_trace()
 
 for epoch in range(cfg["CVAE_training"]["num_epochs"]):
     if epoch % cfg["CVAE_training"]["evaluate_period"] == 0:
@@ -128,24 +133,26 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
             # Model forward computation
             with torch.no_grad():
                 latent_mean, latent_log_var, sampled_command_traj = cvae_evaluate_model(observation_batch, goal_position_batch, command_traj_batch)
-
+            
             # Compute loss
             if n_latent_sample == 1:
                 reconstruction_loss = torch.sum(torch.sum((sampled_command_traj - command_traj_batch).pow(2), dim=0), dim=-1)
             else:
                 command_traj_batch_broadcast = torch.broadcast_to(command_traj_batch.unsqueeze(2),
                                                                   (command_traj_batch.shape[0], command_traj_batch.shape[1], n_latent_sample, command_traj_batch.shape[2]))
-                if cfg["CVAE_training"]["objective_type"] is "CVAE":
+                if cfg["CVAE_training"]["objective_type"] == "CVAE":
                     reconstruction_loss = torch.mean(torch.sum(torch.sum((sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1)
-                elif cfg["CVAE_training"]["objective_type"] is "BMS":
-                    reconstruction_loss = torch.min(torch.sum(torch.sum((sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1) + torch.log(n_latent_sample).to(device)
+                elif cfg["CVAE_training"]["objective_type"] == "BMS":
+                    reconstruction_loss = torch.min(torch.sum(torch.sum((sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1)[0] + torch.log(torch.tensor(n_latent_sample)).to(device)
                 else:
                     raise ValueError("Unsupported loss type")
+            reconstruction_loss = reconstruction_loss.mean()
             KL_posterior_loss = 0.5 * (torch.sum(latent_mean.pow(2) + latent_log_var.exp() - latent_log_var - 1, dim=-1))
-            loss = reconstruction_loss.mean() * loss_weight["reconsturction"] + KL_posterior_loss.mean() * loss_weight["KL_posterior"]
+            KL_posterior_loss = KL_posterior_loss.mean()
+            loss = reconstruction_loss * loss_weight["reconstruction"] + KL_posterior_loss * loss_weight["KL_posterior"]
 
             mean_loss += loss.item()
-            mean_reconstruction_loss += reconstruction_loss.loss()
+            mean_reconstruction_loss += reconstruction_loss.item()
             mean_KL_posterior_loss += KL_posterior_loss.item()
             n_update += 1
 
@@ -153,12 +160,13 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
         mean_reconstruction_loss /= n_update
         mean_KL_posterior_loss /= n_update
 
-        # Log data
-        logging_data = dict()
-        logging_data['Evaluate/Total'] = mean_loss
-        logging_data['Evaluate/Reconstruction'] = mean_reconstruction_loss
-        logging_data['Evaluate/KL_posterior'] = mean_KL_posterior_loss
-        wandb.log(logging_data)
+        if cfg["logging"]:
+            # Log data
+            logging_data = dict()
+            logging_data['Evaluate/Total'] = mean_loss
+            logging_data['Evaluate/Reconstruction'] = mean_reconstruction_loss
+            logging_data['Evaluate/KL_posterior'] = mean_KL_posterior_loss
+            wandb.log(logging_data)
 
         print('====================================================')
         print('{:>6}th evaluation'.format(epoch))
@@ -188,14 +196,16 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
         else:
             command_traj_batch_broadcast = torch.broadcast_to(command_traj_batch.unsqueeze(2),
                                                               (command_traj_batch.shape[0], command_traj_batch.shape[1], n_latent_sample, command_traj_batch.shape[2]))
-            if cfg["CVAE_training"]["objective_type"] is "CVAE":
+            if cfg["CVAE_training"]["objective_type"] == "CVAE":
                 reconstruction_loss = torch.mean(torch.sum(torch.sum((sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1)
-            elif cfg["CVAE_training"]["objective_type"] is "BMS":
-                reconstruction_loss = torch.min(torch.sum(torch.sum((sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1) + torch.log(n_latent_sample).to(device)
+            elif cfg["CVAE_training"]["objective_type"] == "BMS":
+                reconstruction_loss = torch.min(torch.sum(torch.sum((sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1)[0] +  torch.log(torch.tensor(n_latent_sample)).to(device)
             else:
                 raise ValueError("Unsupported loss type")
+        reconstruction_loss = reconstruction_loss.mean()
         KL_posterior_loss = 0.5 * (torch.sum(latent_mean.pow(2) + latent_log_var.exp() - latent_log_var - 1, dim=-1))
-        loss = reconstruction_loss.mean() * loss_weight["reconsturction"] + KL_posterior_loss.mean() * loss_weight["KL_posterior"]
+        KL_posterior_loss = KL_posterior_loss.mean()
+        loss = reconstruction_loss * loss_weight["reconstruction"] + KL_posterior_loss * loss_weight["KL_posterior"]
 
         # Gradient step
         optimizer.zero_grad()
@@ -205,7 +215,7 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
         optimizer.step()
 
         mean_loss += loss.item()
-        mean_reconstruction_loss += reconstruction_loss.loss()
+        mean_reconstruction_loss += reconstruction_loss.item()
         mean_KL_posterior_loss += KL_posterior_loss.item()
         n_update += 1
 
@@ -213,12 +223,13 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
     mean_reconstruction_loss /= n_update
     mean_KL_posterior_loss /= n_update
 
-    # Log data
-    logging_data = dict()
-    logging_data['Loss/Total'] = mean_loss
-    logging_data['Loss/Reconstruction'] = mean_reconstruction_loss
-    logging_data['Loss/KL_posterior'] = mean_KL_posterior_loss
-    wandb.log(logging_data)
+    if cfg["logging"]:
+        # Log data
+        logging_data = dict()
+        logging_data['Loss/Total'] = mean_loss
+        logging_data['Loss/Reconstruction'] = mean_reconstruction_loss
+        logging_data['Loss/KL_posterior'] = mean_KL_posterior_loss
+        wandb.log(logging_data)
 
     print('----------------------------------------------------')
     print('{:>6}th iteration'.format(epoch))

@@ -1,5 +1,3 @@
-import pdb
-
 import torch.nn as nn
 import numpy as np
 import torch
@@ -150,7 +148,7 @@ class CVAE_implicit_distribution(nn.Module):
         self.recurrence_decoding_config = recurrence_decoding_config
         self.command_decoding_config = command_decoding_config
         self.device = device
-        self.pretrained_weight = pretrained_weight
+        self.pretrained_weight = torch.load(pretrained_weight, map_location=self.device)["model_architecture_state_dict"]
         self.n_latent_sample = n_latent_sample
         self.state_encoder_fixed = state_encoder_fixed
         self.command_encoder_fixed = command_encoder_fixed
@@ -162,10 +160,8 @@ class CVAE_implicit_distribution(nn.Module):
 
         assert self.state_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
         assert self.command_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
-        assert self.recurrence_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
         assert self.latent_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
         assert self.latent_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
-        assert self.recurrence_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
         assert self.command_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
 
         self.set_module()
@@ -218,7 +214,8 @@ class CVAE_implicit_distribution(nn.Module):
         if self.state_encoder_fixed:
             # load pretrained state encoder
             state_encoder_state_dict = self.state_encoder.state_dict()
-            pretrained_state_encoder_state_dict = {k: v for k, v in self.pretrained_weight.items() if k in state_encoder_state_dict}
+            pretrained_state_encoder_state_dict = {k.split('.', 1)[1]: v for k, v in self.pretrained_weight.items() if k.split('.', 1)[0] == "state_encoder"}
+            assert len(pretrained_state_encoder_state_dict.keys()) != 0, "Error when loading weights"
             state_encoder_state_dict.update(pretrained_state_encoder_state_dict)
             self.state_encoder.load_state_dict(state_encoder_state_dict)
             self.state_encoder.eval()
@@ -228,7 +225,8 @@ class CVAE_implicit_distribution(nn.Module):
         if self.command_encoder_fixed:
             # load pretrained state encoder
             command_encoder_state_dict = self.command_encoder.state_dict()
-            pretrained_command_encoder_state_dict = {k: v for k, v in self.pretrained_weight.items() if k in command_encoder_state_dict}
+            pretrained_command_encoder_state_dict = {k.split('.', 1)[1]: v for k, v in self.pretrained_weight.items() if k.split('.')[0] == "command_encoder"}
+            assert len(pretrained_command_encoder_state_dict.keys()) != 0, "Error when loading weights"
             command_encoder_state_dict.update(pretrained_command_encoder_state_dict)
             self.command_encoder.load_state_dict(command_encoder_state_dict)
             self.command_encoder.eval()
@@ -294,13 +292,12 @@ class CVAE_implicit_distribution(nn.Module):
             total_decoded_result = torch.cat((encoded_state, goal_position, sample), dim=1)
             hidden_state = self.latent_decoder.architecture(total_decoded_result).unsqueeze(0)
             decoded_traj = torch.zeros(traj_len, n_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
-            input = torch.zeros(1, n_sample, self.recurrence_decoding_config["input"]).to(self.device)
+            input_state = torch.zeros(1, n_sample, self.recurrence_decoding_config["input"]).to(self.device)
 
             for i in range(traj_len):
-                output, hidden_state = self.recurrence_decoder(input, hidden_state)
-                output = output.squeeze(0)
-                decoded_traj[i] = output
-                input = decoded_traj[i]
+                output, hidden_state = self.recurrence_decoder(input_state, hidden_state)
+                decoded_traj[i] = output.squeeze(0)
+                input_state = output
 
             decoded_traj = decoded_traj.reshape(-1, self.recurrence_decoding_config["hidden"])
             sampled_command_traj = self.command_decoder.architecture(decoded_traj)
@@ -316,8 +313,7 @@ class CVAE_implicit_distribution(nn.Module):
             """
             # sample with reparameterization trick
             latent_std = torch.exp(0.5 * latent_log_var)
-            eps = torch.rand((n_sample, self.n_latent_sample, self.latent_dim),
-                              dtype=latent_std.type, layout=latent_std.layout, device=self.device)
+            eps = torch.rand((n_sample, self.n_latent_sample, self.latent_dim)).to(self.device)
             sample = latent_mean.unsqueeze(1) + (eps * latent_std.unsqueeze(1))   # (n_sample, self.n_latent_sample, latent_dim)
 
             # decode command trajectory
@@ -327,13 +323,12 @@ class CVAE_implicit_distribution(nn.Module):
             total_decoded_result = total_decoded_result.reshape(n_sample * self.n_latent_sample, -1)
             hidden_state = self.latent_decoder.architecture(total_decoded_result).unsqueeze(0)
             decoded_traj = torch.zeros(traj_len, n_sample * self.n_latent_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
-            input = torch.zeros(1, n_sample * self.n_latent_sample, self.recurrence_decoding_config["input"]).to(self.device)
+            input_state = torch.zeros(1, n_sample * self.n_latent_sample, self.recurrence_decoding_config["input"]).to(self.device)
 
             for i in range(traj_len):
-                output, hidden_state = self.recurrence_decoder(input, hidden_state)
-                output = output.squeeze(0)
-                decoded_traj[i] = output
-                input = decoded_traj[i]
+                output, hidden_state = self.recurrence_decoder(input_state, hidden_state)
+                decoded_traj[i] = output.squeeze(0)
+                input_state = output
 
             decoded_traj = decoded_traj.reshape(-1, self.recurrence_decoding_config["hidden"])
             sampled_command_traj = self.command_decoder.architecture(decoded_traj)
@@ -363,14 +358,13 @@ class CVAE_implicit_distribution_inference(nn.Module):
         self.recurrence_decoding_config = recurrence_decoding_config
         self.command_decoding_config = command_decoding_config
         self.device = device
-        self.trained_weight = trained_weight
+        self.trained_weight = torch.load(trained_weight, map_location=self.device)["model_architecture_state_dict"]
         self.cfg_command = cfg_command
         self.activation_map = {"relu": nn.ReLU, "tanh": nn.Tanh, "leakyrelu": nn.LeakyReLU}
         self.latent_dim = self.latent_decoding_config["input"] - self.state_encoding_config["output"] - 2
 
         assert self.state_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
         assert self.latent_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
-        assert self.recurrence_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
         assert self.command_decoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
 
         self.set_module()
@@ -400,25 +394,29 @@ class CVAE_implicit_distribution_inference(nn.Module):
 
         # load weight
         state_encoder_state_dict = self.state_encoder.state_dict()
-        trained_state_encoder_state_dict = {k: v for k, v in self.trained_weight.items() if k in state_encoder_state_dict}
+        trained_state_encoder_state_dict = {k.split('.', 1)[1]: v for k, v in self.trained_weight.items() if k.split('.', 1)[0] == "state_encoder"}
+        assert len(trained_state_encoder_state_dict.keys()) != 0, "Error when loading weights"
         state_encoder_state_dict.update(trained_state_encoder_state_dict)
         self.state_encoder.load_state_dict(state_encoder_state_dict)
         self.state_encoder.eval()
 
         latent_decoder_state_dict = self.latent_decoder.state_dict()
-        trained_latent_decoder_state_dict = {k: v for k, v in self.trained_weight.items() if k in latent_decoder_state_dict}
+        trained_latent_decoder_state_dict = {k.split('.', 1)[1]: v for k, v in self.trained_weight.items() if k.split('.')[0] == "latent_decoder"}
+        assert len(trained_latent_decoder_state_dict.keys()) != 0, "Error when loading weights"
         latent_decoder_state_dict.update(trained_latent_decoder_state_dict)
         self.latent_decoder.load_state_dict(latent_decoder_state_dict)
         self.latent_decoder.eval()
 
         recurrence_decoder_state_dict = self.recurrence_decoder.state_dict()
-        trained_recurrence_decoder_state_dict = {k: v for k, v in self.trained_weight.items() if k in recurrence_decoder_state_dict}
+        trained_recurrence_decoder_state_dict = {k.split('.', 1)[1]: v for k, v in self.trained_weight.items() if k.split('.')[0] == "recurrence_decoder"}
+        assert len(trained_recurrence_decoder_state_dict.keys()) != 0, "Error when loading weights" 
         recurrence_decoder_state_dict.update(trained_recurrence_decoder_state_dict)
         self.recurrence_decoder.load_state_dict(recurrence_decoder_state_dict)
         self.recurrence_decoder.eval()
 
         command_decoder_state_dict = self.command_decoder.state_dict()
-        trained_command_decoder_state_dict = {k: v for k, v in self.trained_weight.items() if k in command_decoder_state_dict}
+        trained_command_decoder_state_dict = {k.split('.', 1)[1]: v for k, v in self.trained_weight.items() if k.split('.')[0] == "command_decoder"}
+        assert len(trained_command_decoder_state_dict.keys()) != 0, "Error when loading weights"
         command_decoder_state_dict.update(trained_command_decoder_state_dict)
         self.command_decoder.load_state_dict(command_decoder_state_dict)
         self.command_decoder.eval()
@@ -441,14 +439,13 @@ class CVAE_implicit_distribution_inference(nn.Module):
             total_decoded_result = torch.cat((encoded_state, goal_position, sample), dim=1)
             hidden_state = self.latent_decoder.architecture(total_decoded_result).unsqueeze(0)
             decoded_traj = torch.zeros(traj_len, n_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
-            input = torch.zeros(1, n_sample, self.recurrence_decoding_config["input"]).to(self.device)
+            input_state = torch.zeros(1, n_sample, self.recurrence_decoding_config["input"]).to(self.device)
 
             for i in range(traj_len):
-                output, hidden_state = self.recurrence_decoder(input, hidden_state)
-                output = output.squeeze(0)
-                decoded_traj[i] = output
-                input = decoded_traj[i]
-
+                output, hidden_state = self.recurrence_decoder(input_state, hidden_state)
+                decoded_traj[i] = output.squeeze(0)
+                input_state = output
+            
             decoded_traj = decoded_traj.reshape(-1, self.recurrence_decoding_config["hidden"])
             sampled_command_traj = self.command_decoder.architecture(decoded_traj)
             sampled_command_traj = sampled_command_traj.reshape(traj_len, n_sample, -1)

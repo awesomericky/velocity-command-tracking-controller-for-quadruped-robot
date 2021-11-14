@@ -123,42 +123,42 @@ architecture:
 CVAE_architecture:
   state_encoder: # state = lidar + (encoded COM history)
     input: 450  # COM_encoder output is included in the input (360 + 32)
-    output: 64
+    output: 100
     shape: [ 256, 256, 128, 128 ]
     activation: leakyrelu
     dropout: 0.2
     batchnorm: True
   command_encoder:
     input: 3
-    output: 32
-    shape: [ 64, 64 ]
+    output: 64
+    shape: [ 32 ]
     activation: leakyrelu
     dropout: 0.2
     batchnorm: True
   recurrence_encoder:
-    input: 32
-    hidden: 64
+    input: 64
+    hidden: 100
     layer: 1
   latent_encoder:
-    input: 130  # 64 + 64 + 2 (goal_position)
+    input: 202  # 100 + 100 + 2 (goal_position)
     output: 16  # latent dimension (model outputs 'mean' and 'log_std' each of corresponding size'
     shape: [64, 32]
     activation: leakyrelu
     dropout: 0.0
     batchnorm: False
   latent_decoder:
-    input: 82  # 16 + 64 + 2 (goal_position)
+    input: 118  # 16 + 100 + 2 (goal_position)
     shape: [64]
-    output: 32
+    output: 50
     activation: leakyrelu
     dropout: 0.0
     batchnorm: False
   recurrence_decoder:
-    input: 32
-    hidden: 32
+    input: 50  # input and hidden size should be sames because recursive process happens (check other good method)
+    hidden: 50
     layer: 1
   command_decoder:
-    input: 32
+    input: 50
     output: 3
     shape: [ 64, 64 ]
     activation: leakyrelu
@@ -172,7 +172,7 @@ CVAE_training:
   objective_type: CVAE  # CVAE / BMS (https://arxiv.org/abs/1806.07772)  ==> changes are meaningful only when n_latent_sample > 1
   n_latent_sample: 1
   learning_rate: 3e-4
-  batch_size: 512
+  batch_size: 200 # 512
   num_workers: 6
   shuffle_batch: True
   clip_gradient: True
