@@ -9,7 +9,7 @@ class Lidar_environment_model(nn.Module):
     def __init__(self, COM_encoding_config, state_encoding_config, command_encoding_config,
                  recurrence_config, prediction_config, device):
         super(Lidar_environment_model, self).__init__()
-
+        
         self.use_TCN = COM_encoding_config["use_TCN"]
         self.COM_encoding_config = COM_encoding_config
         self.state_encoding_config = state_encoding_config
@@ -184,7 +184,8 @@ class CVAE_implicit_distribution(nn.Module):
                                    batchnorm=self.state_encoding_config["batchnorm"])
         self.recurrence_encoder = torch.nn.GRU(self.recurrence_encoding_config["input"],
                                                 self.recurrence_encoding_config["hidden"],
-                                                self.recurrence_encoding_config["layer"])
+                                                self.recurrence_encoding_config["layer"],
+                                                dropout=self.recurrence_encoding_config["dropout"])
         self.latent_mean_encoder = MLP(self.latent_encoding_config["shape"],
                                        self.activation_map[self.latent_encoding_config["activation"]],
                                        self.latent_encoding_config["input"],
@@ -205,7 +206,8 @@ class CVAE_implicit_distribution(nn.Module):
                                   batchnorm=self.state_encoding_config["batchnorm"])
         self.recurrence_decoder = torch.nn.GRU(self.recurrence_decoding_config["input"],
                                                self.recurrence_decoding_config["hidden"],
-                                               self.recurrence_decoding_config["layer"])
+                                               self.recurrence_decoding_config["layer"],
+                                               dropout=self.recurrence_decoding_config["dropout"])
         self.command_decoder = MLP(self.command_decoding_config["shape"],
                                    self.activation_map[self.command_decoding_config["activation"]],
                                    self.command_decoding_config["input"],
@@ -256,6 +258,8 @@ class CVAE_implicit_distribution(nn.Module):
             :param state: (n_sample, state_dim)
             :param goal_position: (n_sample, goal_position_dim)
             :param command_traj: (traj_len, n_sample, single_command_dim)
+
+            * n_sample == batch_size
 
             :return:
             latent_mean: (n_sample, latent_dim)
@@ -321,9 +325,6 @@ class CVAE_implicit_distribution(nn.Module):
             else:
                 return latent_mean.cpu().detach().numpy(), latent_log_var.cpu().detach().numpy(), sampled_command_traj.cpu().detach().numpy()
         else:
-            """
-            Should check whether the reshaping works well!!!!!!!!!
-            """
             # sample with reparameterization trick
             latent_std = torch.exp(0.5 * latent_log_var)
             eps = torch.rand((n_sample, self.n_latent_sample, self.latent_dim)).to(self.device)
@@ -396,7 +397,8 @@ class CVAE_implicit_distribution_inference(nn.Module):
                                   batchnorm=self.state_encoding_config["batchnorm"])
         self.recurrence_decoder = torch.nn.GRU(self.recurrence_decoding_config["input"],
                                                self.recurrence_decoding_config["hidden"],
-                                               self.recurrence_decoding_config["layer"])
+                                               self.recurrence_decoding_config["layer"],
+                                               dropout=self.recurrence_decoding_config["dropout"])
         self.command_decoder = MLP(self.command_decoding_config["shape"],
                                    self.activation_map[self.command_decoding_config["activation"]],
                                    self.command_decoding_config["input"],
@@ -444,41 +446,59 @@ class CVAE_implicit_distribution_inference(nn.Module):
         self.command_decoder.load_state_dict(command_decoder_state_dict)
         self.command_decoder.eval()
 
-    def forward(self, state, goal_position, n_sample, traj_len):
+    def forward(self, state, goal_position, n_sample, traj_len, return_torch=False):
         """
 
-        :param state: (n_sample', state_dim)
-        :param goal_position: (n_sample', goal_position_dim)
+        :param state: (batch_size, state_dim)
+        :param goal_position: (batch_size, goal_position_dim)
         :param n_sample: int
         :param traj_len: int
+        
+        * In real-time navigation, batch_size is usually 1. 
+
         :return:
+            sampled_command_traj: (traj_len, batch_size, n_sample, single_command_dim)
         """
         state = state.contiguous()
         goal_position = goal_position.contiguous()
 
+        batch_size = state.shape[0]
+
         with torch.no_grad():
             encoded_state = self.state_encoder.architecture(state)
-            sample = torch.rand((n_sample, self.latent_dim)).to(self.device)
+            sample = torch.rand((batch_size, n_sample, self.latent_dim)).to(self.device)
 
             # decode command trajectory
-            total_decoded_result = torch.cat((encoded_state, goal_position, sample), dim=1)
+            encoded_state = torch.broadcast_to(encoded_state.unsqueeze(1), (batch_size, n_sample, encoded_state.shape[-1])).contiguous()
+            goal_position = torch.broadcast_to(goal_position.unsqueeze(1), (batch_size, n_sample, goal_position.shape[-1])).contiguous()
+
+            total_decoded_result = torch.cat((encoded_state, goal_position, sample), dim=-1)
+            total_decoded_result = total_decoded_result.view(batch_size * n_sample, -1)
             hidden_state = self.latent_decoder.architecture(total_decoded_result).unsqueeze(0)
-            decoded_traj = torch.zeros(traj_len, n_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
-            input_state = torch.zeros(1, n_sample, self.recurrence_decoding_config["input"]).to(self.device)
+            decoded_traj = torch.zeros(traj_len, batch_size * n_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
+            input_state = torch.zeros(1, batch_size * n_sample, self.recurrence_decoding_config["input"]).to(self.device)
 
             for i in range(traj_len):
                 output, hidden_state = self.recurrence_decoder(input_state, hidden_state)
                 decoded_traj[i] = output.squeeze(0)
                 input_state = output
-            
+
             decoded_traj = decoded_traj.view(-1, self.recurrence_decoding_config["hidden"])
             sampled_command_traj = self.command_decoder.architecture(decoded_traj)
-            sampled_command_traj = sampled_command_traj.view(traj_len, n_sample, -1)
+            sampled_command_traj = sampled_command_traj.view(traj_len, batch_size, n_sample, -1)
+            if batch_size == 1:
+                sampled_command_traj = sampled_command_traj.squeeze(1)  # (traj_len, n_sample, command_dim)
 
-            sampled_command_traj = sampled_command_traj.cpu().detach().numpy()
-            sampled_command_traj = np.clip(sampled_command_traj,
-                                           [self.cfg_command["forward_vel"]["min"], self.cfg_command["lateral_vel"]["min"], self.cfg_command["yaw_rate"]["min"]],
-                                           [self.cfg_command["forward_vel"]["max"], self.cfg_command["lateral_vel"]["max"], self.cfg_command["yaw_rate"]["max"]])
+            if return_torch:
+                # pytorch clamping function with min, max as Tensor just works > 1.10.0
+                sampled_command_traj = torch.clamp(sampled_command_traj,
+                                                   torch.tensor([self.cfg_command["forward_vel"]["min"], self.cfg_command["lateral_vel"]["min"], self.cfg_command["yaw_rate"]["min"]], device=self.device),
+                                                   torch.tensor([self.cfg_command["forward_vel"]["max"], self.cfg_command["lateral_vel"]["max"], self.cfg_command["yaw_rate"]["max"]], device=self.device))
+            else:
+                sampled_command_traj = sampled_command_traj.cpu().detach().numpy()
+                sampled_command_traj = np.clip(sampled_command_traj,
+                                              [self.cfg_command["forward_vel"]["min"], self.cfg_command["lateral_vel"]["min"], self.cfg_command["yaw_rate"]["min"]],
+                                              [self.cfg_command["forward_vel"]["max"], self.cfg_command["lateral_vel"]["max"], self.cfg_command["yaw_rate"]["max"]])
 
             return sampled_command_traj
 

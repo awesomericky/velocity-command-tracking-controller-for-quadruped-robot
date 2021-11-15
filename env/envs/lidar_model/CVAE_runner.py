@@ -1,3 +1,4 @@
+import time
 from ruamel.yaml import YAML, dump, RoundTripDumper
 import numpy as np
 import torch
@@ -10,6 +11,7 @@ import wandb
 import pdb
 import os
 import argparse
+import numpy as np
 
 # task specification
 task_name = "CVAE_train"
@@ -42,7 +44,7 @@ np.random.seed(seed)
 data_folder_path = "/home/student/quadruped/raisimLib/raisimGymTorch/CVAE_data"
 data_file_list = os.listdir(data_folder_path)
 n_data_files = len(data_file_list)
-train_data_ratio = 0.8
+train_data_ratio = 0.9
 n_train_data_files = int(n_data_files * train_data_ratio)
 n_val_data_files = n_data_files - n_train_data_files
 indices = np.random.permutation(n_data_files)
@@ -80,6 +82,7 @@ cvae_train_model = CVAE_implicit_distribution(state_encoding_config=cfg["CVAE_ar
                                               command_encoder_fixed=True)
 cvae_train_model.to(device)
 n_latent_sample = cfg["CVAE_training"]["n_latent_sample"]
+n_prediction_step = int(cfg["data_collection"]["prediction_period"] / cfg["data_collection"]["command_period"])
 loss_weight = {"reconstruction": cfg["CVAE_training"]["loss_weight"]["reconsturction"],
                "KL_posterior": cfg["CVAE_training"]["loss_weight"]["KL_posterior"]}
 
@@ -90,7 +93,7 @@ saver = ConfigurationSaver(log_dir=home_path + "/raisimGymTorch/data/"+task_name
 
 if cfg["logging"]:
     wandb.init(name=task_name, project="Quadruped_RL")
-    wandb.watch(cvae_train_model, log='all', log_freq=200)
+    wandb.watch(cvae_train_model, log='all', log_freq=150)
 
 pdb.set_trace()
 
@@ -119,9 +122,22 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
         cvae_evaluate_model.eval()
         cvae_evaluate_model.to(device)
 
+        # Create CVAE inference model
+        saved_model_weight = saver.data_dir+"/full_"+str(epoch)+'.pt'
+        cvae_inference_model = CVAE_implicit_distribution_inference(state_encoding_config=cfg["CVAE_architecture"]["state_encoder"],
+                                                                    latent_decoding_config=cfg["CVAE_architecture"]["latent_decoder"],
+                                                                    recurrence_decoding_config=cfg["CVAE_architecture"]["recurrence_decoder"],
+                                                                    command_decoding_config=cfg["CVAE_architecture"]["command_decoder"],
+                                                                    device=device,
+                                                                    trained_weight=saved_model_weight,
+                                                                    cfg_command=cfg["environment"]["command"])
+        cvae_inference_model.eval()
+        cvae_inference_model.to(device)
+
         mean_loss = 0
         mean_reconstruction_loss = 0
         mean_KL_posterior_loss = 0
+        mean_inference_reconstruction_loss = 0
         n_update = 0
 
         for observation_batch, goal_position_batch, command_traj_batch in validation_generator:
@@ -133,6 +149,7 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
             # Model forward computation
             with torch.no_grad():
                 latent_mean, latent_log_var, sampled_command_traj = cvae_evaluate_model(observation_batch, goal_position_batch, command_traj_batch)
+                inference_sampled_command_traj = cvae_inference_model(observation_batch, goal_position_batch, cfg["CVAE_inference"]["n_sample"], n_prediction_step, return_torch=True) 
             
             # Compute loss
             if n_latent_sample == 1:
@@ -151,14 +168,21 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
             KL_posterior_loss = KL_posterior_loss.mean()
             loss = reconstruction_loss * loss_weight["reconstruction"] + KL_posterior_loss * loss_weight["KL_posterior"]
 
+            
+            command_traj_batch_broadcast = torch.broadcast_to(command_traj_batch.unsqueeze(2),
+                                                            (command_traj_batch.shape[0], command_traj_batch.shape[1], cfg["CVAE_inference"]["n_sample"], command_traj_batch.shape[2]))
+            inference_reconstruction_loss = torch.mean(torch.sum(torch.sum((inference_sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1).mean()
+
             mean_loss += loss.item()
             mean_reconstruction_loss += reconstruction_loss.item()
             mean_KL_posterior_loss += KL_posterior_loss.item()
+            mean_inference_reconstruction_loss += inference_reconstruction_loss.item()
             n_update += 1
 
         mean_loss /= n_update
         mean_reconstruction_loss /= n_update
         mean_KL_posterior_loss /= n_update
+        mean_inference_reconstruction_loss /= n_update
 
         if cfg["logging"]:
             # Log data
@@ -166,6 +190,7 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
             logging_data['Evaluate/Total'] = mean_loss
             logging_data['Evaluate/Reconstruction'] = mean_reconstruction_loss
             logging_data['Evaluate/KL_posterior'] = mean_KL_posterior_loss
+            logging_data['Evaluate/Inference_reconstruction'] = mean_inference_reconstruction_loss
             wandb.log(logging_data)
 
         print('====================================================')
@@ -173,9 +198,13 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
         print('{:<40} {:>6}'.format("total: ", '{:0.6f}'.format(mean_loss)))
         print('{:<40} {:>6}'.format("reconstruction: ", '{:0.6f}'.format(mean_reconstruction_loss)))
         print('{:<40} {:>6}'.format("kl posterior: ", '{:0.6f}'.format(mean_KL_posterior_loss)))
+        print('{:<40} {:>6}'.format("inference reconstruction: ", '{:0.6f}'.format(mean_inference_reconstruction_loss)))
 
         print('====================================================\n')
     
+
+    epoch_start = time.time()
+
     mean_loss = 0
     mean_reconstruction_loss = 0
     mean_KL_posterior_loss = 0
@@ -231,12 +260,18 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
         logging_data['Loss/KL_posterior'] = mean_KL_posterior_loss
         wandb.log(logging_data)
 
+    epoch_end = time.time()
+    elapse_time_seconds = epoch_end - epoch_start
+    elaspe_time_minutes = int(elapse_time_seconds / 60)
+    elapse_time_seconds -= (elaspe_time_minutes * 60)
+    elapse_time_seconds = int(elapse_time_seconds)
+
     print('----------------------------------------------------')
     print('{:>6}th iteration'.format(epoch))
     print('{:<40} {:>6}'.format("total: ", '{:0.6f}'.format(mean_loss)))
     print('{:<40} {:>6}'.format("reconstruction: ", '{:0.6f}'.format(mean_reconstruction_loss)))
     print('{:<40} {:>6}'.format("kl posterior: ", '{:0.6f}'.format(mean_KL_posterior_loss)))
-
+    print(f'Time: {elaspe_time_minutes}m {elapse_time_seconds}s')
     print('----------------------------------------------------\n')
 
 

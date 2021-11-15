@@ -1,6 +1,6 @@
 seed: 1
 record_video: yes
-logging: False
+logging: True
 
 environment:
   render: True
@@ -14,7 +14,7 @@ environment:
   seed:
     train: 0
     evaluate: 600
-  num_threads: 4
+  num_threads: 4 # 4 is (optimal for data collection)
   evaluate_num_threads: 12  # Number of threads for evaluating model prediction
   test_num_threads: 3  # Number of threads for evaluating model based RL
   simulation_dt: 0.0025
@@ -139,44 +139,49 @@ CVAE_architecture:
     input: 64
     hidden: 100
     layer: 1
+    dropout: 0.0  # just available when n_layer > 1
   latent_encoder:
     input: 202  # 100 + 100 + 2 (goal_position)
     output: 16  # latent dimension (model outputs 'mean' and 'log_std' each of corresponding size'
     shape: [64, 32]
     activation: leakyrelu
-    dropout: 0.0
-    batchnorm: False
+    dropout: 0.2
+    batchnorm: True
   latent_decoder:
     input: 118  # 16 + 100 + 2 (goal_position)
-    shape: [64]
-    output: 50
+    shape: [64, 64]
+    output: 32
     activation: leakyrelu
     dropout: 0.0
     batchnorm: False
   recurrence_decoder:
-    input: 50  # input and hidden size should be sames because recursive process happens (check other good method)
-    hidden: 50
+    input: 32  # input and hidden(output) size should be sames because recursive process happens (check other good method)
+    hidden: 32
     layer: 1
+    dropout: 0.0  # just available when n_layer > 1
   command_decoder:
-    input: 50
+    input: 32
     output: 3
-    shape: [ 64, 64 ]
+    shape: [ 32 ]
     activation: leakyrelu
-    dropout: 0.0
-    batchnorm: False
+    dropout: 0.2
+    batchnorm: True
 
 CVAE_training:
   seed: 0  # important for creating training & validation dataset
   num_epochs: 10000
-  evaluate_period: 50  # number of epochs
+  evaluate_period: 30  # number of epochs
   objective_type: CVAE  # CVAE / BMS (https://arxiv.org/abs/1806.07772)  ==> changes are meaningful only when n_latent_sample > 1
-  n_latent_sample: 100
+  n_latent_sample: 500
   learning_rate: 3e-4
-  batch_size: 200 # 512
+  batch_size: 256 # 512
   num_workers: 6
   shuffle_batch: True
-  clip_gradient: True
+  clip_gradient: False
   max_gradient_norm: 2.0
   loss_weight:
     reconsturction: 1
     KL_posterior: 1
+
+CVAE_inference:
+  n_sample: 100

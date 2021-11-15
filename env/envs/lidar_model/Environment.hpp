@@ -41,7 +41,7 @@ namespace raisim
             env_type = sample_env_type;  // 1: scattered circle, 2: scattered box, 3: cross corridor
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
-            hm_sizeX = 30., hm_sizeY = 30.;
+	    hm_sizeX = 30., hm_sizeY = 30.;
 //            hm_sizeX = 40., hm_sizeY = 40.;
 //            double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
             double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
