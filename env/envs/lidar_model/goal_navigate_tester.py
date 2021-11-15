@@ -420,7 +420,7 @@ else:
             print(f"Intermediate result : {n_success_test_case} / {n_test_case}")
         # success
         elif current_goal_distance < 0.5:
-            print(goal_current_duration)
+            # print(goal_current_duration)
             env.initialize_n_step()  # keep start in same initial condiition
             env.reset()
             # plot command trajectory

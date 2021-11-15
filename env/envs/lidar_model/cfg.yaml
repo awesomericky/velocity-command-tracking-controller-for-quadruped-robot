@@ -170,7 +170,7 @@ CVAE_training:
   num_epochs: 10000
   evaluate_period: 50  # number of epochs
   objective_type: CVAE  # CVAE / BMS (https://arxiv.org/abs/1806.07772)  ==> changes are meaningful only when n_latent_sample > 1
-  n_latent_sample: 1
+  n_latent_sample: 100
   learning_rate: 3e-4
   batch_size: 200 # 512
   num_workers: 6

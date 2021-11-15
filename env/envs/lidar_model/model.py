@@ -88,25 +88,28 @@ class Lidar_environment_model(nn.Module):
             """
             state, command_traj = args
 
+        state = state.contiguous()
+        command_traj = command_traj.contiguous()
+
         encoded_state = self.state_encoder.architecture(state)
         initial_cell_state = torch.broadcast_to(encoded_state, (self.recurrence_config["layer"], *encoded_state.shape)).contiguous()
         initial_hidden_state = torch.zeros_like(initial_cell_state).to(self.device)
 
         traj_len, n_sample, single_command_dim = command_traj.shape
-        command_traj = command_traj.reshape(-1, single_command_dim)
-        encoded_command = self.command_encoder.architecture(command_traj).reshape(traj_len, n_sample, -1)
+        command_traj = command_traj.view(-1, single_command_dim)
+        encoded_command = self.command_encoder.architecture(command_traj).view(traj_len, n_sample, -1)
 
         encoded_prediction, (_, _) = self.recurrence(encoded_command, (initial_hidden_state, initial_cell_state))
         traj_len, n_sample, encoded_prediction_dim = encoded_prediction.shape
-        encoded_prediction = encoded_prediction.reshape(-1, encoded_prediction_dim)
+        encoded_prediction = encoded_prediction.view(-1, encoded_prediction_dim)
         collision_prob_traj = self.sigmoid(self.Pcol_prediction.architecture(encoded_prediction))
-        collision_prob_traj = collision_prob_traj.reshape(traj_len, n_sample, self.prediction_config["collision"]["output"])
+        collision_prob_traj = collision_prob_traj.view(traj_len, n_sample, self.prediction_config["collision"]["output"])
          
         # coordinate_traj = self.coordinate_prediction.architecture(encoded_prediction)
-        # coordinate_traj = coordinate_traj.reshape(traj_len, n_sample, self.prediction_config["coordinate"]["output"])
+        # coordinate_traj = coordinate_traj.view(traj_len, n_sample, self.prediction_config["coordinate"]["output"])
 
         delata_coordinate_traj = self.coordinate_prediction.architecture(encoded_prediction)
-        delata_coordinate_traj = delata_coordinate_traj.reshape(traj_len, n_sample, self.prediction_config["coordinate"]["output"])
+        delata_coordinate_traj = delata_coordinate_traj.view(traj_len, n_sample, self.prediction_config["coordinate"]["output"])
 
         coordinate_traj = torch.zeros(traj_len, n_sample, self.prediction_config["coordinate"]["output"]).to(self.device)
         for i in range(traj_len):
@@ -210,12 +213,21 @@ class CVAE_implicit_distribution(nn.Module):
                                    dropout=self.state_encoding_config["dropout"],
                                    batchnorm=self.state_encoding_config["batchnorm"])
 
+        # Prepare weights too be loaded
+        pretrained_state_encoder_state_dict = dict()
+        pretrained_command_encoder_state_dict = dict()
+        for k, v in self.pretrained_weight.items():
+            if k.split('.', 1)[0] == "state_encoder":
+                pretrained_state_encoder_state_dict[k.split('.', 1)[1]] = v
+            elif k.split('.')[0] == "command_encoder":
+                pretrained_command_encoder_state_dict[k.split('.', 1)[1]] = v
+        assert len(pretrained_state_encoder_state_dict.keys()) != 0, "Error when loading weights"
+        assert len(pretrained_command_encoder_state_dict.keys()) != 0, "Error when loading weights"
+
         # Load pretrained weight and set mode for each part
         if self.state_encoder_fixed:
             # load pretrained state encoder
             state_encoder_state_dict = self.state_encoder.state_dict()
-            pretrained_state_encoder_state_dict = {k.split('.', 1)[1]: v for k, v in self.pretrained_weight.items() if k.split('.', 1)[0] == "state_encoder"}
-            assert len(pretrained_state_encoder_state_dict.keys()) != 0, "Error when loading weights"
             state_encoder_state_dict.update(pretrained_state_encoder_state_dict)
             self.state_encoder.load_state_dict(state_encoder_state_dict)
             self.state_encoder.eval()
@@ -225,8 +237,6 @@ class CVAE_implicit_distribution(nn.Module):
         if self.command_encoder_fixed:
             # load pretrained state encoder
             command_encoder_state_dict = self.command_encoder.state_dict()
-            pretrained_command_encoder_state_dict = {k.split('.', 1)[1]: v for k, v in self.pretrained_weight.items() if k.split('.')[0] == "command_encoder"}
-            assert len(pretrained_command_encoder_state_dict.keys()) != 0, "Error when loading weights"
             command_encoder_state_dict.update(pretrained_command_encoder_state_dict)
             self.command_encoder.load_state_dict(command_encoder_state_dict)
             self.command_encoder.eval()
@@ -256,6 +266,9 @@ class CVAE_implicit_distribution(nn.Module):
             else:
                 sampled_command_traj: (traj_len, n_sample, self.n_latent_sample, single_command_dim)
         """
+        state = state.contiguous()
+        goal_position = goal_position.contiguous()
+        command_traj = command_traj.contiguous()
 
         # state encoding
         if self.state_encoder_fixed:
@@ -266,12 +279,12 @@ class CVAE_implicit_distribution(nn.Module):
 
         # command encoding
         traj_len, n_sample, single_command_dim = command_traj.shape
-        command_traj = command_traj.reshape(-1, single_command_dim)
+        command_traj = command_traj.view(-1, single_command_dim)
         if self.command_encoder_fixed:
             with torch.no_grad():
-                encoded_command = self.command_encoder.architecture(command_traj).reshape(traj_len, n_sample, -1)
+                encoded_command = self.command_encoder.architecture(command_traj).view(traj_len, n_sample, -1)
         else:
-            encoded_command = self.command_encoder.architecture(command_traj).reshape(traj_len, n_sample, -1)
+            encoded_command = self.command_encoder.architecture(command_traj).view(traj_len, n_sample, -1)
 
         # command trajectory encoding
         _, encoded_command_traj = self.recurrence_encoder(encoded_command)
@@ -299,9 +312,9 @@ class CVAE_implicit_distribution(nn.Module):
                 decoded_traj[i] = output.squeeze(0)
                 input_state = output
 
-            decoded_traj = decoded_traj.reshape(-1, self.recurrence_decoding_config["hidden"])
+            decoded_traj = decoded_traj.view(-1, self.recurrence_decoding_config["hidden"])
             sampled_command_traj = self.command_decoder.architecture(decoded_traj)
-            sampled_command_traj = sampled_command_traj.reshape(traj_len, n_sample, -1)
+            sampled_command_traj = sampled_command_traj.view(traj_len, n_sample, -1)
 
             if training:
                 return latent_mean, latent_log_var, sampled_command_traj
@@ -317,10 +330,10 @@ class CVAE_implicit_distribution(nn.Module):
             sample = latent_mean.unsqueeze(1) + (eps * latent_std.unsqueeze(1))   # (n_sample, self.n_latent_sample, latent_dim)
 
             # decode command trajectory
-            encoded_state = torch.broadcast_to(encoded_state.unsqueeze(1), (n_sample, self.n_latent_sample, encoded_state.shape[-1]))
-            goal_position = torch.broadcast_to(goal_position.unsqueeze(1), (n_sample, self.n_latent_sample, goal_position.shape[-1]))
+            encoded_state = torch.broadcast_to(encoded_state.unsqueeze(1), (n_sample, self.n_latent_sample, encoded_state.shape[-1])).contiguous()
+            goal_position = torch.broadcast_to(goal_position.unsqueeze(1), (n_sample, self.n_latent_sample, goal_position.shape[-1])).contiguous()
             total_decoded_result = torch.cat((encoded_state, goal_position, sample), dim=-1)
-            total_decoded_result = total_decoded_result.reshape(n_sample * self.n_latent_sample, -1)
+            total_decoded_result = total_decoded_result.view(n_sample * self.n_latent_sample, -1)
             hidden_state = self.latent_decoder.architecture(total_decoded_result).unsqueeze(0)
             decoded_traj = torch.zeros(traj_len, n_sample * self.n_latent_sample, self.recurrence_decoding_config["hidden"]).to(self.device)
             input_state = torch.zeros(1, n_sample * self.n_latent_sample, self.recurrence_decoding_config["input"]).to(self.device)
@@ -330,10 +343,9 @@ class CVAE_implicit_distribution(nn.Module):
                 decoded_traj[i] = output.squeeze(0)
                 input_state = output
 
-            decoded_traj = decoded_traj.reshape(-1, self.recurrence_decoding_config["hidden"])
+            decoded_traj = decoded_traj.view(-1, self.recurrence_decoding_config["hidden"])
             sampled_command_traj = self.command_decoder.architecture(decoded_traj)
-            sampled_command_traj = sampled_command_traj.reshape(traj_len, n_sample * self.n_latent_sample, -1)
-            sampled_command_traj = sampled_command_traj.reshape(traj_len, n_sample, self.n_latent_sample, -1)
+            sampled_command_traj = sampled_command_traj.view(traj_len, n_sample, self.n_latent_sample, -1)
 
             if training:
                 return latent_mean, latent_log_var, sampled_command_traj
@@ -392,31 +404,42 @@ class CVAE_implicit_distribution_inference(nn.Module):
                                    dropout=self.state_encoding_config["dropout"],
                                    batchnorm=self.state_encoding_config["batchnorm"])
 
+        # Prepare weights too be loaded
+        trained_state_encoder_state_dict = dict()
+        trained_latent_decoder_state_dict = dict()
+        trained_recurrence_decoder_state_dict = dict()
+        trained_command_decoder_state_dict = dict()
+        for k, v in self.trained_weight.items():
+            if k.split('.', 1)[0] == "state_encoder":
+                trained_state_encoder_state_dict[k.split('.', 1)[1]] = v
+            elif k.split('.')[0] == "latent_decoder":
+                trained_latent_decoder_state_dict[k.split('.', 1)[1]] = v
+            elif k.split('.')[0] == "recurrence_decoder":
+                trained_recurrence_decoder_state_dict[k.split('.', 1)[1]] = v
+            elif k.split('.')[0] == "command_decoder":
+                trained_command_decoder_state_dict[k.split('.', 1)[1]] = v
+        assert len(trained_state_encoder_state_dict.keys()) != 0, "Error when loading weights"
+        assert len(trained_latent_decoder_state_dict.keys()) != 0, "Error when loading weights"
+        assert len(trained_recurrence_decoder_state_dict.keys()) != 0, "Error when loading weights"
+        assert len(trained_command_decoder_state_dict.keys()) != 0, "Error when loading weights"
+
         # load weight
         state_encoder_state_dict = self.state_encoder.state_dict()
-        trained_state_encoder_state_dict = {k.split('.', 1)[1]: v for k, v in self.trained_weight.items() if k.split('.', 1)[0] == "state_encoder"}
-        assert len(trained_state_encoder_state_dict.keys()) != 0, "Error when loading weights"
         state_encoder_state_dict.update(trained_state_encoder_state_dict)
         self.state_encoder.load_state_dict(state_encoder_state_dict)
         self.state_encoder.eval()
 
         latent_decoder_state_dict = self.latent_decoder.state_dict()
-        trained_latent_decoder_state_dict = {k.split('.', 1)[1]: v for k, v in self.trained_weight.items() if k.split('.')[0] == "latent_decoder"}
-        assert len(trained_latent_decoder_state_dict.keys()) != 0, "Error when loading weights"
         latent_decoder_state_dict.update(trained_latent_decoder_state_dict)
         self.latent_decoder.load_state_dict(latent_decoder_state_dict)
         self.latent_decoder.eval()
 
         recurrence_decoder_state_dict = self.recurrence_decoder.state_dict()
-        trained_recurrence_decoder_state_dict = {k.split('.', 1)[1]: v for k, v in self.trained_weight.items() if k.split('.')[0] == "recurrence_decoder"}
-        assert len(trained_recurrence_decoder_state_dict.keys()) != 0, "Error when loading weights" 
         recurrence_decoder_state_dict.update(trained_recurrence_decoder_state_dict)
         self.recurrence_decoder.load_state_dict(recurrence_decoder_state_dict)
         self.recurrence_decoder.eval()
 
         command_decoder_state_dict = self.command_decoder.state_dict()
-        trained_command_decoder_state_dict = {k.split('.', 1)[1]: v for k, v in self.trained_weight.items() if k.split('.')[0] == "command_decoder"}
-        assert len(trained_command_decoder_state_dict.keys()) != 0, "Error when loading weights"
         command_decoder_state_dict.update(trained_command_decoder_state_dict)
         self.command_decoder.load_state_dict(command_decoder_state_dict)
         self.command_decoder.eval()
@@ -430,10 +453,12 @@ class CVAE_implicit_distribution_inference(nn.Module):
         :param traj_len: int
         :return:
         """
+        state = state.contiguous()
+        goal_position = goal_position.contiguous()
+
         with torch.no_grad():
             encoded_state = self.state_encoder.architecture(state)
-            sample = torch.rand((n_sample, self.latent_dim),
-                                 dtype=encoded_state.type, layout=encoded_state.layout, device=self.device)
+            sample = torch.rand((n_sample, self.latent_dim)).to(self.device)
 
             # decode command trajectory
             total_decoded_result = torch.cat((encoded_state, goal_position, sample), dim=1)
@@ -446,9 +471,9 @@ class CVAE_implicit_distribution_inference(nn.Module):
                 decoded_traj[i] = output.squeeze(0)
                 input_state = output
             
-            decoded_traj = decoded_traj.reshape(-1, self.recurrence_decoding_config["hidden"])
+            decoded_traj = decoded_traj.view(-1, self.recurrence_decoding_config["hidden"])
             sampled_command_traj = self.command_decoder.architecture(decoded_traj)
-            sampled_command_traj = sampled_command_traj.reshape(traj_len, n_sample, -1)
+            sampled_command_traj = sampled_command_traj.view(traj_len, n_sample, -1)
 
             sampled_command_traj = sampled_command_traj.cpu().detach().numpy()
             sampled_command_traj = np.clip(sampled_command_traj,

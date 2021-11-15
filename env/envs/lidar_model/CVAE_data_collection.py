@@ -234,8 +234,8 @@ for env_type in [1, 2, 3]:
             goal_position_traj = []
             command_traj = []
 
+            # finish too easy or too complex environment 
             if (current_num_fail_goals > 10) or (current_num_success_but_short_goals > 10):
-                print("Not appropriate environment sampled")
                 break
 
             while True:
@@ -369,8 +369,11 @@ for env_type in [1, 2, 3]:
         elapse_time_seconds -= (elaspe_time_minutes * 60)
         elapse_time_seconds = int(elapse_time_seconds)
         saved_data_size[f'env{env_type}'] += (current_num_success_goals * num_max_data_in_one_goal)
-        print(f"Time: {elaspe_time_minutes}m {elapse_time_seconds}s", "||" , f"Date SR: {num_max_sucess_goals_in_one_env} / {num_max_sucess_goals_in_one_env + current_num_fail_goals + current_num_success_but_short_goals} ({current_num_success_but_short_goals})",
-            "||", f"Dataset: {saved_data_size['env1']} / {saved_data_size['env2']} / {saved_data_size['env3']}", sep=" ")
+
+        if (current_num_fail_goals > 10) or (current_num_success_but_short_goals > 10):
+            print(f"Time: {elaspe_time_minutes}m {elapse_time_seconds}s", "||" , f"Date SR: {current_num_success_goals} / {current_num_success_goals + current_num_fail_goals + current_num_success_but_short_goals} ({current_num_success_but_short_goals})", "||", f"Dataset: {saved_data_size['env1']} / {saved_data_size['env2']} / {saved_data_size['env3']}", "||", "Early termination", sep=" ")
+        else:
+            print(f"Time: {elaspe_time_minutes}m {elapse_time_seconds}s", "||" , f"Date SR: {current_num_success_goals} / {current_num_success_goals + current_num_fail_goals + current_num_success_but_short_goals} ({current_num_success_but_short_goals})", "||", f"Dataset: {saved_data_size['env1']} / {saved_data_size['env2']} / {saved_data_size['env3']}", sep=" ")
 
 # env.stop_video_recording()
 env.turn_off_visualization()
