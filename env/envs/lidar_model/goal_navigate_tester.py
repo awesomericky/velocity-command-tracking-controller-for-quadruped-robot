@@ -438,7 +438,7 @@ else:
             plot_command_result(command_traj=np.array(command_log),
                                 folder_name="command_trajectory",
                                 task_name=task_name,
-                                run_name="normal_not_fixed",
+                                run_name="normal_fixed",
                                 n_update=n_test_case,
                                 control_dt=cfg["environment"]["control_dt"])
             command_log = []
