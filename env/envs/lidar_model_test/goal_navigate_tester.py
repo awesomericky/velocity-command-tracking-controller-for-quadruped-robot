@@ -56,7 +56,7 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
 np.random.seed(1)
 
 # task specification
-task_name = "lidar_environment_model"
+task_name = "point_goal_nav_test"
 
 # configuration
 parser = argparse.ArgumentParser()
@@ -101,28 +101,17 @@ assert env.num_obs == proprioceptive_sensor_dim + lidar_dim, "Check configured s
 # Evaluating
 n_steps = math.floor(cfg['environment']['max_time'] / cfg['environment']['control_dt'])
 command_period_steps = math.floor(cfg['data_collection']['command_period'] / cfg['environment']['control_dt'])
-# command_period_steps = math.floor(0.25 / cfg['environment']['control_dt'])
-# evaluate_command_sampling_steps = math.floor(cfg['evaluating']['command_period'] / cfg['environment']['control_dt'])
 
 state_dim = cfg["architecture"]["state_encoder"]["input"]
 command_dim = cfg["architecture"]["command_encoder"]["input"]
 P_col_dim = cfg["architecture"]["traj_predictor"]["collision"]["output"]
 coordinate_dim = cfg["architecture"]["traj_predictor"]["coordinate"]["output"]   # Just predict x, y coordinate (not yaw)
 
-use_TCN_COM_encoder = cfg["architecture"]["COM_encoder"]["use_TCN"]
-
-if use_TCN_COM_encoder:
-    # Use TCN for encoding COM vel history
-    COM_feature_dim = cfg["architecture"]["COM_encoder"]["TCN"]["input"]
-    COM_history_time_step = cfg["architecture"]["COM_encoder"]["TCN"]["time_step"]
-    COM_history_update_period = int(cfg["architecture"]["COM_encoder"]["TCN"]["update_period"] / cfg["environment"]["control_dt"])
-    assert state_dim - lidar_dim == cfg["architecture"]["COM_encoder"]["TCN"]["output"][-1], "Check COM_encoder output and state_encoder input in the cfg.yaml"
-else:
-    # Use naive concatenation for encoding COM vel history
-    COM_feature_dim = cfg["architecture"]["COM_encoder"]["naive"]["input"]
-    COM_history_time_step = cfg["architecture"]["COM_encoder"]["naive"]["time_step"]
-    COM_history_update_period = int(cfg["architecture"]["COM_encoder"]["naive"]["update_period"] / cfg["environment"]["control_dt"])
-    assert state_dim - lidar_dim == COM_feature_dim * COM_history_time_step, "Check COM_encoder output and state_encoder input in the cfg.yaml"
+# Use naive concatenation for encoding COM vel history
+COM_feature_dim = cfg["architecture"]["COM_encoder"]["naive"]["input"]
+COM_history_time_step = cfg["architecture"]["COM_encoder"]["naive"]["time_step"]
+COM_history_update_period = int(cfg["architecture"]["COM_encoder"]["naive"]["update_period"] / cfg["environment"]["control_dt"])
+assert state_dim - lidar_dim == COM_feature_dim * COM_history_time_step, "Check COM_encoder output and state_encoder input in the cfg.yaml"
 
 command_tracking_ob_dim = user_command_dim + proprioceptive_sensor_dim
 command_tracking_act_dim = env.num_acts
@@ -138,9 +127,6 @@ command_tracking_policy.to(device)
 command_tracking_weight_dir = command_tracking_weight_path.rsplit('/', 1)[0] + '/'
 iteration_number = command_tracking_weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0]
 env.load_scaling(command_tracking_weight_dir, int(iteration_number))
-
-iteration_number = weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0]
-weight_dir = weight_path.rsplit('/', 1)[0] + '/'
 
 if weight_path == "":
     print("Can't find trained weight, please provide a trained weight with --weight switch\n")
@@ -190,9 +176,6 @@ else:
     COM_buffer.reset()
     # env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_" + "lidar_2d_normal_sampling" + '.mp4')
 
-    # command tracking logging initialize
-    command_traj = []
-
     # Initialize number of steps
     step = 0
     n_test_case = 0
@@ -205,7 +188,6 @@ else:
     MUST_safety_period = 3.0
     MUST_safety_period_n_steps = int(MUST_safety_period / cfg['data_collection']['command_period'])
     sample_user_command = np.zeros(3)
-    prev_coordinate_obs = np.zeros((1, 3))
 
     # Needed for computing real time factor
     total_time = 0
@@ -213,10 +195,11 @@ else:
     collision_threshold = 0.05
     goal_distance_threshold = 10
 
-    # goal_kernel = [0.98 ** (12 - i - 1) for i in range(12)]
-    # goal_kernel = np.array(goal_kernel)[:, np.newaxis]
-
+    # collision idx list initialize
     num_collision_idx = []
+
+    # command tracking logging initialize
+    command_log = []
 
     pdb.set_trace()
 
@@ -236,23 +219,12 @@ else:
             action_candidates = action_candidates.astype(np.float32)
             init_coordinate_obs = env.coordinate_observe()
 
-            if use_TCN_COM_encoder:
-                COM_history_feature = COM_buffer.return_data()[0, :, :]
-                COM_history_feature = np.tile(COM_history_feature, (cfg["evaluating"]["number_of_sample"], 1, 1))
-                COM_history_feature = COM_history_feature.astype(np.float32)
-                lidar_data = np.tile(lidar_data, (cfg["evaluating"]["number_of_sample"], 1))
-                lidar_data = lidar_data.astype(np.float32)
-                predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(COM_history_feature).to(device),
-                                                                                   torch.from_numpy(lidar_data).to(device),
-                                                                                   torch.from_numpy(action_candidates).to(device),
-                                                                                   training=False)
-            else:
-                COM_history_feature = COM_buffer.return_data(flatten=True)[0, :]
-                state = np.tile(np.concatenate((lidar_data, COM_history_feature)), (cfg["evaluating"]["number_of_sample"], 1))
-                state = state.astype(np.float32)
-                predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
-                                                                                   torch.from_numpy(action_candidates).to(device),
-                                                                                   training=False)
+            COM_history_feature = COM_buffer.return_data(flatten=True)[0, :]
+            state = np.tile(np.concatenate((lidar_data, COM_history_feature)), (cfg["evaluating"]["number_of_sample"], 1))
+            state = state.astype(np.float32)
+            predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
+                                                                               torch.from_numpy(action_candidates).to(device),
+                                                                               training=False)
 
             predicted_P_cols = np.squeeze(predicted_P_cols, axis=-1)  # (12, 2000)
 
@@ -312,6 +284,7 @@ else:
             #     pdb.set_trace()
 
             cand_sample_user_command, sample_user_command_traj = action_planner.action(reward)
+            sample_user_command = cand_sample_user_command.copy()
 
         # if step % 200 == 0:
         #     # plot predicted trajectory
@@ -337,22 +310,11 @@ else:
         #
         #     print(len(coll_idx))
 
-
-        if new_action_time:
-            sample_user_command = cand_sample_user_command.copy()
-
-            if use_TCN_COM_encoder:
-                COM_history_feature = COM_history_feature[0, :, :][np.newaxis, :]
-                lidar_data = lidar_data[0, :][np.newaxis, :]
-                predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(COM_history_feature).to(device),
-                                                                                   torch.from_numpy(lidar_data).to(device),
-                                                                                   torch.from_numpy(sample_user_command_traj[:, np.newaxis, :]).to(device),
-                                                                                   training=False)
-            else:
-                state = state[0, :][np.newaxis, :]
-                predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
-                                                                                   torch.from_numpy(sample_user_command_traj[:, np.newaxis, :]).to(device),
-                                                                                   training=False)
+            # predict modified command trajectory
+            state = state[0, :][np.newaxis, :]
+            predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
+                                                                               torch.from_numpy(sample_user_command_traj[:, np.newaxis, :]).to(device),
+                                                                               training=False)
 
             # visualize predicted modified command trajectory
             w_coordinate_modified_command_path = transform_coordinate_LW(init_coordinate_obs, predicted_coordinates[:, 0, :])
@@ -361,7 +323,8 @@ else:
                                                 P_col_modified_command_path,
                                                 collision_threshold)
 
-            prev_coordinate_obs = init_coordinate_obs.copy()
+        # Command logging
+        command_log.append(sample_user_command)
 
         tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
         tracking_obs = env.force_normalize_observation(tracking_obs, type=1)
@@ -384,9 +347,6 @@ else:
             # sample_user_command = np.zeros(3)
             # step = 0
 
-        # Command logging
-        command_traj.append(sample_user_command)
-
         frame_end = time.time()
 
         # # (2000 sample, 10 bin ==> 0.008 sec)
@@ -407,17 +367,20 @@ else:
         if current_goal_distance < 0.5:
             # pdb.set_trace()
             # plot command trajectory
-            command_traj = np.array(command_traj)
-            plot_command_result(command_traj, "navigating_plot",
-                                weight_path.split('/')[-3], weight_path.split('/')[-2],
-                                f"test{n_test_case}", control_dt=cfg['environment']['control_dt'])
+            command_log = np.array(command_log)
+            plot_command_result(command_traj=command_log,
+                                folder_name="command_trajectory",
+                                task_name=task_name,
+                                run_name="normal_fixed",
+                                n_update=n_test_case,
+                                control_dt=cfg["environment"]["control_dt"])
 
             # reset action planner and set new goal
             action_planner.reset()
             goal_position = env.set_goal()[np.newaxis, :]
             n_test_case += 1
             step = 0
-            command_traj = []
+            command_log = []
             sample_user_command = np.zeros(3)
 
     print(f"Time: {total_time}")

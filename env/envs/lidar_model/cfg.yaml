@@ -6,7 +6,7 @@ environment:
   render: True
   # just testing commenting
   evaluate: True
-  determine_env: 1  # 0: not determine / 1: circle / 2: box / 3: corridor
+  determine_env: 2  # 0: not determine / 1: circle / 2: box / 3: corridor
   num_envs: 500
   max_n_update: 30000
   eval_every_n: 100
@@ -59,7 +59,6 @@ training:
   weight_decay_lamda: 0.1
 
 evaluating:
-#  command_period: 3.0
   number_of_sample: 2000
   gamma: 20
   beta: 0.4  # 0.8  # bigger == more consider a_hat

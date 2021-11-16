@@ -233,9 +233,6 @@ else:
     COM_buffer.reset()
     # env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_" + "lidar_2d_normal_sampling" + '.mp4')
 
-    # command tracking logging initialize
-    command_traj = []
-
     # Initialize number of steps
     step = 0
     n_test_case = 0
@@ -259,6 +256,7 @@ else:
     goal_time_limit = 180.
     goal_current_duration = 0.
 
+    # command tracking logging initialize
     command_log = []
 
     while n_test_case < num_goals:
@@ -320,7 +318,7 @@ else:
             action_size /= np.max(action_size)
 
             reward = 1.0 * goal_reward * safety_reward + 0.3 * safety_reward
-            # reward = 1.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
+            # reward = 2.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
             # reward = 1.0 * goal_reward + 0.5 * safety_reward  # weighted sum for computing rewards
             coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
 
@@ -351,7 +349,9 @@ else:
                                                 P_col_modified_command_path,
                                                 collision_threshold)
 
+        # Command logging
         command_log.append(sample_user_command)
+
         tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
         tracking_obs = env.force_normalize_observation(tracking_obs, type=1)
         tracking_obs = tracking_obs.astype(np.float32)
@@ -362,9 +362,6 @@ else:
         _, done = env.step(tracking_action.cpu().detach().numpy())
 
         step += 1
-
-        # Command logging
-        command_traj.append(sample_user_command)
 
         frame_end = time.time()
 
@@ -400,7 +397,6 @@ else:
             goal_position = env.set_goal()[np.newaxis, :]
             n_test_case += 1
             step = 0
-            command_traj = []
             sample_user_command = np.zeros(3)
             goal_current_duration = 0.
             print(f"Intermediate result : {n_success_test_case} / {n_test_case}")
@@ -410,13 +406,11 @@ else:
             env.initialize_n_step()  # keep start in different initial condiition
             env.reset()
             # plot command trajectory
-            command_traj = np.array(command_traj)
             # reset action planner and set new goal
             action_planner.reset()
             goal_position = env.set_goal()[np.newaxis, :]
             n_test_case += 1
             step = 0
-            command_traj = []
             sample_user_command = np.zeros(3)
             n_success_test_case += 1
             goal_current_duration = 0.
