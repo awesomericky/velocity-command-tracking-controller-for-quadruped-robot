@@ -245,8 +245,6 @@ else:
     MUST_safety_period_n_steps = int(MUST_safety_period / cfg['data_collection']['command_period'])
     sample_user_command = np.zeros(3)
 
-    pdb.set_trace()
-
     eval_start = time.time()
 
     collision_threshold = 0.05
@@ -258,6 +256,8 @@ else:
 
     # command tracking logging initialize
     command_log = []
+
+    pdb.set_trace()
 
     while n_test_case < num_goals:
         frame_start = time.time()
@@ -410,11 +410,11 @@ else:
             action_planner.reset()
             goal_position = env.set_goal()[np.newaxis, :]
             n_test_case += 1
-            step = 0
             sample_user_command = np.zeros(3)
             n_success_test_case += 1
             goal_current_duration = 0.
-            print(f"Intermediate result : {n_success_test_case} / {n_test_case}")
+            print(f"Intermediate result : {n_success_test_case} / {n_test_case} || Number of steps: {step}")
+            step = 0
 
             plot_command_result(command_traj=np.array(command_log),
                                 folder_name="command_trajectory",

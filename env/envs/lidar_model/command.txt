@@ -1,5 +1,0 @@
-# CVAE training
-python raisimGymTorch/env/envs/lidar_model/CVAE_runner.py -pw /home/student/quadruped/raisimLib/raisimGymTorch/data/lidar_environment_model/2021-11-11-03-50-02/full_1800.pt
-
-# CVAE point goal navigation
-python raisimGymTorch/env/envs/lidar_model/CVAE_goal_navigate_tester.py -w /home/student/quadruped/raisimLib/raisimGymTorch/data/lidar_environment_model/2021-11-11-03-50-02/full_1800.pt -tw /home/student/quadruped/raisimLib/raisimGymTorch/data/anymal_locomotion_rough/2021-07-15-21-15-21/full_16200.pt -cw /home/student/quadruped/raisimLib/raisimGymTorch/data/CVAE_train/2021-11-15-18-31-00/full_450.pt

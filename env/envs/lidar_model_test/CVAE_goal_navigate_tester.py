@@ -239,6 +239,7 @@ else:
 
     # Needed for computing real time factor
     total_time = 0
+    total_n_step = 0
 
     collision_threshold = 0.05
     goal_distance_threshold = 10
@@ -309,8 +310,8 @@ else:
             # action_size = np.sqrt((action_candidates[0, :, 0] / 1) ** 2 + (action_candidates[0, :, 1] / 0.4) ** 2 + (action_candidates[0, :, 2] / 1.2) ** 2)
             # action_size /= np.max(action_size)
 
-            # reward = 1.0 * goal_reward * safety_reward + 0.3 * safety_reward
-            reward = 1.0 * goal_reward + 0.3 * safety_reward
+            reward = 1.0 * goal_reward * safety_reward + 0.3 * safety_reward
+            # reward = 1.0 * goal_reward + 0.3 * safety_reward
             # reward = 2.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
             # reward = 1.0 * goal_reward + 0.5 * safety_reward  # weighted sum for computing rewards
             coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
@@ -320,9 +321,6 @@ else:
 
             cand_sample_user_command, sample_user_command_traj = action_planner.action(reward)
             sample_user_command = cand_sample_user_command.copy()
-
-            # cand_sample_user_command, sample_user_command_traj = action_candidates[0, 1500, :], action_candidates[:, 1500, :]
-            # sample_user_command = cand_sample_user_command.copy()
 
             # # plot predicted trajectory
             # traj_len, n_sample, coor_dim = predicted_coordinates.shape
@@ -391,9 +389,9 @@ else:
             total_time += cfg['environment']['control_dt']
         else:
             total_time += (frame_end - frame_start)
+        total_n_step += 1
 
         if current_goal_distance < 0.5:
-            # pdb.set_trace()
             # plot command trajectory
             command_log = np.array(command_log)
             plot_command_result(command_traj=np.array(command_log),
@@ -412,6 +410,7 @@ else:
             sample_user_command = np.zeros(3)
 
     print(f"Time: {total_time}")
+    print(f"Total number of steps: {total_n_step}")
 
     num_collision = 0
     for i in range(len(num_collision_idx) - 1):

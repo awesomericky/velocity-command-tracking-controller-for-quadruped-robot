@@ -191,6 +191,7 @@ else:
 
     # Needed for computing real time factor
     total_time = 0
+    total_n_step = 0
 
     collision_threshold = 0.05
     goal_distance_threshold = 10
@@ -363,6 +364,7 @@ else:
             total_time += cfg['environment']['control_dt']
         else:
             total_time += (frame_end - frame_start)
+        total_n_step += 1
 
         if current_goal_distance < 0.5:
             # pdb.set_trace()
@@ -384,6 +386,7 @@ else:
             sample_user_command = np.zeros(3)
 
     print(f"Time: {total_time}")
+    print(f"Total number of steps: {total_n_step}")
 
     num_collision = 0
     for i in range(len(num_collision_idx) - 1):

@@ -428,12 +428,12 @@ else:
             action_planner.reset()
             goal_position = env.set_goal()[np.newaxis, :]
             n_test_case += 1
-            step = 0
             command_traj = []
             sample_user_command = np.zeros(3)
             n_success_test_case += 1
             goal_current_duration = 0.
-            print(f"Intermediate result : {n_success_test_case} / {n_test_case}")
+            print(f"Intermediate result : {n_success_test_case} / {n_test_case} || Number of steps: {step}")
+            step = 0
 
             plot_command_result(command_traj=np.array(command_log),
                                 folder_name="command_trajectory",

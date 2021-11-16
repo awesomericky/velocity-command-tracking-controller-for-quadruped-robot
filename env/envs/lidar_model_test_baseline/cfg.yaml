@@ -3,7 +3,7 @@ record_video: yes
 
 environment:
   render: True
-  type: 9
+  type: 2
   evaluate: True
   #    1 : 90 degree maze
   #    2 : diagonal maze   ===

@@ -67,8 +67,8 @@ evaluating:
   number_of_bin: 10
 
 evaluating_w_CVAE:
- wo_CVAE_number_of_sample: 1000        
- CVAE_number_of_sample: 1000
+ wo_CVAE_number_of_sample: 0
+ CVAE_number_of_sample: 1
  gamma: 20
  beta: 0.4
  time_correlation_beta: 0.1

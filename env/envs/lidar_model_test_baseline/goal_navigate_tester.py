@@ -20,7 +20,6 @@ from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
 from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin
 from raisimGymTorch.env.envs.lidar_model.action import Zeroth_action_planner, Modified_zeroth_action_planner, Stochastic_action_planner_uniform_bin_baseline
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
-from fastdtw import fastdtw
 
 
 def transform_coordinate_LW(w_init_coordinate, l_coordinate_traj):
@@ -150,12 +149,12 @@ command_traj = []
 step = 0
 n_test_case = 0
 if cfg["environment"]["type"] == 2:
-    num_goals = 1
-else:
     num_goals = 3
+else:
+    num_goals = 1
 
 # MUST safe period from collision
-MUST_safety_period = 2.0
+MUST_safety_period = 3.0
 MUST_safety_period_n_steps = int(MUST_safety_period / cfg['data_collection']['command_period'])
 sample_user_command = np.zeros(3)
 prev_coordinate_obs = np.zeros((1, 3))
@@ -164,6 +163,7 @@ collision_idx_list = np.zeros((cfg["evaluating"]["number_of_sample"], 1), dtype=
 
 # Needed for computing real time factor
 total_time = 0
+total_n_step = 0
 num_collision_idx = []
 
 pdb.set_trace()
@@ -346,6 +346,7 @@ while n_test_case < num_goals:
         total_time += cfg['environment']['control_dt']
     else:
         total_time += (frame_end - frame_start)
+    total_n_step += 1
 
     if current_goal_distance < 0.5:
         # pdb.set_trace()
@@ -361,6 +362,7 @@ while n_test_case < num_goals:
         sample_user_command = np.zeros(3)
 
 print(f"Time: {total_time}")
+print(f"Total number of steps: {total_n_step}")
 
 num_collision = 0
 for i in range(len(num_collision_idx) - 1):
