@@ -5,8 +5,8 @@ logging: True
 environment:
   render: True
   # just testing commenting
-  evaluate: False
-  determine_env: 0  # 0: not determine / 1: circle / 2: box / 3: corridor
+  evaluate: True
+  determine_env: 1  # 0: not determine / 1: circle / 2: box / 3: corridor
   num_envs: 500
   max_n_update: 30000
   eval_every_n: 100
@@ -39,8 +39,8 @@ environment:
   randomization: False  # 1) Base COM position, 2) Mass of links, 3) Joint position
   random_initialize: False  # yaw angle is only randomized
   random_external_force: False  # 50N force for 1s for lateral direction
-  point_goal_initialize: False
-  CVAE_data_collection_initialize: True
+  point_goal_initialize: True
+  CVAE_data_collection_initialize: False
   safe_control_initialize: False
 
 training:
@@ -66,6 +66,15 @@ evaluating:
   time_correlation_beta: 0.1   # 0.1
   sigma: 0.3
   number_of_bin: 10
+
+evaluating_w_CVAE:
+ wo_CVAE_number_of_sample: 1000        
+ CVAE_number_of_sample: 1000
+ gamma: 20
+ beta: 0.4
+ time_correlation_beta: 0.1
+ sigma: 0.3
+ number_of_bin: 10  # only used for command_sampler not using CVAE
 
 data_collection:
   time_correlated_command_sampler_beta: 0.7

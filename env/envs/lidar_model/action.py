@@ -660,6 +660,63 @@ class Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal:
         return self.a_hat[0], self.a_hat.astype(np.float32)
 
 
+class Stochastic_action_planner_w_CVAE:
+    def __init__(self, wo_cvae_sampler, w_cvae_sampler, wo_cvae_n_sample, w_cvae_n_sample, n_prediction_step, gamma):
+        self.wo_cvae_sampler = wo_cvae_sampler
+        self.w_cvae_sampler = w_cvae_sampler
+        self.wo_cvae_n_sample = wo_cvae_n_sample
+        self.w_cvae_n_sample = w_cvae_n_sample
+        self.n_prediction_step = n_prediction_step
+        self.gamma = gamma
+        self.sampled_command_traj = None
+        self.optimized_command_traj = None
+
+    def sample(self, observation, goal_position):
+        """
+        observation: (1, observation_dim)  type: torch.tensor
+        goal_position: (1, goal_position_dim)  type: torch.tensor
+
+        return:
+            sampled_command_traj: (traj_len, self.wo_cvae_n_sample + self.w_cvae_n_sample, command_dim)  type: numpy.tensor
+
+        * sampled_command_traj stacked order: (1) wo_cvae_sampling (2) w_cvae_sampling
+        """
+        wo_cvae_sampled_command_traj = self.wo_cvae_sampler.sample()
+        wo_cvae_sampled_command_traj = np.swapaxes(wo_cvae_sampled_command_traj, 0, 1)
+        cvae_sampled_command_traj = self.w_cvae_sampler(observation, goal_position, self.w_cvae_n_sample, self.n_prediction_step, return_torch=False)
+        self.sampled_command_traj = np.concatenate((wo_cvae_sampled_command_traj, cvae_sampled_command_traj), axis=1)
+        return self.sampled_command_traj.astype(np.float32).copy()
+
+    def reset(self):
+        self.wo_cvae_sampler.reset()
+        self.sampled_command_traj = None
+        self.optimized_command_traj = None
+
+    def update(self, rewards):
+        safe_idx = np.where(rewards != 0)[0]
+        if len(safe_idx) != 0:
+            probs = np.exp(self.gamma * rewards[safe_idx])
+            probs /= np.sum(probs) + 1e-10
+            self.optimized_command_traj = np.sum(self.sampled_command_traj[:, safe_idx, :] * probs[np.newaxis, :, np.newaxis], axis=1)
+        else:
+            probs = np.exp(self.gamma * rewards)
+            probs /= np.sum(probs) + 1e-10
+            self.optimized_command_traj = np.sum(self.sampled_command_traj * probs[np.newaxis, :, np.newaxis], axis=1)
+
+    def action(self, rewards):
+        """
+        rewards: (self.wo_cvae_n_sample + self.w_cvae_n_sample,)
+  
+        return:
+            optimized_current_command: (command_dim,)
+            optimized_command_traj: (traj_len, command_dim)
+        """
+
+        self.update(rewards)
+        self.wo_cvae_sampler.a_hat = self.optimized_command_traj   # update a_hat in wo_cvae_sampler
+        return self.optimized_command_traj[0], self.optimized_command_traj.astype(np.float32)
+
+
 class Stochastic_action_planner_normal:
     """
     Sample commands from normal distribution, where the mean value is user command

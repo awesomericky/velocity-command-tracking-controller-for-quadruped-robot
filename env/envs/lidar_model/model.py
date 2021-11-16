@@ -457,7 +457,10 @@ class CVAE_implicit_distribution_inference(nn.Module):
         * In real-time navigation, batch_size is usually 1. 
 
         :return:
-            sampled_command_traj: (traj_len, batch_size, n_sample, single_command_dim)
+            if batch_size == 1:
+                sampled_command_traj: (traj_len, n_sample, single_command_dim)
+            else:
+                sampled_command_traj: (traj_len, batch_size, n_sample, single_command_dim)
         """
         state = state.contiguous()
         goal_position = goal_position.contiguous()
@@ -499,6 +502,7 @@ class CVAE_implicit_distribution_inference(nn.Module):
                 sampled_command_traj = np.clip(sampled_command_traj,
                                               [self.cfg_command["forward_vel"]["min"], self.cfg_command["lateral_vel"]["min"], self.cfg_command["yaw_rate"]["min"]],
                                               [self.cfg_command["forward_vel"]["max"], self.cfg_command["lateral_vel"]["max"], self.cfg_command["yaw_rate"]["max"]])
+                sampled_command_traj = sampled_command_traj.astype(np.float32)
 
             return sampled_command_traj
 

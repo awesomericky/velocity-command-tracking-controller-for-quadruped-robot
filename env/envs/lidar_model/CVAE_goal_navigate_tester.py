@@ -19,7 +19,9 @@ import pdb
 from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
 from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin, Stochastic_action_planner_uniform_bin_w_time_correlation, Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal
 from raisimGymTorch.env.envs.lidar_model.action import Zeroth_action_planner, Modified_zeroth_action_planner
+from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_w_CVAE
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
+from raisimGymTorch.env.envs.lidar_model.model import CVAE_implicit_distribution_inference
 
 """
 Check!!!!
@@ -62,16 +64,18 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
 np.random.seed(1)
 
 # task specification
-task_name = "point_goal_nav"
+task_name = "CVAE_point_goal_nav"
 
 # configuration
 parser = argparse.ArgumentParser()
 parser.add_argument('-m', '--mode', help='set mode either train or test', type=str, default='train')
 parser.add_argument('-w', '--weight', help='trained environment model weight path', type=str, required=True)
+parser.add_argument('-cw', '--cvae_weight', help='trained CVAE model weight path', type=str, required=True)
 parser.add_argument('-tw', '--tracking_weight', help='trained command tracking policy weight path', type=str, required=True)
 args = parser.parse_args()
 mode = args.mode
 weight_path = args.weight
+cvae_weight_path = args.cvae_weight
 command_tracking_weight_path = args.tracking_weight
 
 # check if gpu is available
@@ -91,7 +95,7 @@ assert cfg["environment"]["point_goal_initialize"] or cfg["environment"]["CVAE_d
 assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environment][safe_control_initialize] to False"
 
 # user command sampling
-user_command = UserCommand(cfg, cfg['evaluating']['number_of_sample'])
+user_command = UserCommand(cfg, cfg['evaluating_w_CVAE']['wo_CVAE_number_of_sample'])
 
 # create environment from the configuration file
 cfg['environment']['num_envs'] = 1
@@ -113,27 +117,17 @@ assert env.num_obs == proprioceptive_sensor_dim + lidar_dim, "Check configured s
 # Evaluating
 n_steps = math.floor(cfg['environment']['max_time'] / cfg['environment']['control_dt'])
 command_period_steps = math.floor(cfg['data_collection']['command_period'] / cfg['environment']['control_dt'])
-# evaluate_command_sampling_steps = math.floor(cfg['evaluating']['command_period'] / cfg['environment']['control_dt'])
 
 state_dim = cfg["architecture"]["state_encoder"]["input"]
 command_dim = cfg["architecture"]["command_encoder"]["input"]
 P_col_dim = cfg["architecture"]["traj_predictor"]["collision"]["output"]
 coordinate_dim = cfg["architecture"]["traj_predictor"]["coordinate"]["output"]   # Just predict x, y coordinate (not yaw)
 
-use_TCN_COM_encoder = cfg["architecture"]["COM_encoder"]["use_TCN"]
-
-if use_TCN_COM_encoder:
-    # Use TCN for encoding COM vel history
-    COM_feature_dim = cfg["architecture"]["COM_encoder"]["TCN"]["input"]
-    COM_history_time_step = cfg["architecture"]["COM_encoder"]["TCN"]["time_step"]
-    COM_history_update_period = int(cfg["architecture"]["COM_encoder"]["TCN"]["update_period"] / cfg["environment"]["control_dt"])
-    assert state_dim - lidar_dim == cfg["architecture"]["COM_encoder"]["TCN"]["output"][-1], "Check COM_encoder output and state_encoder input in the cfg.yaml"
-else:
-    # Use naive concatenation for encoding COM vel history
-    COM_feature_dim = cfg["architecture"]["COM_encoder"]["naive"]["input"]
-    COM_history_time_step = cfg["architecture"]["COM_encoder"]["naive"]["time_step"]
-    COM_history_update_period = int(cfg["architecture"]["COM_encoder"]["naive"]["update_period"] / cfg["environment"]["control_dt"])
-    assert state_dim - lidar_dim == COM_feature_dim * COM_history_time_step, "Check COM_encoder output and state_encoder input in the cfg.yaml"
+# Use naive concatenation for encoding COM vel history
+COM_feature_dim = cfg["architecture"]["COM_encoder"]["naive"]["input"]
+COM_history_time_step = cfg["architecture"]["COM_encoder"]["naive"]["time_step"]
+COM_history_update_period = int(cfg["architecture"]["COM_encoder"]["naive"]["update_period"] / cfg["environment"]["control_dt"])
+assert state_dim - lidar_dim == COM_feature_dim * COM_history_time_step, "Check COM_encoder output and state_encoder input in the cfg.yaml"
 
 command_tracking_ob_dim = user_command_dim + proprioceptive_sensor_dim
 command_tracking_act_dim = env.num_acts
@@ -172,48 +166,66 @@ else:
 
     # Load action planner
     n_prediction_step = int(cfg["data_collection"]["prediction_period"] / cfg["data_collection"]["command_period"])
-    # action_planner = Stochastic_action_planner_uniform_bin(command_range=cfg["environment"]["command"],
-    #                                                        n_sample=cfg["evaluating"]["number_of_sample"],
+    # wo_cvae_sampler = Stochastic_action_planner_uniform_bin(command_range=cfg["environment"]["command"],
+    #                                                        n_sample=cfg["evaluating_w_CVAE"]["wo_CVAE_number_of_sample"],
     #                                                        n_horizon=n_prediction_step,
-    #                                                        n_bin=cfg["evaluating"]["number_of_bin"],
-    #                                                        beta=cfg["evaluating"]["beta"],
-    #                                                        gamma=cfg["evaluating"]["gamma"],
+    #                                                        n_bin=cfg["evaluating_w_CVAE"]["number_of_bin"],
+    #                                                        beta=cfg["evaluating_w_CVAE"]["beta"],
+    #                                                        gamma=cfg["evaluating_w_CVAE"]["gamma"],
     #                                                        noise_sigma=0.1,
     #                                                        noise=False,
     #                                                        action_dim=command_dim)
 
-    # action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation(command_range=cfg["environment"]["command"],
-    #                                                                           n_sample=cfg["evaluating"]["number_of_sample"],
+    # wo_cvae_sampler = Stochastic_action_planner_uniform_bin_w_time_correlation(command_range=cfg["environment"]["command"],
+    #                                                                           n_sample=cfg["evaluating_w_CVAE"]["wo_CVAE_number_of_sample"],
     #                                                                           n_horizon=n_prediction_step,
-    #                                                                           n_bin=cfg["evaluating"]["number_of_bin"],
-    #                                                                           beta=cfg["evaluating"]["beta"],
-    #                                                                           gamma=cfg["evaluating"]["gamma"],
+    #                                                                           n_bin=cfg["evaluating_w_CVAE"]["number_of_bin"],
+    #                                                                           beta=cfg["evaluating_w_CVAE"]["beta"],
+    #                                                                           gamma=cfg["evaluating_w_CVAE"]["gamma"],
     #                                                                           noise_sigma=0.1,
-    #                                                                           time_correlation_beta=cfg["evaluating"]["time_correlation_beta"],
+    #                                                                           time_correlation_beta=cfg["evaluating_w_CVAE"]["time_correlation_beta"],
     #                                                                           noise=False,
     #                                                                           action_dim=command_dim,
     #                                                                           random_command_sampler=user_command)
 #
-    action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal(command_range=cfg["environment"]["command"],
-                                                                                     n_sample=cfg["evaluating"]["number_of_sample"],
+    wo_cvae_sampler = Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal(command_range=cfg["environment"]["command"],
+                                                                                     n_sample=cfg["evaluating_w_CVAE"]["wo_CVAE_number_of_sample"],
                                                                                      n_horizon=n_prediction_step,
-                                                                                     n_bin=cfg["evaluating"]["number_of_bin"],
-                                                                                     beta=cfg["evaluating"]["beta"],
-                                                                                     gamma=cfg["evaluating"]["gamma"],
-                                                                                     sigma=cfg["evaluating"]["sigma"],
+                                                                                     n_bin=cfg["evaluating_w_CVAE"]["number_of_bin"],
+                                                                                     beta=cfg["evaluating_w_CVAE"]["beta"],
+                                                                                     gamma=cfg["evaluating_w_CVAE"]["gamma"],
+                                                                                     sigma=cfg["evaluating_w_CVAE"]["sigma"],
                                                                                      noise_sigma=0.1,
                                                                                      noise=False,
                                                                                      action_dim=command_dim,
                                                                                      random_command_sampler=user_command)
 
-    # action_planner = Zeroth_action_planner(command_range=cfg["environment"]["command"],
-    #                                        n_sample=cfg["evaluating"]["number_of_sample"],
+    # wo_cvae_sampler = Zeroth_action_planner(command_range=cfg["environment"]["command"],
+    #                                        n_sample=cfg["evaluating_w_CVAE"]["wo_CVAE_number_of_sample"],
     #                                        n_horizon=n_prediction_step,
     #                                        sigma=0.3,
-    #                                        gamma=cfg["evaluating"]["gamma"],
+    #                                        gamma=cfg["evaluating_w_CVAE"]["gamma"],
     #                                        beta=0.6,
     #                                        action_dim=3)
-#
+
+    # Load CVAE inference model (Learned command sampling distribution)
+    w_cvae_sampler = CVAE_implicit_distribution_inference(state_encoding_config=cfg["CVAE_architecture"]["state_encoder"],
+                                                          latent_decoding_config=cfg["CVAE_architecture"]["latent_decoder"],
+                                                          recurrence_decoding_config=cfg["CVAE_architecture"]["recurrence_decoder"],
+                                                          command_decoding_config=cfg["CVAE_architecture"]["command_decoder"],
+                                                          device=device,
+                                                          trained_weight=cvae_weight_path,
+                                                          cfg_command=cfg["environment"]["command"])
+    w_cvae_sampler.eval()
+    w_cvae_sampler.to(device)
+
+    action_planner = Stochastic_action_planner_w_CVAE(wo_cvae_sampler=wo_cvae_sampler,
+                                                      w_cvae_sampler=w_cvae_sampler,
+                                                      wo_cvae_n_sample=cfg["evaluating_w_CVAE"]["wo_CVAE_number_of_sample"],
+                                                      w_cvae_n_sample=cfg["evaluating_w_CVAE"]["CVAE_number_of_sample"],
+                                                      n_prediction_step=n_prediction_step,
+                                                      gamma=cfg["evaluating_w_CVAE"]["gamma"])
+
     env.initialize_n_step()
     action_planner.reset()
     goal_position = env.set_goal()[np.newaxis, :]
@@ -235,7 +247,6 @@ else:
     # MUST_safety_period = 2.0
     MUST_safety_period_n_steps = int(MUST_safety_period / cfg['data_collection']['command_period'])
     sample_user_command = np.zeros(3)
-    prev_coordinate_obs = np.zeros((1, 3))
 
     pdb.set_trace()
 
@@ -261,29 +272,25 @@ else:
 
         if new_action_time:
             lidar_data = obs[0, proprioceptive_sensor_dim:]
-            action_candidates = action_planner.sample()
-            action_candidates = np.swapaxes(action_candidates, 0, 1)
-            action_candidates = action_candidates.astype(np.float32)
             init_coordinate_obs = env.coordinate_observe()
 
-            if use_TCN_COM_encoder:
-                COM_history_feature = COM_buffer.return_data()[0, :, :]
-                COM_history_feature = np.tile(COM_history_feature, (cfg["evaluating"]["number_of_sample"], 1, 1))
-                COM_history_feature = COM_history_feature.astype(np.float32)
-                lidar_data = np.tile(lidar_data, (cfg["evaluating"]["number_of_sample"], 1))
-                lidar_data = lidar_data.astype(np.float32)
-                predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(COM_history_feature).to(device),
-                                                                                   torch.from_numpy(lidar_data).to(device),
-                                                                                   torch.from_numpy(action_candidates).to(device),
-                                                                                   training=False)
-            else:
-                COM_history_feature = COM_buffer.return_data(flatten=True)[0, :]
-                state = np.tile(np.concatenate((lidar_data, COM_history_feature)), (cfg["evaluating"]["number_of_sample"], 1))
-                state = state.astype(np.float32)
-                predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
-                                                                                   torch.from_numpy(action_candidates).to(device),
-                                                                                   training=False)
+            goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
+            current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
+            if current_goal_distance > goal_distance_threshold:
+                goal_position_L *= (goal_distance_threshold / current_goal_distance)
 
+            COM_history_feature = COM_buffer.return_data(flatten=True)[0, :]
+            state = np.concatenate((lidar_data, COM_history_feature)).astype(np.float32)
+            goal_position_L = goal_position_L.astype(np.float32)
+            
+            # Sample command trajectories
+            action_candidates = action_planner.sample(torch.from_numpy(state).unsqueeze(0).to(device), torch.from_numpy(goal_position_L).to(device))
+            
+            # Predict future outcomes 
+            state = np.tile(state, (cfg["evaluating_w_CVAE"]["wo_CVAE_number_of_sample"] + cfg["evaluating_w_CVAE"]["CVAE_number_of_sample"], 1))
+            predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
+                                                                               torch.from_numpy(action_candidates).to(device),
+                                                                               training=False)
             predicted_P_cols = np.squeeze(predicted_P_cols, axis=-1)
 
             # # Test
@@ -295,10 +302,6 @@ else:
             #         predicted_coordinates[first_collision_idx+1:, sample_id, :] = np.tile(predicted_coordinates[first_collision_idx, sample_id, :], (12 - first_collision_idx - 1, 1))
 
             # compute reward (goal reward + safety reward)
-            goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
-            current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
-            if current_goal_distance > goal_distance_threshold:
-                goal_position_L *= (goal_distance_threshold / current_goal_distance)
             delta_goal_distance = current_goal_distance - np.sqrt(np.sum(np.power(predicted_coordinates - goal_position_L, 2), axis=-1))
 
             goal_reward = np.sum(delta_goal_distance, axis=0)
@@ -321,10 +324,11 @@ else:
             # reward = 1.0 * goal_reward + 0.5 * safety_reward  # weighted sum for computing rewards
             coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
 
-            if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
+            if len(coll_idx) != (cfg["evaluating_w_CVAE"]["wo_CVAE_number_of_sample"] + cfg["evaluating_w_CVAE"]["CVAE_number_of_sample"]):
                 reward[coll_idx] = 0  # exclude trajectory that collides with obstacle
 
             cand_sample_user_command, sample_user_command_traj = action_planner.action(reward)
+            sample_user_command = cand_sample_user_command.copy()
 
             # # plot predicted trajectory
             # traj_len, n_sample, coor_dim = predicted_coordinates.shape
@@ -334,21 +338,11 @@ else:
             # plt.clf()
             # pdb.set_trace()
 
-        if new_action_time:
-            sample_user_command = cand_sample_user_command.copy()
-
-            if use_TCN_COM_encoder:
-                COM_history_feature = COM_history_feature[0, :, :][np.newaxis, :]
-                lidar_data = lidar_data[0, :][np.newaxis, :]
-                predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(COM_history_feature).to(device),
-                                                                                   torch.from_numpy(lidar_data).to(device),
-                                                                                   torch.from_numpy(sample_user_command_traj[:, np.newaxis, :]).to(device),
-                                                                                   training=False)
-            else:
-                state = state[0, :][np.newaxis, :]
-                predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
-                                                                                   torch.from_numpy(sample_user_command_traj[:, np.newaxis, :]).to(device),
-                                                                                   training=False)
+            # predict modified command trajectory
+            state = state[0, :][np.newaxis, :]
+            predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
+                                                                               torch.from_numpy(sample_user_command_traj[:, np.newaxis, :]).to(device),
+                                                                               training=False)
 
             # visualize predicted modified command trajectory
             w_coordinate_modified_command_path = transform_coordinate_LW(init_coordinate_obs, predicted_coordinates[:, 0, :])
@@ -356,13 +350,6 @@ else:
             env.visualize_modified_command_traj(w_coordinate_modified_command_path,
                                                 P_col_modified_command_path,
                                                 collision_threshold)
-
-            # # reset action planner if stuck in local optimum
-            # current_pos_change = np.sqrt(np.sum(np.power(init_coordinate_obs[0, :2] - prev_coordinate_obs[0, :2], 2)))
-            # if current_pos_change < 0.005:  # 0.1 [m / s]
-            #     action_planner.reset()
-
-            prev_coordinate_obs = init_coordinate_obs.copy()
 
         command_log.append(sample_user_command)
         tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
