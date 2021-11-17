@@ -53,7 +53,7 @@ assert cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to Tru
 assert cfg["environment"]["random_initialize"], "Change cfg[environment][random_initialize] to True"
 assert not cfg["environment"]["point_goal_initialize"], "Change cfg[environment][point_goal_initialize] to False"
 assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environment][safe_control_initialize] to False"
-assert not cfg["environment"]["CVAE_environment_evaluation_initialize"], "Change cfg[environment][CVAE_environment_evaluation_initialize] to False"
+assert not cfg["environment"]["CVAE_environment_initialize"], "Change cfg[environment][CVAE_environment_evaluation_initialize] to False"
 
 cfg['environment']['num_threads'] = cfg['environment']['evaluate_num_threads']
 

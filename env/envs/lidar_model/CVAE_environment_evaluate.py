@@ -44,8 +44,8 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     Transform WORLD frame coordinate trajectory to LOCAL frame coordinate trajectory
     (WORLD frame --> LOCAL frame)
 
-    :param w_init_coordinate: initial coordinate in WORLD frame (1, coordinate_dim)
-    :param w_coordinate_traj: coordintate trajectory in WORLD frame (n_step, coordinate_dim)
+    :param w_init_coordinate: initial coordinate in WORLD frame (1, coordinate_dim) or (n_env, coordinate_dim)
+    :param w_coordinate_traj: coordintate trajectory in WORLD frame (n_step, coordinate_dim) or (n_env, coordinate_dim)
     :return:
     """
     transition_matrix = np.array([[np.cos(w_init_coordinate[0, 2]), np.sin(w_init_coordinate[0, 2])],
@@ -87,7 +87,7 @@ assert cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to Tru
 assert not cfg["environment"]["random_initialize"], "Change cfg[environment][random_initialize] to False"
 assert not cfg["environment"]["point_goal_initialize"], "Change cfg[environment][point_goal_initialize] to False"
 assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environment][safe_control_initialize] to False"
-assert cfg["environment"]["CVAE_environment_evaluation_initialize"], "Change cfg[environment][CVAE_environment_evaluation_initialize] to True"
+assert cfg["environment"]["CVAE_environment_initialize"], "Change cfg[environment][CVAE_environment_evaluation_initialize] to True"
 
 cfg['environment']['num_threads'] = cfg['environment']['evaluate_num_threads']
 
@@ -219,8 +219,7 @@ for n_test in range(num_test):
 
         if new_command_time:
             env.initialize_n_step()  # to reset in new position
-            # reset only terminated environment
-            env.partial_reset(list(done_envs))
+            env.partial_reset(list(done_envs))  # reset only terminated environment
 
             # save coordinate before taking step to modify the labeled data
             coordinate_obs = env.coordinate_observe()
@@ -246,10 +245,7 @@ for n_test in range(num_test):
             temp_state = np.concatenate((lidar_data, temp_COM_history), axis=1)
 
             # prepare goal position
-            goal_position_L = np.zeros((cfg['environment']['num_envs'], 2))
-            for env_id in range(cfg['environment']['num_envs']):
-                goal_position_L[env_id, :] = transform_coordinate_WL(coordinate_obs[env_id, :][np.newaxis, :],
-                                                                     goal_position[env_id, :][np.newaxis, :])
+            goal_position_L = transform_coordinate_WL(coordinate_obs, goal_position)
             current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2), axis=-1))[:, np.newaxis]
             goal_position_L *= np.clip(goal_distance_threshold / current_goal_distance, a_min=None, a_max=1.)
 

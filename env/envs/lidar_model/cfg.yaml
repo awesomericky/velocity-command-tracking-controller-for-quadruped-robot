@@ -41,7 +41,7 @@ environment:
   random_external_force: False  # 50N force for 1s for lateral direction
   point_goal_initialize: False
   CVAE_data_collection_initialize: False
-  CVAE_environment_evaluation_initialize: True
+  CVAE_environment_initialize: True
   safe_control_initialize: False
 
 training:
@@ -58,6 +58,16 @@ training:
   interpolate_probability: False
   weight_decay: False
   weight_decay_lamda: 0.1
+  command_sampler_probability:
+    Naive:
+      constant: 0.
+      linear_correlated: 0.
+      normal_correlated: 1.
+    CVAE_retraining:
+      constant: 0.2
+      linear_correlated: 0.2
+      normal_correlated: 0.2
+      cvae: 0.4
 
 evaluating:
   number_of_sample: 2000

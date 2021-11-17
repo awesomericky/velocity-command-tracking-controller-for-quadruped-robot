@@ -243,7 +243,10 @@ class Trainer:
                 P_col_loss = torch.sum(P_col_loss, dim=0).mean()
 
                 # Coordinate loss (MSE)
-                coordinate_loss = torch.sum(torch.sum((predicted_coordinates - coordinates_batch).pow(2), dim=0), dim=-1).mean()
+                coordinate_loss = torch.sum(torch.sum((predicted_coordinates - coordinates_batch).pow(2), dim=-1), dim=0).mean()
+
+                # Square root coordinate loss (Just for logging)
+                square_root_coordinate_loss = torch.sum(torch.sqrt(torch.sum((predicted_coordinates - coordinates_batch).pow(2), dim=-1)), dim=0).mean()
 
                 loss = P_col_loss * self.loss_weight["collision"] + coordinate_loss * self.loss_weight["coordinate"]
 
@@ -256,7 +259,7 @@ class Trainer:
 
                 mean_loss += loss.item()
                 mean_P_col_loss += P_col_loss.item()
-                mean_coordinate_loss += coordinate_loss.item()
+                mean_coordinate_loss += square_root_coordinate_loss.item()
                 if n_total_col != 0:
                     col_prediction_accuracy_log.append(col_prediction_accuracy.item())
                 if n_total_not_col != 0:
