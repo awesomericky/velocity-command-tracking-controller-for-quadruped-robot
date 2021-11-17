@@ -22,6 +22,7 @@ from raisimGymTorch.env.envs.lidar_model.trainer import Trainer, Trainer_TCN
 from raisimGymTorch.env.envs.lidar_model.action import Command_sampler, Time_correlated_command_sampler, Normal_time_correlated_command_sampler
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 
+np.random.seed(1)
 
 # task specification
 task_name = "lidar_environment_model_evaluate"
@@ -52,6 +53,7 @@ assert cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to Tru
 assert cfg["environment"]["random_initialize"], "Change cfg[environment][random_initialize] to True"
 assert not cfg["environment"]["point_goal_initialize"], "Change cfg[environment][point_goal_initialize] to False"
 assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environment][safe_control_initialize] to False"
+assert not cfg["environment"]["CVAE_environment_evaluation_initialize"], "Change cfg[environment][CVAE_environment_evaluation_initialize] to False"
 
 cfg['environment']['num_threads'] = cfg['environment']['evaluate_num_threads']
 
@@ -70,10 +72,9 @@ proprioceptive_sensor_dim = 81
 lidar_dim = 360
 assert env.num_obs == proprioceptive_sensor_dim + lidar_dim, "Check configured sensor dimension"
 
-# Training
+# Evaluating
 n_steps = math.floor(cfg['environment']['max_time'] / cfg['environment']['control_dt'])
 command_period_steps = math.floor(cfg['data_collection']['command_period'] / cfg['environment']['control_dt'])
-total_steps = n_steps * env.num_envs
 
 state_dim = cfg["architecture"]["state_encoder"]["input"]
 command_dim = cfg["architecture"]["command_encoder"]["input"]
@@ -149,11 +150,6 @@ else:
                       prioritized_data_update=cfg["data_collection"]["prioritized_data_update"],
                       prioritized_data_update_magnitude=cfg["data_collection"]["prioritized_data_update_magnitude"])
 
-iteration_number = weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0]
-weight_dir = weight_path.rsplit('/', 1)[0] + '/'
-
-# wandb initialize
-# wandb.init(name=task_name, project="Quadruped_RL")
 
 if weight_path == "":
     print("Can't find trained weight, please provide a trained weight with --weight switch\n")
@@ -171,9 +167,6 @@ command_tracking_weight_dir = command_tracking_weight_path.rsplit('/', 1)[0] + '
 iteration_number = command_tracking_weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0]
 env.load_scaling(command_tracking_weight_dir, int(iteration_number))
 
-
-env.turn_off_visualization()
-
 # Load trained environment model
 loaded_environment_model = Lidar_environment_model(COM_encoding_config=cfg["architecture"]["COM_encoder"],
                                                    state_encoding_config=cfg["architecture"]["state_encoder"],
@@ -190,6 +183,8 @@ final_col_accuracy = []
 final_not_col_accuracy = []
 final_coordinate_error = []
 num_test = 100
+
+env.turn_off_visualization()
 
 pdb.set_trace()
 
@@ -217,6 +212,7 @@ for n_test in range(num_test):
         traj_update_time = (step + 1) % command_period_steps == 0
 
         if new_command_time:
+            env.initialize_n_step()  # to reset in new position
             # reset only terminated environment
             env.partial_reset(list(done_envs))
 

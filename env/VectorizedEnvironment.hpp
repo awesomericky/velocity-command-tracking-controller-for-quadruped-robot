@@ -92,9 +92,9 @@ class VectorizedEnvironment {
             n_type_3 += 1.;
     }
 
-//    std::cout << "Environment 1 (circle): " << std::to_string(n_type_1 / num_envs_) << "\n";
-//    std::cout << "Environment 2 (box): " << std::to_string(n_type_2 / num_envs_) << "\n";
-//    std::cout << "Environment 3 (corridor): " << std::to_string(n_type_3 / num_envs_) << "\n";
+    std::cout << "Environment 1 (circle): " << std::to_string(n_type_1 / num_envs_) << "\n";
+    std::cout << "Environment 2 (box): " << std::to_string(n_type_2 / num_envs_) << "\n";
+    std::cout << "Environment 3 (corridor): " << std::to_string(n_type_3 / num_envs_) << "\n";
 
     environments_.reserve(num_envs_);
     rewardInformation_.reserve(num_envs_);
@@ -161,6 +161,12 @@ class VectorizedEnvironment {
   }
 
   void set_goal(Eigen::Ref<EigenVec> &goal) { environments_[0]->set_goal(goal); }
+
+  void parallel_set_goal(Eigen::Ref<EigenRowMajorMat> &goal) {
+#pragma omp parallel for
+      for (int i = 0; i < num_envs_; i++)
+          environments_[i]->set_goal(goal.row(i));
+  }
 
   void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> &sampled_command,
                                Eigen::Ref<EigenVec> &goal_Pos_local,

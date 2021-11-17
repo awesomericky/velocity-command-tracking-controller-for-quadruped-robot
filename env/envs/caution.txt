@@ -1,0 +1,15 @@
+runner2.py : using multiple command sampler (constant command, uniform time correlated command, normal time correlated command)
+
+point_goal_initialize:
+- fixed center point + random orientation initialize  (to make the goal path lengh similar)
+- goal equally sampled in four frames
+
+CVAE_data_collection_initialize:
+- fixed center point + random orientation initialize  (to make the goal path lengh similar)
+- goal randomly sampled without considering the frame
+
+CVAE_environment_evaluation_initialize
+- random initialize
+- goal randomly sampled without considering the frame
+
+** Don't forget to check whether env.initialize_n_step() is called after the environment is done, because it will decide to initialize in different position or not.

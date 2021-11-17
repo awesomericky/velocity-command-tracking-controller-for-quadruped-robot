@@ -41,7 +41,7 @@ namespace raisim
             env_type = sample_env_type;  // 1: scattered circle, 2: scattered box, 3: cross corridor
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
-	    hm_sizeX = 30., hm_sizeY = 30.;
+            hm_sizeX = 30., hm_sizeY = 30.;
 //            hm_sizeX = 40., hm_sizeY = 40.;
 //            double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
             double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
@@ -52,8 +52,8 @@ namespace raisim
             static std::default_random_engine env_generator(random_seed);
 
             /// sample obstacle center
-            // double obstacle_grid_size = sample_obstacle_grid_size;;
-            double obstacle_grid_size = 2.5;
+            double obstacle_grid_size = sample_obstacle_grid_size;;
+//            double obstacle_grid_size = 2.5;
             int n_x_grid = int(hm_sizeX / obstacle_grid_size);
             int n_y_grid = int(hm_sizeY / obstacle_grid_size);
             n_obstacle = n_x_grid * n_y_grid;
@@ -82,8 +82,8 @@ namespace raisim
                 Eigen::VectorXd obstacle_circle_dr;
                 obstacle_circle_dr.setZero(n_obstacle);
                 for (int i=0; i<n_obstacle; i++) {
-                    obstacle_circle_dr[i] = 0.4;
-                    // obstacle_circle_dr[i] = uniform_obstacle(env_generator);
+//                    obstacle_circle_dr[i] = 0.4;
+                     obstacle_circle_dr[i] = uniform_obstacle(env_generator);
                 }
 
                 // set raw height value
@@ -130,8 +130,8 @@ namespace raisim
                 Eigen::VectorXd obstacle_box_size;
                 obstacle_box_size.setZero(n_obstacle);
                 for (int i=0; i<n_obstacle; i++) {
-                    obstacle_box_size[i] = 0.8;
-                    // obstacle_box_size[i] = uniform_obstacle(env_generator);
+//                    obstacle_box_size[i] = 0.8;
+                     obstacle_box_size[i] = uniform_obstacle(env_generator);
                 }
 
                 for (int j=0; j<hm_samplesY; j++) {
@@ -315,6 +315,7 @@ namespace raisim
             point_goal_initialize = cfg["point_goal_initialize"].template As<bool>();
             CVAE_data_collection_initialize = cfg["CVAE_data_collection_initialize"].template As<bool>();
             safe_control_initialize = cfg["safe_control_initialize"].template As<bool>();
+            CVAE_environment_evaluation_initialize = cfg["CVAE_environment_evaluation_initialize"].template As<bool>();
 
             if (point_goal_initialize) {
                 /// sample goals for point goal navigation (sample equally in each frame)
@@ -520,7 +521,7 @@ namespace raisim
                     modified_command_traj.push_back(server_->addVisualBox("modified_command_pos" + std::to_string(i), 0.08, 0.08, 0.08, 0, 0, 1));  // blue
                 }
 
-                if (point_goal_initialize || CVAE_data_collection_initialize) {
+                if (point_goal_initialize || CVAE_data_collection_initialize || CVAE_environment_evaluation_initialize) {
                     /// goal
                     server_->addVisualCylinder("goal", 0.4, 0.8, 2, 1, 0);
                 }
@@ -536,7 +537,7 @@ namespace raisim
     {
         static std::default_random_engine generator(random_seed);
 
-        if (random_initialize) {
+        if (random_initialize || CVAE_environment_evaluation_initialize) {
             if (current_n_step == 0) {
                 /// Random initialization by sampling available x, y position
                 std::uniform_int_distribution<> uniform_init(0, n_init_set-1);
@@ -567,7 +568,6 @@ namespace raisim
                 anymal_->setState(current_random_gc_init, current_random_gv_init);
                 initHistory();
             }
-
         }
         else if (point_goal_initialize || CVAE_data_collection_initialize) {
             if (current_n_step == 0) {
@@ -982,7 +982,7 @@ namespace raisim
             for (int i=0; i<2; i++)
                 goal_pos_[i] = goal_set[sampled_goal_set[current_n_goal]][i];
         }
-        else if (CVAE_data_collection_initialize) {
+        else if (CVAE_data_collection_initialize || CVAE_environment_evaluation_initialize) {
             static std::default_random_engine generator(random_seed + current_n_goal * 10);
             std::uniform_int_distribution<> uniform_sample_goal(0, n_goal_set-1);
             int sampled_goal_idx = uniform_sample_goal(generator);
@@ -1108,7 +1108,8 @@ namespace raisim
     std::vector<raisim::Visuals *> desired_command_traj, modified_command_traj;
 
     /// Task specific initialization for evaluation
-    bool point_goal_initialize= false, CVAE_data_collection_initialize= false, safe_control_initialize= false;
+    bool point_goal_initialize= false, CVAE_data_collection_initialize= false;
+    bool safe_control_initialize= false, CVAE_environment_evaluation_initialize=false;
     raisim::Vec<2> point_goal_init;
 
     /// goal position

@@ -89,6 +89,7 @@ assert cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to Tru
 assert not cfg["environment"]["random_initialize"], "Change cfg[environment][random_initialize] to False"
 assert cfg["environment"]["point_goal_initialize"] or cfg["environment"]["CVAE_data_collection_initialize"], "Change cfg[environment][point_goal_initialize] or cfg[environment][CVAE_data_collection_initialize] to True"
 assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environment][safe_control_initialize] to False"
+assert not cfg["environment"]["CVAE_environment_evaluation_initialize"], "Change cfg[environment][CVAE_environment_evaluation_initialize] to False"
 
 # user command sampling
 user_command = UserCommand(cfg, cfg['evaluating']['number_of_sample'])

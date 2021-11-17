@@ -27,6 +27,7 @@ class RaisimGymVecEnv:
         self._reward = np.zeros(self.num_envs, dtype=np.float32)
         self._done = np.zeros(self.num_envs, dtype=np.bool)
         self._goal = np.zeros(2, dtype=np.float32)
+        self._parallel_goal = np.zeros((self.num_envs, 2), dtype=np.float32)
         # self.rewards = [[] for _ in range(self.num_envs)]
         try:
             self.reward_log = np.zeros([self.num_envs, cfg["n_rewards"] + 1], dtype=np.float32)
@@ -182,6 +183,10 @@ class RaisimGymVecEnv:
     def set_goal(self):
         self.wrapper.set_goal(self._goal)
         return self._goal.copy()
+
+    def parallel_set_goal(self):
+        self.wrapper.parallel_set_goal(self._parallel_goal)
+        return self._parallel_goal.copy()
 
     def observe_potential_heading_direction(self):
         self.wrapper.computed_heading_direction(self.potential_computed_heading_direction)

@@ -48,6 +48,7 @@ PYBIND11_MODULE(RAISIMGYM_TORCH_ENV_NAME, m) {
     .def("visualize_desired_command_traj", &VectorizedEnvironment<ENVIRONMENT>::visualize_desired_command_traj)
     .def("visualize_modified_command_traj", &VectorizedEnvironment<ENVIRONMENT>::visualize_modified_command_traj)
     .def("set_goal", &VectorizedEnvironment<ENVIRONMENT>::set_goal)
+    .def("parallel_set_goal", &VectorizedEnvironment<ENVIRONMENT>::parallel_set_goal)
     .def("baseline_compute_reward", &VectorizedEnvironment<ENVIRONMENT>::baseline_compute_reward)
     .def("computed_heading_direction", &VectorizedEnvironment<ENVIRONMENT>::computed_heading_direction)
 
