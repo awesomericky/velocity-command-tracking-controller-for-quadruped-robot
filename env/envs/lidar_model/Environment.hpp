@@ -315,7 +315,7 @@ namespace raisim
             point_goal_initialize = cfg["point_goal_initialize"].template As<bool>();
             CVAE_data_collection_initialize = cfg["CVAE_data_collection_initialize"].template As<bool>();
             safe_control_initialize = cfg["safe_control_initialize"].template As<bool>();
-            CVAE_environment_evaluation_initialize = cfg["CVAE_environment_evaluation_initialize"].template As<bool>();
+            CVAE_environment_initialize = cfg["CVAE_environment_initialize"].template As<bool>();
 
             if (point_goal_initialize) {
                 /// sample goals for point goal navigation (sample equally in each frame)
@@ -521,7 +521,7 @@ namespace raisim
                     modified_command_traj.push_back(server_->addVisualBox("modified_command_pos" + std::to_string(i), 0.08, 0.08, 0.08, 0, 0, 1));  // blue
                 }
 
-                if (point_goal_initialize || CVAE_data_collection_initialize || CVAE_environment_evaluation_initialize) {
+                if (point_goal_initialize || CVAE_data_collection_initialize || CVAE_environment_initialize) {
                     /// goal
                     server_->addVisualCylinder("goal", 0.4, 0.8, 2, 1, 0);
                 }
@@ -537,7 +537,7 @@ namespace raisim
     {
         static std::default_random_engine generator(random_seed);
 
-        if (random_initialize || CVAE_environment_evaluation_initialize) {
+        if (random_initialize || CVAE_environment_initialize) {
             if (current_n_step == 0) {
                 /// Random initialization by sampling available x, y position
                 std::uniform_int_distribution<> uniform_init(0, n_init_set-1);
@@ -982,7 +982,7 @@ namespace raisim
             for (int i=0; i<2; i++)
                 goal_pos_[i] = goal_set[sampled_goal_set[current_n_goal]][i];
         }
-        else if (CVAE_data_collection_initialize || CVAE_environment_evaluation_initialize) {
+        else if (CVAE_data_collection_initialize || CVAE_environment_initialize) {
             static std::default_random_engine generator(random_seed + current_n_goal * 10);
             std::uniform_int_distribution<> uniform_sample_goal(0, n_goal_set-1);
             int sampled_goal_idx = uniform_sample_goal(generator);
@@ -1109,7 +1109,7 @@ namespace raisim
 
     /// Task specific initialization for evaluation
     bool point_goal_initialize= false, CVAE_data_collection_initialize= false;
-    bool safe_control_initialize= false, CVAE_environment_evaluation_initialize=false;
+    bool safe_control_initialize= false, CVAE_environment_initialize=false;
     raisim::Vec<2> point_goal_init;
 
     /// goal position

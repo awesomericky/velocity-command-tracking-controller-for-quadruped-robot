@@ -60,7 +60,7 @@ def load_param(weight_path, env, actor, critic, optimizer, data_dir):
     critic.architecture.load_state_dict(checkpoint['critic_architecture_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-def load_enviroment_model_param(weight_path, model, optimizer, data_dir):
+def load_enviroment_model_param(weight_path, model, optimizer, data_dir, device):
     if weight_path == "":
         raise Exception("\nCan't find the pre-trained weight, please provide a pre-trained weight with --weight switch\n")
     print("\nRetraining from the checkpoint:", weight_path+"\n")
@@ -77,7 +77,7 @@ def load_enviroment_model_param(weight_path, model, optimizer, data_dir):
             copyfile(item_to_save, pretrained_data_dir+'/'+item_to_save.rsplit('/', 1)[1])
 
     # load environment model parameters from full checkpoint
-    checkpoint = torch.load(weight_path)
+    checkpoint = torch.load(weight_path, map_location=device)
     model.load_state_dict(checkpoint['model_architecture_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 

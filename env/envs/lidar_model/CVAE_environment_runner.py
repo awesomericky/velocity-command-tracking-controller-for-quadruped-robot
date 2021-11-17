@@ -161,8 +161,8 @@ saver = ConfigurationSaver(log_dir=home_path + "/raisimGymTorch/data/"+task_name
                            save_items=[task_path + "/cfg.yaml", task_path + "/Environment.hpp"])
 
 # Load pre-trained environment model
-load_enviroment_model_param(weight_path, environment_model, trainer.optimizer, saver.data_dir)
-environment_model_iteration_number = weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0]
+load_enviroment_model_param(weight_path, environment_model, trainer.optimizer, saver.data_dir, device)
+environment_model_iteration_number = int(weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0])
 
 # Load CVAE inference model (Learned command sampling distribution)
 w_cvae_sampler = CVAE_implicit_distribution_inference(state_encoding_config=cfg["CVAE_architecture"]["state_encoder"],
@@ -234,7 +234,10 @@ for update in range(environment_model_iteration_number, cfg["environment"]["max_
         
         # sample command sampler type for each environment
         env_command_sampler_idx = np.random.choice(4, cfg["environment"]["num_envs"],
-                                                   p=[cfg["CVAE_retraining"]["constant"], cfg["CVAE_retraining"]["linear_correlated"], cfg["CVAE_retraining"]["normal_correlated"], cfg["CVAE_retraining"]["cvae"]])
+                                                   p=[cfg["training"]["command_sampler_probability"]["CVAE_retraining"]["constant"],
+                                                      cfg["training"]["command_sampler_probability"]["CVAE_retraining"]["linear_correlated"],
+                                                      cfg["training"]["command_sampler_probability"]["CVAE_retraining"]["normal_correlated"],
+                                                      cfg["training"]["command_sampler_probability"]["CVAE_retraining"]["cvae"]])
         command_sampler_constant_idx = np.where(env_command_sampler_idx == 0)[0]
         command_sampler_correlated_idx = np.where(env_command_sampler_idx == 1)[0]
         command_sampler_normal_correlated_idx = np.where(env_command_sampler_idx == 2)[0]
@@ -389,15 +392,19 @@ for update in range(environment_model_iteration_number, cfg["environment"]["max_
     
     # prepare for training
     env.initialize_n_step()
+    goal_position = env.parallel_set_goal()
     env.reset()
+    COM_buffer.reset()
     command_sampler_constant.reset()
     command_sampler_correlated.reset()
     command_sampler_normal_correlated.reset()
-    COM_buffer.reset()
 
     # sample command sampler type for each environment
     env_command_sampler_idx = np.random.choice(4, cfg["environment"]["num_envs"],
-                                               p=[cfg["CVAE_retraining"]["constant"], cfg["CVAE_retraining"]["linear_correlated"], cfg["CVAE_retraining"]["normal_correlated"], cfg["CVAE_retraining"]["cvae"]])
+                                               p=[cfg["training"]["command_sampler_probability"]["CVAE_retraining"]["constant"],
+                                                  cfg["training"]["command_sampler_probability"]["CVAE_retraining"]["linear_correlated"],
+                                                  cfg["training"]["command_sampler_probability"]["CVAE_retraining"]["normal_correlated"],
+                                                  cfg["training"]["command_sampler_probability"]["CVAE_retraining"]["cvae"]])
     command_sampler_constant_idx = np.where(env_command_sampler_idx == 0)[0]
     command_sampler_correlated_idx = np.where(env_command_sampler_idx == 1)[0]
     command_sampler_normal_correlated_idx = np.where(env_command_sampler_idx == 2)[0]
