@@ -160,7 +160,7 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
                 if cfg["CVAE_training"]["objective_type"] == "CVAE":
                     reconstruction_loss = torch.mean(torch.sum(torch.sum((sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1)
                 elif cfg["CVAE_training"]["objective_type"] == "BMS":
-                    reconstruction_loss = torch.min(torch.sum(torch.sum((sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1)[0] + torch.log(torch.tensor(n_latent_sample)).to(device)
+                    reconstruction_loss = torch.min(torch.sum(torch.sum((sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1)[0]  # log(n_latent_sample) can be ignored
                 else:
                     raise ValueError("Unsupported loss type")
             reconstruction_loss = reconstruction_loss.mean()
@@ -228,7 +228,7 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
             if cfg["CVAE_training"]["objective_type"] == "CVAE":
                 reconstruction_loss = torch.mean(torch.sum(torch.sum((sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1)
             elif cfg["CVAE_training"]["objective_type"] == "BMS":
-                reconstruction_loss = torch.min(torch.sum(torch.sum((sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1)[0] +  torch.log(torch.tensor(n_latent_sample)).to(device)
+                reconstruction_loss = torch.min(torch.sum(torch.sum((sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1)[0]  # log(n_latent_sample) can be ignored
             else:
                 raise ValueError("Unsupported loss type")
         reconstruction_loss = reconstruction_loss.mean()

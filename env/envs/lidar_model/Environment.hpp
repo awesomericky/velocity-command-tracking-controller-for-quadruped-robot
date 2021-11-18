@@ -173,7 +173,7 @@ namespace raisim
             else {
                 // sample environment size
 //                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 4.0);
-                std::uniform_real_distribution<> uniform_obstacle_short(4.0, 6.0);
+                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 6.0);
 //                std::uniform_real_distribution<> uniform_obstacle_long(8.0, 12.0);
                 std::uniform_real_distribution<> uniform_obstacle_long(26.0, 30.0);
                 double obstacle_corridor_short = uniform_obstacle_short(env_generator);

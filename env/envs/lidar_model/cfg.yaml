@@ -5,7 +5,7 @@ logging: True
 environment:
   render: True
   # just testing commenting
-  evaluate: True
+  evaluate: False
   determine_env: 0  # 0: not determine / 1: circle / 2: box / 3: corridor
   num_envs: 500
   max_n_update: 30000
@@ -40,8 +40,8 @@ environment:
   random_initialize: False  # yaw angle is only randomized
   random_external_force: False  # 50N force for 1s for lateral direction
   point_goal_initialize: False
-  CVAE_data_collection_initialize: False
-  CVAE_environment_initialize: True
+  CVAE_data_collection_initialize: True
+  CVAE_environment_initialize: False
   safe_control_initialize: False
 
 training:
@@ -192,8 +192,8 @@ CVAE_training:
   evaluate_period: 50  # number of epochs
   objective_type: BMS  # CVAE / BMS (https://arxiv.org/abs/1806.07772)  ==> changes are meaningful only when n_latent_sample > 1
   n_latent_sample: 500
-  learning_rate: 6e-4
-  batch_size: 256 # 512
+  learning_rate: 3e-4
+  batch_size: 128 # 512
   num_workers: 6
   shuffle_batch: True
   clip_gradient: False

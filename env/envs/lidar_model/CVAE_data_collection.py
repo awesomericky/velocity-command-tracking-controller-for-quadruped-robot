@@ -61,11 +61,9 @@ task_name = "CVAE_data_collection"
 
 # configuration
 parser = argparse.ArgumentParser()
-parser.add_argument('-m', '--mode', help='set mode either train or test', type=str, default='train')
 parser.add_argument('-w', '--weight', help='pre-trained weight path', type=str, default='')
 parser.add_argument('-tw', '--tracking_weight', help='pre-trained command tracking policy weight path', type=str, default='')
 args = parser.parse_args()
-mode = args.mode
 weight_path = args.weight
 command_tracking_weight_path = args.tracking_weight
 
@@ -166,10 +164,11 @@ action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal
                                                                                  action_dim=command_dim,
                                                                                  random_command_sampler=user_command)
 
-num_max_env = 240
+previous_env_checkpoint = 240
+num_max_env = 480
 num_max_sucess_goals_in_one_env = 8   # Should also change 'total_n_point_goal' in Environment.hpp if you change this value
 num_max_data_in_one_goal = 20
-print(f">> Check important data collection parameters: num_max_env = {num_max_env} / num_max_sucess_goals_in_one_env = {num_max_sucess_goals_in_one_env} / num_max_data_in_one_goal = {num_max_data_in_one_goal}")
+print(f">> Check important data collection parameters: previous_env_checkpoint = {previous_env_checkpoint}, num_max_env = {num_max_env} / num_max_sucess_goals_in_one_env = {num_max_sucess_goals_in_one_env} / num_max_data_in_one_goal = {num_max_data_in_one_goal}")
 pdb.set_trace()
 
 # MUST safe period from collision
@@ -200,12 +199,15 @@ for env_type in [1, 2, 3]:
     cfg["environment"]["determine_env"] = env_type
     print("==============================================")
     print(f"Environment {env_type} data collection started")
-    for i in range(num_max_env):   # Change range value if you want to add more data continuing from previous data collection (ex) range(n) ==> range(n, n'))
+    for i in range(previous_env_checkpoint, num_max_env):   # Change range value if you want to add more data continuing from previous data collection (ex) range(n) ==> range(n, n'))
         print(f"{i+1} / {num_max_env} ==>", end=' ')
         env_start = time.time()
 
         # Create environment from the configuration file
-        cfg["environment"]["seed"]["train"] = env_type * 10000 + 2000 + i   # used seed: 12000 ~ 12000 + (num_max_env-1) | 22000 ~ 22000 + (num_max_env-1) | 32000 ~ 32000 + (num_max_env-1)
+        cfg["environment"]["seed"]["train"] = env_type * 10000 + 2000 + i   
+        # used seed: 12000 + previous_env_checkpoint ~ 12000 + (num_max_env-1) | 
+        #            22000 + previous_env_checkpoint ~ 22000 + (num_max_env-1) |
+        #            32000 + previous_env_checkpoint ~ 32000 + (num_max_env-1)
         env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
         env.load_scaling(command_tracking_weight_dir, int(iteration_number))
         # env.turn_on_visualization()
@@ -343,23 +345,29 @@ for env_type in [1, 2, 3]:
                 elif current_goal_distance < 0.5:
                     # Will record (sampled) success case
                     n_steps = len(observation_traj)
-                    n_max_available_steps = n_steps - n_prediction_step
-                    if n_max_available_steps >= num_max_data_in_one_goal:
-                        sample_ids = np.random.choice(n_max_available_steps, num_max_data_in_one_goal, replace=False)
+                    n_max_available_steps = n_steps - n_prediction_step  # maximum available index which starts from 0
+                    max_n_data = n_max_available_steps + 1
+                    if max_n_data <= 0:
+                        current_num_success_but_short_goals += 1
+                    else:
+                        if max_n_data <= num_max_data_in_one_goal:
+                            sample_ids = np.arange(max_n_data)
+                        else:
+                            sample_ids = np.random.choice(max_n_data, num_max_data_in_one_goal, replace=False)
+                    
                         for sample_id in sample_ids:
                             data_count += 1
 
                             data_observation = observation_traj[sample_id]  # (observation_dim,)
                             data_goal_position = goal_position_traj[sample_id]  # (goal_position_dim,)
                             data_command_traj = np.stack(command_traj[sample_id:sample_id + n_prediction_step])  # (traj_len, command_dim)
+                            assert data_command_traj.shape[0] == n_prediction_step, "Bug exists when saving data"
 
                             # Save data
                             file_name = f"{env_type}_{i+1}_{data_count}"
                             np.savez_compressed(f"{folder_name}/{file_name}", observation=data_observation, goal_position=data_goal_position, command_traj=data_command_traj)
 
                         current_num_success_goals += 1
-                    else:
-                        current_num_success_but_short_goals += 1
                     break
 
         env_end = time.time()
@@ -369,7 +377,7 @@ for env_type in [1, 2, 3]:
         elaspe_time_minutes = int(elapse_time_seconds / 60)
         elapse_time_seconds -= (elaspe_time_minutes * 60)
         elapse_time_seconds = int(elapse_time_seconds)
-        saved_data_size[f'env{env_type}'] += (current_num_success_goals * num_max_data_in_one_goal)
+        saved_data_size[f'env{env_type}'] += data_count
 
         if (current_num_fail_goals > 10) or (current_num_success_but_short_goals > 10):
             print(f"Time: {elaspe_time_minutes}m {elapse_time_seconds}s", "||" , f"Date SR: {current_num_success_goals} / {current_num_success_goals + current_num_fail_goals + current_num_success_but_short_goals} ({current_num_success_but_short_goals})", "||", f"Dataset: {saved_data_size['env1']} / {saved_data_size['env2']} / {saved_data_size['env3']}", "||", "Early termination", sep=" ")

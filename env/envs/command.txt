@@ -1,4 +1,7 @@
 [lidar_model]
+# CVAE data collection
+python raisimGymTorch/env/envs/lidar_model/CVAE_data_collection.py -w /home/student/quadruped/raisimLib/raisimGymTorch/data/lidar_environment_model/2021-11-11-03-50-02/full_1800.pt -tw /home/student/quadruped/raisimLib/raisimGymTorch/data/anymal_locomotion_rough/2021-07-15-21-15-21/full_16200.pt
+
 # CVAE training
 python raisimGymTorch/env/envs/lidar_model/CVAE_runner.py -pw /home/student/quadruped/raisimLib/raisimGymTorch/data/lidar_environment_model/2021-11-11-03-50-02/full_1800.pt
 
