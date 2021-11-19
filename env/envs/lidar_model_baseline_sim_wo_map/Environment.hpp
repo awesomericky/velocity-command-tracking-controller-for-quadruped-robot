@@ -436,9 +436,9 @@ namespace raisim
 //            footIndices_.insert(anymal_->getBodyIdx("LH_THIGH"));
 //            footIndices_.insert(anymal_->getBodyIdx("RH_THIGH"));
 //
-//            /// add object for collision checking
-//            for (int i=0; i<scanSize; i++)
-//                scan_spheres.push_back(world_->addSphere(0.02, 1, "default", raisim::COLLISION(3), raisim::COLLISION(2)));
+            /// add object for collision checking
+            for (int i=0; i<scanSize; i++)
+		scan_spheres.push_back(world_->addSphere(0.02, 1, "default", raisim::COLLISION(3), raisim::COLLISION(2)));
 
             /// visualize if it is the first environment
             if (visualizable_)
@@ -470,383 +470,38 @@ namespace raisim
             }
         }
 
-//        void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> sampled_command,
-//                                     Eigen::Ref<EigenVec> goal_Pos_local,
-//                                     Eigen::Ref<EigenVec> rewards_p,
-//                                     Eigen::Ref<EigenVec> collision_idx,
-//                                     int steps, double delta_t, double must_safe_time) {
-//            int n_sample = sampled_command.rows();
-//            raisim::Vec<3> future_coordinate;
-//            raisim::Vec<4> future_quaternion;
-//            Eigen::VectorXd rewards_cp;
-//            Eigen::VectorXd collision_idx_cp;
-//            int must_safe_n_steps = int(must_safe_time / delta_t);
-//
-//            rewards_cp.setZero(n_sample);
-//            collision_idx_cp.setZero(n_sample);
-//            double current_goal_distance = goal_Pos_local.norm();
-//
-//            if (server_)
-//                server_->lockVisualizationServerMutex();
-//
-//            for (int i=0; i<n_sample; i++) {
-//                double local_x = 0;
-//                double local_y = 0;
-//                double local_yaw = 0;
-//                for (int j=0; j<steps; j++) {
-//                    local_yaw += sampled_command(i, 2) * delta_t;
-//                    local_x += sampled_command(i, 0) * delta_t * cos(local_yaw) - sampled_command(i, 1) * delta_t * sin(local_yaw);
-//                    local_y += sampled_command(i, 0) * delta_t * sin(local_yaw) + sampled_command(i, 1) * delta_t * cos(local_yaw);
-//                    future_coordinate[0] = local_x * cos(coordinateDouble[2]) - local_y * sin(coordinateDouble[2]) + coordinateDouble[0];
-//                    future_coordinate[1] = local_x * sin(coordinateDouble[2]) + local_y * cos(coordinateDouble[2]) + coordinateDouble[1];
-//                    future_coordinate[2] = local_yaw + coordinateDouble[2];
-//
-//                    raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
-//
-////                if (i == 0) {
-////                    prediction_box_1[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
-////                    prediction_box_1[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
-////                } else if (i == 1) {
-////                    prediction_box_2[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
-////                    prediction_box_2[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
-////                }
-//
-//                    if (j < must_safe_n_steps) {
-//                        anymal_box_->setPosition(future_coordinate[0], future_coordinate[1], 0.3);
-//                        anymal_box_->setOrientation(future_quaternion);
-//
-//                        world_->integrate1();
-//
-//                        int num_anymal_future_contact = anymal_box_->getContacts().size();
-//
-//                        if (num_anymal_future_contact > 0) {
-//                            collision_idx_cp[i] = 1;
-//                        }
-//
-//                        if (future_coordinate[0] < -hm_sizeX / 2 || hm_sizeX / 2 < future_coordinate[0] ||
-//                            future_coordinate[1] < -hm_sizeY / 2 || hm_sizeY / 2 < future_coordinate[1]) {
-//                            collision_idx_cp[i] = 1;
-//                        }
-//                    }
-//
-//                    double future_goal_distance = sqrt(pow(local_x - goal_Pos_local[0], 2) + pow(local_y - goal_Pos_local[1], 2));
-//                    rewards_cp[i] += current_goal_distance - future_goal_distance;
-//                }
-//            }
-//
-//            if (server_)
-//                server_->unlockVisualizationServerMutex();
-//
-//            /// reset object
-//            for (int i=0; i<obstacle_spheres.size(); i++)
-//                world_->removeObject(obstacle_spheres[i]);
-//            for (int i=0; i<obstacle_boxes.size(); i++)
-//                world_->removeObject(obstacle_boxes[i]);
-//
-//            obstacle_spheres.clear();
-//            obstacle_boxes.clear();
-//
-//            rewards_p = rewards_cp.cast<float>();
-//            collision_idx = collision_idx_cp.cast<float>();
-//        }
+        void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> sampled_command,
+                                     Eigen::Ref<EigenVec> goal_Pos_local,
+                                     Eigen::Ref<EigenVec> rewards_p,
+                                     Eigen::Ref<EigenVec> collision_idx,
+                                     int steps, double delta_t, double must_safe_time) {
+            int n_sample = sampled_command.rows();
+            raisim::Vec<3> future_coordinate;
+            raisim::Vec<4> future_quaternion;
+            Eigen::VectorXd rewards_cp;
+            Eigen::VectorXd collision_idx_cp;
+            int must_safe_n_steps = int(must_safe_time / delta_t);
 
-    void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> sampled_command,
-                                 Eigen::Ref<EigenVec> goal_Pos_local,
-                                 Eigen::Ref<EigenVec> rewards_p,
-                                 Eigen::Ref<EigenVec> collision_idx,
-                                 int steps, double delta_t, double must_safe_time) {
-        int n_sample = sampled_command.rows();
-        raisim::Vec<3> future_coordinate;
-        raisim::Vec<4> future_quaternion;
-        Eigen::VectorXd rewards_cp;
-        Eigen::VectorXd collision_idx_cp;
-        int must_safe_n_steps = int(must_safe_time / delta_t);
+            rewards_cp.setZero(n_sample);
+            collision_idx_cp.setZero(n_sample);
+            double current_goal_distance = goal_Pos_local.norm();
 
-        rewards_cp.setZero(n_sample);
-        collision_idx_cp.setZero(n_sample);
-        double current_goal_distance = goal_Pos_local.norm();
+            if (server_)
+                server_->lockVisualizationServerMutex();
 
-        /// Check https://ieeexplore.ieee.org/abstract/document/7279550
-        /// just consider lidar data inside the safety zone
-        Eigen::VectorXd lidar_scan_depth_modified;
-        lidar_scan_depth_modified.setZero(scanSize);
-        // Should set below (1.0 - discretize_margin) because if there are lidar_scan_values close to 1.0 (ex) 0.99),
-        // the odd scan positions (0, 0, 100) that we set for default will be used in computation.
-        double safety_margin = 0.3; // 3 [m] (because ray_length is 10 [m])
-        double discretize_margin = 0.4 / ray_length;
-        for (int i=0; i<scanSize; i++) {
-            if (lidar_scan_depth[i] > safety_margin)
-                lidar_scan_depth_modified[i] = 1.;
-            else
-                lidar_scan_depth_modified[i] = lidar_scan_depth[i];
-        }
+            for (int i=0; i<n_sample; i++) {
+                double local_x = 0;
+                double local_y = 0;
+                double local_yaw = 0;
+                for (int j=0; j<steps; j++) {
+                    local_yaw += sampled_command(i, 2) * delta_t;
+                    local_x += sampled_command(i, 0) * delta_t * cos(local_yaw) - sampled_command(i, 1) * delta_t * sin(local_yaw);
+                    local_y += sampled_command(i, 0) * delta_t * sin(local_yaw) + sampled_command(i, 1) * delta_t * cos(local_yaw);
+                    future_coordinate[0] = local_x * cos(coordinateDouble[2]) - local_y * sin(coordinateDouble[2]) + coordinateDouble[0];
+                    future_coordinate[1] = local_x * sin(coordinateDouble[2]) + local_y * cos(coordinateDouble[2]) + coordinateDouble[1];
+                    future_coordinate[2] = local_yaw + coordinateDouble[2];
 
-        /// cluster lidar data
-        std::vector<int> discrete_idx;
-        for (int i = 0; i < scanSize - 1; i++) {
-            if (abs(lidar_scan_depth_modified[i] - lidar_scan_depth_modified[i + 1]) > discretize_margin)
-                discrete_idx.push_back(i);
-        }
-        if (abs(lidar_scan_depth_modified[scanSize - 1] - lidar_scan_depth_modified[0]) > discretize_margin)
-            discrete_idx.push_back(scanSize - 1);
-
-        /// set object (sphere or box) on the clustered place
-        if (discrete_idx.size() >= 2) {
-            for (int i = 0; i < discrete_idx.size() - 1; i++) {
-                int num_scans = discrete_idx[i + 1] - discrete_idx[i];
-                if (lidar_scan_depth_modified[discrete_idx[i] + 1] != 1. && 2 <= num_scans) {
-                    /// set sphere
-                    if (num_scans <= 5) {
-                        Eigen::Vector3d obstacle_center_W =
-                                (scans[discrete_idx[i] + 1]->getPosition() + scans[discrete_idx[i + 1]]->getPosition()) / 2;
-                        double max_distance = 0;
-                        for (int j = discrete_idx[i] + 1; j <= discrete_idx[i + 1]; j++) {
-                            Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
-                            double distance = (obstacle_margin.segment(0, 2) - obstacle_center_W.segment(0, 2)).norm();
-                            if (distance > max_distance)
-                                max_distance = distance;
-                        }
-
-                        obstacle_spheres.push_back(
-                                world_->addSphere(max_distance, 1, "default", raisim::COLLISION(3), raisim::COLLISION(2)));
-                        obstacle_spheres[obstacle_spheres.size() - 1]->setPosition(obstacle_center_W[0],
-                                                                                   obstacle_center_W[1], max_distance);
-                    }
-                        /// set box
-                    else {
-                        Eigen::Vector3d obstacle_W_1 = scans[discrete_idx[i] + 1]->getPosition();
-                        Eigen::Vector3d obstacle_W_2 = scans[discrete_idx[i + 1]]->getPosition();
-
-                        if (abs(obstacle_W_1[0] - obstacle_W_2[0]) < 1e-3) {
-                            // x = a = x_1 = x_2
-                            double line_a = obstacle_W_1[0];
-                            double max_distance = 0;
-                            for (int j = discrete_idx[i] + 1; j <= discrete_idx[i + 1]; j++) {
-                                Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
-                                double distance = obstacle_margin[0] - line_a;
-                                if (abs(distance) > abs(max_distance))
-                                    max_distance = distance;
-                            }
-
-                            Eigen::Vector2d obstacle_center_W;
-                            obstacle_center_W[0] = ((line_a + max_distance) + line_a) / 2;
-                            obstacle_center_W[1] = (obstacle_W_1[1] + obstacle_W_2[1]) / 2;
-                            double box_x_length = abs(max_distance);
-                            double box_y_length = abs(obstacle_W_1[1] - obstacle_W_2[1]);
-
-                            obstacle_boxes.push_back(
-                                    world_->addBox(box_x_length, box_y_length, 0.2, 1, "default", raisim::COLLISION(3),
-                                                   raisim::COLLISION(2)));
-                            obstacle_boxes[obstacle_boxes.size() - 1]->setPosition(obstacle_center_W[0],
-                                                                                   obstacle_center_W[1], 0.1);
-                        } else {
-                            // y = ax + b = (y_2 - y_1) / (x_2 - x_1) * (x - x_1) + y_1  ==>  ax - y + b = 0
-                            double line_a = (obstacle_W_2[1] - obstacle_W_1[1]) /
-                                            (obstacle_W_2[0] - obstacle_W_1[0]);
-                            double line_b = -(obstacle_W_2[1] - obstacle_W_1[1]) /
-                                            (obstacle_W_2[0] - obstacle_W_1[0]) * obstacle_W_1[0] +
-                                            obstacle_W_1[1];
-                            Eigen::Vector2d obstacle_margin;
-                            Eigen::Vector2d obstacle_max_margin;
-                            double max_distance = 0;
-                            for (int j = discrete_idx[i] + 1; j <= discrete_idx[i + 1]; j++) {
-                                Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
-                                double distance = abs(line_a * obstacle_margin[0] - obstacle_margin[1] + line_b) /
-                                                  sqrt(pow(line_a, 2) + 1);
-                                if (distance > max_distance) {
-                                    max_distance = distance;
-                                    obstacle_max_margin[0] = obstacle_margin[0];
-                                    obstacle_max_margin[1] = obstacle_margin[1];
-                                }
-                            }
-
-                            Eigen::Vector2d obstacle_edge_W_1, obstacle_edge_W_2;
-                            obstacle_edge_W_1[0] = (obstacle_W_1[0] + line_a * obstacle_W_1[1] +
-                                                    pow(line_a, 2) * obstacle_max_margin[0] -
-                                                    line_a * obstacle_max_margin[1]) / (pow(line_a, 2) + 1);
-                            obstacle_edge_W_1[1] =
-                                    line_a * (obstacle_edge_W_1[0] - obstacle_max_margin[0]) + obstacle_max_margin[1];
-                            obstacle_edge_W_2[0] = (obstacle_W_2[0] + line_a * obstacle_W_2[1] +
-                                                    pow(line_a, 2) * obstacle_max_margin[0] -
-                                                    line_a * obstacle_max_margin[1]) / (pow(line_a, 2) + 1);
-                            obstacle_edge_W_2[1] =
-                                    line_a * (obstacle_edge_W_2[0] - obstacle_max_margin[0]) + obstacle_max_margin[1];
-
-                            Eigen::Vector2d obstacle_center_W;
-                            obstacle_center_W[0] = (obstacle_W_1[0] + obstacle_W_2[0] + obstacle_edge_W_1[0] +
-                                                    obstacle_edge_W_2[0]) / 4;
-                            obstacle_center_W[1] = (obstacle_W_1[1] + obstacle_W_2[1] + obstacle_edge_W_1[1] +
-                                                    obstacle_edge_W_2[1]) / 4;
-
-                            double box_x_length = (obstacle_W_1 - obstacle_W_2).norm();
-                            double box_y_length = max_distance;
-
-                            double yaw_W = atan(line_a);
-
-                            raisim::angleAxisToQuaternion({0, 0, 1}, yaw_W, future_quaternion);
-
-                            obstacle_boxes.push_back(
-                                    world_->addBox(box_x_length, box_y_length, 0.2, 1, "default", raisim::COLLISION(3),
-                                                   raisim::COLLISION(2)));
-                            obstacle_boxes[obstacle_boxes.size() - 1]->setPosition(obstacle_center_W[0],
-                                                                                   obstacle_center_W[1], 0.1);
-                            obstacle_boxes[obstacle_boxes.size() - 1]->setOrientation(future_quaternion);
-                        }
-                    }
-                }
-            }
-
-            int final_starting_idx = discrete_idx[discrete_idx.size() - 1] + 1;
-            if (final_starting_idx == scanSize)
-                final_starting_idx = 0;
-
-            int num_scans = (scanSize - final_starting_idx) + discrete_idx[0];
-            if (lidar_scan_depth_modified[final_starting_idx] != 1. && 2 <= num_scans) {
-                /// set sphere
-                if (num_scans <= 5) {
-                    Eigen::Vector3d obstacle_center_W =
-                            (scans[final_starting_idx]->getPosition() + scans[discrete_idx[0]]->getPosition()) / 2;
-                    double max_distance = 0;
-                    if (final_starting_idx != 0) {
-                        for (int j=final_starting_idx; j<scanSize; j++) {
-                            Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
-                            double distance = (obstacle_margin.segment(0, 2) - obstacle_center_W.segment(0, 2)).norm();
-                            if (distance > max_distance)
-                                max_distance = distance;
-                        }
-                    }
-                    for (int j=0; j<=discrete_idx[0]; j++) {
-                        Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
-                        double distance = (obstacle_margin.segment(0, 2) - obstacle_center_W.segment(0, 2)).norm();
-                        if (distance > max_distance)
-                            max_distance = distance;
-                    }
-
-                    obstacle_spheres.push_back(
-                            world_->addSphere(max_distance, 1, "default", raisim::COLLISION(3), raisim::COLLISION(2)));
-                    obstacle_spheres[obstacle_spheres.size() - 1]->setPosition(obstacle_center_W[0],
-                                                                               obstacle_center_W[1], max_distance);
-                }
-                    /// set box
-                else {
-                    Eigen::Vector3d obstacle_W_1 = scans[final_starting_idx]->getPosition();
-                    Eigen::Vector3d obstacle_W_2 = scans[discrete_idx[0]]->getPosition();
-
-                    if (abs(obstacle_W_1[0] - obstacle_W_2[0]) < 1e-3) {
-                        // x = a = x_1 = x_2
-                        double line_a = obstacle_W_1[0];
-                        double max_distance = 0;
-                        if (final_starting_idx != 0) {
-                            for (int j=final_starting_idx; j<scanSize; j++) {
-                                Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
-                                double distance = obstacle_margin[0] - line_a;
-                                if (abs(distance) > abs(max_distance))
-                                    max_distance = distance;
-                            }
-                        }
-                        for (int j=0; j<=discrete_idx[0]; j++) {
-                            Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
-                            double distance = obstacle_margin[0] - line_a;
-                            if (abs(distance) > abs(max_distance))
-                                max_distance = distance;
-                        }
-
-                        Eigen::Vector2d obstacle_center_W;
-                        obstacle_center_W[0] = ((line_a + max_distance) + line_a) / 2;
-                        obstacle_center_W[1] = (obstacle_W_1[1] + obstacle_W_2[1]) / 2;
-                        double box_x_length = abs(max_distance);
-                        double box_y_length = abs(obstacle_W_1[1] - obstacle_W_2[1]);
-
-                        obstacle_boxes.push_back(
-                                world_->addBox(box_x_length, box_y_length, 0.2, 1, "default", raisim::COLLISION(3),
-                                               raisim::COLLISION(2)));
-                        obstacle_boxes[obstacle_boxes.size() - 1]->setPosition(obstacle_center_W[0],
-                                                                               obstacle_center_W[1], 0.1);
-                    } else {
-                        // y = ax + b = (y_2 - y_1) / (x_2 - x_1) * (x - x_1) + y_1  ==>  ax - y + b = 0
-                        double line_a = (obstacle_W_2[1] - obstacle_W_1[1]) /
-                                        (obstacle_W_2[0] - obstacle_W_1[0]);
-                        double line_b = -(obstacle_W_2[1] - obstacle_W_1[1]) /
-                                        (obstacle_W_2[0] - obstacle_W_1[0]) * obstacle_W_1[0] +
-                                        obstacle_W_1[1];
-                        Eigen::Vector2d obstacle_margin;
-                        Eigen::Vector2d obstacle_max_margin;
-                        double max_distance = 0;
-                        if (final_starting_idx != 0) {
-                            for (int j=final_starting_idx; j<scanSize; j++) {
-                                Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
-                                double distance = abs(line_a * obstacle_margin[0] - obstacle_margin[1] + line_b) /
-                                                  sqrt(pow(line_a, 2) + 1);
-                                if (distance > max_distance) {
-                                    max_distance = distance;
-                                    obstacle_max_margin[0] = obstacle_margin[0];
-                                    obstacle_max_margin[1] = obstacle_margin[1];
-                                }
-                            }
-                        }
-                        for (int j=0; j<=discrete_idx[0]; j++) {
-                            Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
-                            double distance = abs(line_a * obstacle_margin[0] - obstacle_margin[1] + line_b) /
-                                              sqrt(pow(line_a, 2) + 1);
-                            if (distance > max_distance) {
-                                max_distance = distance;
-                                obstacle_max_margin[0] = obstacle_margin[0];
-                                obstacle_max_margin[1] = obstacle_margin[1];
-                            }
-                        }
-
-                        Eigen::Vector2d obstacle_edge_W_1, obstacle_edge_W_2;
-                        obstacle_edge_W_1[0] = (obstacle_W_1[0] + line_a * obstacle_W_1[1] +
-                                                pow(line_a, 2) * obstacle_max_margin[0] -
-                                                line_a * obstacle_max_margin[1]) / (pow(line_a, 2) + 1);
-                        obstacle_edge_W_1[1] =
-                                line_a * (obstacle_edge_W_1[0] - obstacle_max_margin[0]) + obstacle_max_margin[1];
-                        obstacle_edge_W_2[0] = (obstacle_W_2[0] + line_a * obstacle_W_2[1] +
-                                                pow(line_a, 2) * obstacle_max_margin[0] -
-                                                line_a * obstacle_max_margin[1]) / (pow(line_a, 2) + 1);
-                        obstacle_edge_W_2[1] =
-                                line_a * (obstacle_edge_W_2[0] - obstacle_max_margin[0]) + obstacle_max_margin[1];
-
-                        Eigen::Vector2d obstacle_center_W;
-                        obstacle_center_W[0] = (obstacle_W_1[0] + obstacle_W_2[0] + obstacle_edge_W_1[0] +
-                                                obstacle_edge_W_2[0]) / 4;
-                        obstacle_center_W[1] = (obstacle_W_1[1] + obstacle_W_2[1] + obstacle_edge_W_1[1] +
-                                                obstacle_edge_W_2[1]) / 4;
-
-                        double box_x_length = (obstacle_W_1 - obstacle_W_2).norm();
-                        double box_y_length = max_distance;
-
-                        double yaw_W = atan(line_a);
-
-                        raisim::angleAxisToQuaternion({0, 0, 1}, yaw_W, future_quaternion);
-
-                        obstacle_boxes.push_back(
-                                world_->addBox(box_x_length, box_y_length, 0.2, 1, "default", raisim::COLLISION(3),
-                                               raisim::COLLISION(2)));
-                        obstacle_boxes[obstacle_boxes.size() - 1]->setPosition(obstacle_center_W[0],
-                                                                               obstacle_center_W[1], 0.1);
-                        obstacle_boxes[obstacle_boxes.size() - 1]->setOrientation(future_quaternion);
-                    }
-                }
-            }
-        }
-
-        if (server_)
-            server_->lockVisualizationServerMutex();
-
-        for (int i=0; i<n_sample; i++) {
-            double local_x = 0;
-            double local_y = 0;
-            double local_yaw = 0;
-            for (int j=0; j<steps; j++) {
-                local_yaw += sampled_command(i, 2) * delta_t;
-                local_x += sampled_command(i, 0) * delta_t * cos(local_yaw) - sampled_command(i, 1) * delta_t * sin(local_yaw);
-                local_y += sampled_command(i, 0) * delta_t * sin(local_yaw) + sampled_command(i, 1) * delta_t * cos(local_yaw);
-                future_coordinate[0] = local_x * cos(coordinateDouble[2]) - local_y * sin(coordinateDouble[2]) + coordinateDouble[0];
-                future_coordinate[1] = local_x * sin(coordinateDouble[2]) + local_y * cos(coordinateDouble[2]) + coordinateDouble[1];
-                future_coordinate[2] = local_yaw + coordinateDouble[2];
-
-                raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
+                    raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
 
 //                if (i == 0) {
 //                    prediction_box_1[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
@@ -856,45 +511,390 @@ namespace raisim
 //                    prediction_box_2[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
 //                }
 
-                if (j < must_safe_n_steps) {
-                    anymal_box_->setPosition(future_coordinate[0], future_coordinate[1], 0.3);
-                    anymal_box_->setOrientation(future_quaternion);
+                    if (j < must_safe_n_steps) {
+                        anymal_box_->setPosition(future_coordinate[0], future_coordinate[1], 0.3);
+                        anymal_box_->setOrientation(future_quaternion);
 
-                    world_->integrate1();
+                        world_->integrate1();
 
-                    int num_anymal_future_contact = anymal_box_->getContacts().size();
+                        int num_anymal_future_contact = anymal_box_->getContacts().size();
 
-                    if (num_anymal_future_contact > 0) {
-                        collision_idx_cp[i] = 1;
+                        if (num_anymal_future_contact > 0) {
+                            collision_idx_cp[i] = 1;
+                        }
+
+                        if (future_coordinate[0] < -hm_sizeX / 2 || hm_sizeX / 2 < future_coordinate[0] ||
+                            future_coordinate[1] < -hm_sizeY / 2 || hm_sizeY / 2 < future_coordinate[1]) {
+                            collision_idx_cp[i] = 1;
+                        }
                     }
 
-                    if (future_coordinate[0] < -hm_sizeX / 2 || hm_sizeX / 2 < future_coordinate[0] ||
-                        future_coordinate[1] < -hm_sizeY / 2 || hm_sizeY / 2 < future_coordinate[1]) {
-                        collision_idx_cp[i] = 1;
-                    }
+                    double future_goal_distance = sqrt(pow(local_x - goal_Pos_local[0], 2) + pow(local_y - goal_Pos_local[1], 2));
+                    rewards_cp[i] += current_goal_distance - future_goal_distance;
                 }
-
-                double future_goal_distance = sqrt(pow(local_x - goal_Pos_local[0], 2) + pow(local_y - goal_Pos_local[1], 2));
-                rewards_cp[i] += current_goal_distance - future_goal_distance;
             }
+
+            if (server_)
+                server_->unlockVisualizationServerMutex();
+
+            /// reset object
+            for (int i=0; i<obstacle_spheres.size(); i++)
+                world_->removeObject(obstacle_spheres[i]);
+            for (int i=0; i<obstacle_boxes.size(); i++)
+                world_->removeObject(obstacle_boxes[i]);
+
+            obstacle_spheres.clear();
+            obstacle_boxes.clear();
+
+            rewards_p = rewards_cp.cast<float>();
+            collision_idx = collision_idx_cp.cast<float>();
         }
 
-        if (server_)
-            server_->unlockVisualizationServerMutex();
-
-        /// reset object
-        for (int i=0; i<obstacle_spheres.size(); i++)
-            world_->removeObject(obstacle_spheres[i]);
-        for (int i=0; i<obstacle_boxes.size(); i++)
-            world_->removeObject(obstacle_boxes[i]);
-
-        obstacle_spheres.clear();
-        obstacle_boxes.clear();
-
-        rewards_p = rewards_cp.cast<float>();
-        collision_idx = collision_idx_cp.cast<float>();
-    }
-
+//    void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> sampled_command,
+//                                 Eigen::Ref<EigenVec> goal_Pos_local,
+//                                 Eigen::Ref<EigenVec> rewards_p,
+//                                 Eigen::Ref<EigenVec> collision_idx,
+//                                 int steps, double delta_t, double must_safe_time) {
+//        int n_sample = sampled_command.rows();
+//        raisim::Vec<3> future_coordinate;
+//        raisim::Vec<4> future_quaternion;
+//        Eigen::VectorXd rewards_cp;
+//        Eigen::VectorXd collision_idx_cp;
+//        int must_safe_n_steps = int(must_safe_time / delta_t);
+//
+//        rewards_cp.setZero(n_sample);
+//        collision_idx_cp.setZero(n_sample);
+//        double current_goal_distance = goal_Pos_local.norm();
+//
+//        /// Check https://ieeexplore.ieee.org/abstract/document/7279550
+//        /// just consider lidar data inside the safety zone
+//        Eigen::VectorXd lidar_scan_depth_modified;
+//        lidar_scan_depth_modified.setZero(scanSize);
+//        // Should set below (1.0 - discretize_margin) because if there are lidar_scan_values close to 1.0 (ex) 0.99),
+//        // the odd scan positions (0, 0, 100) that we set for default will be used in computation.
+//        double safety_margin = 0.3; // 3 [m] (because ray_length is 10 [m])
+//        double discretize_margin = 0.4 / ray_length;
+//        for (int i=0; i<scanSize; i++) {
+//            if (lidar_scan_depth[i] > safety_margin)
+//                lidar_scan_depth_modified[i] = 1.;
+//            else
+//                lidar_scan_depth_modified[i] = lidar_scan_depth[i];
+//        }
+//
+//        /// cluster lidar data
+//        std::vector<int> discrete_idx;
+//        for (int i = 0; i < scanSize - 1; i++) {
+//            if (abs(lidar_scan_depth_modified[i] - lidar_scan_depth_modified[i + 1]) > discretize_margin)
+//                discrete_idx.push_back(i);
+//        }
+//        if (abs(lidar_scan_depth_modified[scanSize - 1] - lidar_scan_depth_modified[0]) > discretize_margin)
+//            discrete_idx.push_back(scanSize - 1);
+//
+//        /// set object (sphere or box) on the clustered place
+//        if (discrete_idx.size() >= 2) {
+//            for (int i = 0; i < discrete_idx.size() - 1; i++) {
+//                int num_scans = discrete_idx[i + 1] - discrete_idx[i];
+//                if (lidar_scan_depth_modified[discrete_idx[i] + 1] != 1. && 2 <= num_scans) {
+//                    /// set sphere
+//                    if (num_scans <= 5) {
+//                        Eigen::Vector3d obstacle_center_W =
+//                                (scans[discrete_idx[i] + 1]->getPosition() + scans[discrete_idx[i + 1]]->getPosition()) / 2;
+//                        double max_distance = 0;
+//                        for (int j = discrete_idx[i] + 1; j <= discrete_idx[i + 1]; j++) {
+//                            Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
+//                            double distance = (obstacle_margin.segment(0, 2) - obstacle_center_W.segment(0, 2)).norm();
+//                            if (distance > max_distance)
+//                                max_distance = distance;
+//                        }
+//
+//                        obstacle_spheres.push_back(
+//                                world_->addSphere(max_distance, 1, "default", raisim::COLLISION(3), raisim::COLLISION(2)));
+//                        obstacle_spheres[obstacle_spheres.size() - 1]->setPosition(obstacle_center_W[0],
+//                                                                                   obstacle_center_W[1], max_distance);
+//                    }
+//                        /// set box
+//                    else {
+//                        Eigen::Vector3d obstacle_W_1 = scans[discrete_idx[i] + 1]->getPosition();
+//                        Eigen::Vector3d obstacle_W_2 = scans[discrete_idx[i + 1]]->getPosition();
+//
+//                        if (abs(obstacle_W_1[0] - obstacle_W_2[0]) < 1e-3) {
+//                            // x = a = x_1 = x_2
+//                            double line_a = obstacle_W_1[0];
+//                            double max_distance = 0;
+//                            for (int j = discrete_idx[i] + 1; j <= discrete_idx[i + 1]; j++) {
+//                                Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
+//                                double distance = obstacle_margin[0] - line_a;
+//                                if (abs(distance) > abs(max_distance))
+//                                    max_distance = distance;
+//                            }
+//
+//                            Eigen::Vector2d obstacle_center_W;
+//                            obstacle_center_W[0] = ((line_a + max_distance) + line_a) / 2;
+//                            obstacle_center_W[1] = (obstacle_W_1[1] + obstacle_W_2[1]) / 2;
+//                            double box_x_length = abs(max_distance);
+//                            double box_y_length = abs(obstacle_W_1[1] - obstacle_W_2[1]);
+//
+//                            obstacle_boxes.push_back(
+//                                    world_->addBox(box_x_length, box_y_length, 0.2, 1, "default", raisim::COLLISION(3),
+//                                                   raisim::COLLISION(2)));
+//                            obstacle_boxes[obstacle_boxes.size() - 1]->setPosition(obstacle_center_W[0],
+//                                                                                   obstacle_center_W[1], 0.1);
+//                        } else {
+//                            // y = ax + b = (y_2 - y_1) / (x_2 - x_1) * (x - x_1) + y_1  ==>  ax - y + b = 0
+//                            double line_a = (obstacle_W_2[1] - obstacle_W_1[1]) /
+//                                            (obstacle_W_2[0] - obstacle_W_1[0]);
+//                            double line_b = -(obstacle_W_2[1] - obstacle_W_1[1]) /
+//                                            (obstacle_W_2[0] - obstacle_W_1[0]) * obstacle_W_1[0] +
+//                                            obstacle_W_1[1];
+//                            Eigen::Vector2d obstacle_margin;
+//                            Eigen::Vector2d obstacle_max_margin;
+//                            double max_distance = 0;
+//                            for (int j = discrete_idx[i] + 1; j <= discrete_idx[i + 1]; j++) {
+//                                Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
+//                                double distance = abs(line_a * obstacle_margin[0] - obstacle_margin[1] + line_b) /
+//                                                  sqrt(pow(line_a, 2) + 1);
+//                                if (distance > max_distance) {
+//                                    max_distance = distance;
+//                                    obstacle_max_margin[0] = obstacle_margin[0];
+//                                    obstacle_max_margin[1] = obstacle_margin[1];
+//                                }
+//                            }
+//
+//                            Eigen::Vector2d obstacle_edge_W_1, obstacle_edge_W_2;
+//                            obstacle_edge_W_1[0] = (obstacle_W_1[0] + line_a * obstacle_W_1[1] +
+//                                                    pow(line_a, 2) * obstacle_max_margin[0] -
+//                                                    line_a * obstacle_max_margin[1]) / (pow(line_a, 2) + 1);
+//                            obstacle_edge_W_1[1] =
+//                                    line_a * (obstacle_edge_W_1[0] - obstacle_max_margin[0]) + obstacle_max_margin[1];
+//                            obstacle_edge_W_2[0] = (obstacle_W_2[0] + line_a * obstacle_W_2[1] +
+//                                                    pow(line_a, 2) * obstacle_max_margin[0] -
+//                                                    line_a * obstacle_max_margin[1]) / (pow(line_a, 2) + 1);
+//                            obstacle_edge_W_2[1] =
+//                                    line_a * (obstacle_edge_W_2[0] - obstacle_max_margin[0]) + obstacle_max_margin[1];
+//
+//                            Eigen::Vector2d obstacle_center_W;
+//                            obstacle_center_W[0] = (obstacle_W_1[0] + obstacle_W_2[0] + obstacle_edge_W_1[0] +
+//                                                    obstacle_edge_W_2[0]) / 4;
+//                            obstacle_center_W[1] = (obstacle_W_1[1] + obstacle_W_2[1] + obstacle_edge_W_1[1] +
+//                                                    obstacle_edge_W_2[1]) / 4;
+//
+//                            double box_x_length = (obstacle_W_1 - obstacle_W_2).norm();
+//                            double box_y_length = max_distance;
+//
+//                            double yaw_W = atan(line_a);
+//
+//                            raisim::angleAxisToQuaternion({0, 0, 1}, yaw_W, future_quaternion);
+//
+//                            obstacle_boxes.push_back(
+//                                    world_->addBox(box_x_length, box_y_length, 0.2, 1, "default", raisim::COLLISION(3),
+//                                                   raisim::COLLISION(2)));
+//                            obstacle_boxes[obstacle_boxes.size() - 1]->setPosition(obstacle_center_W[0],
+//                                                                                   obstacle_center_W[1], 0.1);
+//                            obstacle_boxes[obstacle_boxes.size() - 1]->setOrientation(future_quaternion);
+//                        }
+//                    }
+//                }
+//            }
+//
+//            int final_starting_idx = discrete_idx[discrete_idx.size() - 1] + 1;
+//            if (final_starting_idx == scanSize)
+//                final_starting_idx = 0;
+//
+//            int num_scans = (scanSize - final_starting_idx) + discrete_idx[0];
+//            if (lidar_scan_depth_modified[final_starting_idx] != 1. && 2 <= num_scans) {
+//                /// set sphere
+//                if (num_scans <= 5) {
+//                    Eigen::Vector3d obstacle_center_W =
+//                            (scans[final_starting_idx]->getPosition() + scans[discrete_idx[0]]->getPosition()) / 2;
+//                    double max_distance = 0;
+//                    if (final_starting_idx != 0) {
+//                        for (int j=final_starting_idx; j<scanSize; j++) {
+//                            Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
+//                            double distance = (obstacle_margin.segment(0, 2) - obstacle_center_W.segment(0, 2)).norm();
+//                            if (distance > max_distance)
+//                                max_distance = distance;
+//                        }
+//                    }
+//                    for (int j=0; j<=discrete_idx[0]; j++) {
+//                        Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
+//                        double distance = (obstacle_margin.segment(0, 2) - obstacle_center_W.segment(0, 2)).norm();
+//                        if (distance > max_distance)
+//                            max_distance = distance;
+//                    }
+//
+//                    obstacle_spheres.push_back(
+//                            world_->addSphere(max_distance, 1, "default", raisim::COLLISION(3), raisim::COLLISION(2)));
+//                    obstacle_spheres[obstacle_spheres.size() - 1]->setPosition(obstacle_center_W[0],
+//                                                                               obstacle_center_W[1], max_distance);
+//                }
+//                    /// set box
+//                else {
+//                    Eigen::Vector3d obstacle_W_1 = scans[final_starting_idx]->getPosition();
+//                    Eigen::Vector3d obstacle_W_2 = scans[discrete_idx[0]]->getPosition();
+//
+//                    if (abs(obstacle_W_1[0] - obstacle_W_2[0]) < 1e-3) {
+//                        // x = a = x_1 = x_2
+//                        double line_a = obstacle_W_1[0];
+//                        double max_distance = 0;
+//                        if (final_starting_idx != 0) {
+//                            for (int j=final_starting_idx; j<scanSize; j++) {
+//                                Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
+//                                double distance = obstacle_margin[0] - line_a;
+//                                if (abs(distance) > abs(max_distance))
+//                                    max_distance = distance;
+//                            }
+//                        }
+//                        for (int j=0; j<=discrete_idx[0]; j++) {
+//                            Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
+//                            double distance = obstacle_margin[0] - line_a;
+//                            if (abs(distance) > abs(max_distance))
+//                                max_distance = distance;
+//                        }
+//
+//                        Eigen::Vector2d obstacle_center_W;
+//                        obstacle_center_W[0] = ((line_a + max_distance) + line_a) / 2;
+//                        obstacle_center_W[1] = (obstacle_W_1[1] + obstacle_W_2[1]) / 2;
+//                        double box_x_length = abs(max_distance);
+//                        double box_y_length = abs(obstacle_W_1[1] - obstacle_W_2[1]);
+//
+//                        obstacle_boxes.push_back(
+//                                world_->addBox(box_x_length, box_y_length, 0.2, 1, "default", raisim::COLLISION(3),
+//                                               raisim::COLLISION(2)));
+//                        obstacle_boxes[obstacle_boxes.size() - 1]->setPosition(obstacle_center_W[0],
+//                                                                               obstacle_center_W[1], 0.1);
+//                    } else {
+//                        // y = ax + b = (y_2 - y_1) / (x_2 - x_1) * (x - x_1) + y_1  ==>  ax - y + b = 0
+//                        double line_a = (obstacle_W_2[1] - obstacle_W_1[1]) /
+//                                        (obstacle_W_2[0] - obstacle_W_1[0]);
+//                        double line_b = -(obstacle_W_2[1] - obstacle_W_1[1]) /
+//                                        (obstacle_W_2[0] - obstacle_W_1[0]) * obstacle_W_1[0] +
+//                                        obstacle_W_1[1];
+//                        Eigen::Vector2d obstacle_margin;
+//                        Eigen::Vector2d obstacle_max_margin;
+//                        double max_distance = 0;
+//                        if (final_starting_idx != 0) {
+//                            for (int j=final_starting_idx; j<scanSize; j++) {
+//                                Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
+//                                double distance = abs(line_a * obstacle_margin[0] - obstacle_margin[1] + line_b) /
+//                                                  sqrt(pow(line_a, 2) + 1);
+//                                if (distance > max_distance) {
+//                                    max_distance = distance;
+//                                    obstacle_max_margin[0] = obstacle_margin[0];
+//                                    obstacle_max_margin[1] = obstacle_margin[1];
+//                                }
+//                            }
+//                        }
+//                        for (int j=0; j<=discrete_idx[0]; j++) {
+//                            Eigen::Vector3d obstacle_margin = scans[j]->getPosition();
+//                            double distance = abs(line_a * obstacle_margin[0] - obstacle_margin[1] + line_b) /
+//                                              sqrt(pow(line_a, 2) + 1);
+//                            if (distance > max_distance) {
+//                                max_distance = distance;
+//                                obstacle_max_margin[0] = obstacle_margin[0];
+//                                obstacle_max_margin[1] = obstacle_margin[1];
+//                            }
+//                        }
+//
+//                        Eigen::Vector2d obstacle_edge_W_1, obstacle_edge_W_2;
+//                        obstacle_edge_W_1[0] = (obstacle_W_1[0] + line_a * obstacle_W_1[1] +
+//                                                pow(line_a, 2) * obstacle_max_margin[0] -
+//                                                line_a * obstacle_max_margin[1]) / (pow(line_a, 2) + 1);
+//                        obstacle_edge_W_1[1] =
+//                                line_a * (obstacle_edge_W_1[0] - obstacle_max_margin[0]) + obstacle_max_margin[1];
+//                        obstacle_edge_W_2[0] = (obstacle_W_2[0] + line_a * obstacle_W_2[1] +
+//                                                pow(line_a, 2) * obstacle_max_margin[0] -
+//                                                line_a * obstacle_max_margin[1]) / (pow(line_a, 2) + 1);
+//                        obstacle_edge_W_2[1] =
+//                                line_a * (obstacle_edge_W_2[0] - obstacle_max_margin[0]) + obstacle_max_margin[1];
+//
+//                        Eigen::Vector2d obstacle_center_W;
+//                        obstacle_center_W[0] = (obstacle_W_1[0] + obstacle_W_2[0] + obstacle_edge_W_1[0] +
+//                                                obstacle_edge_W_2[0]) / 4;
+//                        obstacle_center_W[1] = (obstacle_W_1[1] + obstacle_W_2[1] + obstacle_edge_W_1[1] +
+//                                                obstacle_edge_W_2[1]) / 4;
+//
+//                        double box_x_length = (obstacle_W_1 - obstacle_W_2).norm();
+//                        double box_y_length = max_distance;
+//
+//                        double yaw_W = atan(line_a);
+//
+//                        raisim::angleAxisToQuaternion({0, 0, 1}, yaw_W, future_quaternion);
+//
+//                        obstacle_boxes.push_back(
+//                                world_->addBox(box_x_length, box_y_length, 0.2, 1, "default", raisim::COLLISION(3),
+//                                               raisim::COLLISION(2)));
+//                        obstacle_boxes[obstacle_boxes.size() - 1]->setPosition(obstacle_center_W[0],
+//                                                                               obstacle_center_W[1], 0.1);
+//                        obstacle_boxes[obstacle_boxes.size() - 1]->setOrientation(future_quaternion);
+//                    }
+//                }
+//            }
+//        }
+//
+//        if (server_)
+//            server_->lockVisualizationServerMutex();
+//
+//        for (int i=0; i<n_sample; i++) {
+//            double local_x = 0;
+//            double local_y = 0;
+//            double local_yaw = 0;
+//            for (int j=0; j<steps; j++) {
+//                local_yaw += sampled_command(i, 2) * delta_t;
+//                local_x += sampled_command(i, 0) * delta_t * cos(local_yaw) - sampled_command(i, 1) * delta_t * sin(local_yaw);
+//                local_y += sampled_command(i, 0) * delta_t * sin(local_yaw) + sampled_command(i, 1) * delta_t * cos(local_yaw);
+//                future_coordinate[0] = local_x * cos(coordinateDouble[2]) - local_y * sin(coordinateDouble[2]) + coordinateDouble[0];
+//                future_coordinate[1] = local_x * sin(coordinateDouble[2]) + local_y * cos(coordinateDouble[2]) + coordinateDouble[1];
+//                future_coordinate[2] = local_yaw + coordinateDouble[2];
+//
+//                raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
+//
+////                if (i == 0) {
+////                    prediction_box_1[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
+////                    prediction_box_1[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
+////                } else if (i == 1) {
+////                    prediction_box_2[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
+////                    prediction_box_2[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
+////                }
+//
+//                if (j < must_safe_n_steps) {
+//                    anymal_box_->setPosition(future_coordinate[0], future_coordinate[1], 0.3);
+//                    anymal_box_->setOrientation(future_quaternion);
+//
+//                    world_->integrate1();
+//
+//                    int num_anymal_future_contact = anymal_box_->getContacts().size();
+//
+//                    if (num_anymal_future_contact > 0) {
+//                        collision_idx_cp[i] = 1;
+//                    }
+//
+//                    if (future_coordinate[0] < -hm_sizeX / 2 || hm_sizeX / 2 < future_coordinate[0] ||
+//                        future_coordinate[1] < -hm_sizeY / 2 || hm_sizeY / 2 < future_coordinate[1]) {
+//                        collision_idx_cp[i] = 1;
+//                    }
+//                }
+//
+//                double future_goal_distance = sqrt(pow(local_x - goal_Pos_local[0], 2) + pow(local_y - goal_Pos_local[1], 2));
+//                rewards_cp[i] += current_goal_distance - future_goal_distance;
+//            }
+//        }
+//
+//        if (server_)
+//            server_->unlockVisualizationServerMutex();
+//
+//        /// reset object
+//        for (int i=0; i<obstacle_spheres.size(); i++)
+//            world_->removeObject(obstacle_spheres[i]);
+//        for (int i=0; i<obstacle_boxes.size(); i++)
+//            world_->removeObject(obstacle_boxes[i]);
+//
+//        obstacle_spheres.clear();
+//        obstacle_boxes.clear();
+//
+//        rewards_p = rewards_cp.cast<float>();
+//        collision_idx = collision_idx_cp.cast<float>();
+//    }
+//
     void init() final {}
 
     void reset() final
@@ -1054,14 +1054,15 @@ namespace raisim
                 if (visualizable_) {
                     scans[i]->setPosition(col[0].getPosition());
                 }
-//                scan_spheres[i]->setPosition(col[0].getPosition()[0], col[0].getPosition()[1], 0.1);
+		if (i % 1 == 0)
+		   scan_spheres[i]->setPosition(col[0].getPosition()[0], col[0].getPosition()[1], 0.1);
                 lidar_scan_depth[i] = (lidarPos.e() - col[0].getPosition()).norm() / ray_length;
             }
             else {
                 if (visualizable_) {
                     scans[i]->setPosition({0, 0, 100});
                 }
-//                scan_spheres[i]->setPosition(0, 0, 100);
+                scan_spheres[i]->setPosition(0, 0, 100);
             }
         }
 

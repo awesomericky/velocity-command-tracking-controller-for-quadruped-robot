@@ -8,11 +8,12 @@ environment:
   num_envs: 300
   max_n_update: 10000
   eval_every_n: 50
+  determine_env: 1
   seed:
     train: 0
     evaluate: 700
-  num_threads: 12
-  test_num_threads: 12
+  num_threads: 3
+  test_num_threads: 3
   simulation_dt: 0.0025
   control_dt: 0.01
   max_time: 9.0
@@ -53,10 +54,10 @@ training:
 evaluating:
   command_period: 3.0
   sigma: 1.0
-  number_of_sample: 8 #90
+  number_of_sample: 90 #8 #90
   gamma: 7
   beta: 0.5
-  number_of_bin: 2 #4
+  number_of_bin: 4 #2 #4
 
 data_collection:
   command_sampler_beta: 0.2

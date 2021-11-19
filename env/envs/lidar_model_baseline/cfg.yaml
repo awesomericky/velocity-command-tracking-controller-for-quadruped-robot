@@ -12,7 +12,7 @@ environment:
     evaluate: 600
   max_n_update: 10000
   eval_every_n: 50
-  num_threads: 3
+  num_threads: 3 
   test_num_threads: 3
   simulation_dt: 0.0025
   control_dt: 0.01
@@ -54,7 +54,7 @@ training:
 evaluating:
   command_period: 3.0
   sigma: 1.0
-  number_of_sample: 2000 # 90
+  number_of_sample: 90
   gamma: 20
   beta: 0.5
   number_of_bin: 4

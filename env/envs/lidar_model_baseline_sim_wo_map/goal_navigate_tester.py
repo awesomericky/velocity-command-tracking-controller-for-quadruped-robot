@@ -245,6 +245,9 @@ while n_test_case < num_goals:
     #     #     print(f"Std: {np.std(time_check[50:])}")
     #     #     pdb.set_trace()
 
+    if new_action_time:
+        print(frame_end - frame_start)
+
     wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
     if wait_time > 0.:

@@ -125,13 +125,13 @@ start = time.time()
 
 # Load action planner
 n_prediction_step = int(cfg["data_collection"]["prediction_period"] / cfg["data_collection"]["command_period"])
-# action_planner = Stochastic_action_planner_uniform_bin_baseline(command_range=cfg["environment"]["command"],
-#                                                                 n_sample=cfg["evaluating"]["number_of_sample"],
-#                                                                 n_horizon=n_prediction_step,
-#                                                                 n_bin=cfg["evaluating"]["number_of_bin"],
-#                                                                 beta=cfg["evaluating"]["beta"],
-#                                                                 gamma=cfg["evaluating"]["gamma"],
-#                                                                 action_dim=command_dim)
+action_planner = Stochastic_action_planner_uniform_bin_baseline(command_range=cfg["environment"]["command"],
+                                                                 n_sample=cfg["evaluating"]["number_of_sample"],
+                                                                 n_horizon=n_prediction_step,
+                                                                 n_bin=cfg["evaluating"]["number_of_bin"],
+                                                                 beta=cfg["evaluating"]["beta"],
+                                                                 gamma=cfg["evaluating"]["gamma"],
+                                                                 action_dim=command_dim)
 
 env.initialize_n_step()
 env.reset()
@@ -214,7 +214,6 @@ while n_test_case < num_goals:
 
         ##### Needed check
         # reward_compute_start = time.time()
-        pdb.set_trace()
         goal_rewards, collision_idx_list = env.baseline_compute_reward(action_candidates, np.swapaxes(goal_position_L, 0, 1), goal_rewards, collision_idx_list,
                                                                        n_prediction_step, cfg["data_collection"]["command_period"], MUST_safety_period)
         # reward_compute_end = time.time()
@@ -270,6 +269,9 @@ while n_test_case < num_goals:
     #         print(f"Mean: {np.mean(time_check[50:])}")
     #         print(f"Std: {np.std(time_check[50:])}")
     #         pdb.set_trace()
+
+    if new_action_time:
+        print(frame_end - frame_start)
 
     wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
