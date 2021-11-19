@@ -52,7 +52,6 @@ training:
     coordinate: 1
 
 evaluating:
-  command_period: 3.0
   sigma: 1.0
   number_of_sample: 90
   gamma: 20

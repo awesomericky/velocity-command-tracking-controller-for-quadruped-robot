@@ -138,6 +138,7 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
         mean_reconstruction_loss = 0
         mean_KL_posterior_loss = 0
         mean_inference_reconstruction_loss = 0
+        mean_min_inference_reconstruction_loss = 0
         n_update = 0
 
         for observation_batch, goal_position_batch, command_traj_batch in validation_generator:
@@ -172,11 +173,13 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
             command_traj_batch_broadcast = torch.broadcast_to(command_traj_batch.unsqueeze(2),
                                                             (command_traj_batch.shape[0], command_traj_batch.shape[1], cfg["CVAE_inference"]["n_sample"], command_traj_batch.shape[2]))
             inference_reconstruction_loss = torch.mean(torch.sum(torch.sum((inference_sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1).mean()
+            min_inference_reconstruction_loss = torch.min(torch.sum(torch.sum((inference_sampled_command_traj - command_traj_batch_broadcast).pow(2), dim=0), dim=-1), dim=1)[0].mean()
 
             mean_loss += loss.item()
             mean_reconstruction_loss += reconstruction_loss.item()
             mean_KL_posterior_loss += KL_posterior_loss.item()
             mean_inference_reconstruction_loss += inference_reconstruction_loss.item()
+            mean_min_inference_reconstruction_loss += min_inference_reconstruction_loss.item()
             n_update += 1
 
         mean_loss /= n_update
@@ -191,6 +194,7 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
             logging_data['Evaluate/Reconstruction'] = mean_reconstruction_loss
             logging_data['Evaluate/KL_posterior'] = mean_KL_posterior_loss
             logging_data['Evaluate/Inference_reconstruction'] = mean_inference_reconstruction_loss
+            logging_data['Evaluate/Minimum_inference_reconstruction'] = mean_min_inference_reconstruction_loss
             wandb.log(logging_data)
 
         print('====================================================')
@@ -199,6 +203,7 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
         print('{:<40} {:>6}'.format("reconstruction: ", '{:0.6f}'.format(mean_reconstruction_loss)))
         print('{:<40} {:>6}'.format("kl posterior: ", '{:0.6f}'.format(mean_KL_posterior_loss)))
         print('{:<40} {:>6}'.format("inference reconstruction: ", '{:0.6f}'.format(mean_inference_reconstruction_loss)))
+        print('{:<40} {:>6}'.format("minimum inference reconstruction: ", '{:0.6f}'.format(mean_min_inference_reconstruction_loss)))
 
         print('====================================================\n')
     

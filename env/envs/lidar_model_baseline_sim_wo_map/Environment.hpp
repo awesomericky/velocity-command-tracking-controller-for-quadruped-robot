@@ -438,7 +438,7 @@ namespace raisim
 //
             /// add object for collision checking
             for (int i=0; i<scanSize; i++)
-		scan_spheres.push_back(world_->addSphere(0.02, 1, "default", raisim::COLLISION(3), raisim::COLLISION(2)));
+		scan_spheres.push_back(world_->addSphere(0.05, 1, "default", raisim::COLLISION(3), raisim::COLLISION(2)));
 
             /// visualize if it is the first environment
             if (visualizable_)
@@ -503,13 +503,13 @@ namespace raisim
 
                     raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
 
-//                if (i == 0) {
-//                    prediction_box_1[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
-//                    prediction_box_1[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
-//                } else if (i == 1) {
-//                    prediction_box_2[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
-//                    prediction_box_2[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
-//                }
+//                    if (i == 0) {
+//                       prediction_box_1[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
+//                       prediction_box_1[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
+//                    } else if (i == 1) {
+//                       prediction_box_2[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
+//                       prediction_box_2[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
+//                    }
 
                     if (j < must_safe_n_steps) {
                         anymal_box_->setPosition(future_coordinate[0], future_coordinate[1], 0.3);
@@ -518,7 +518,6 @@ namespace raisim
                         world_->integrate1();
 
                         int num_anymal_future_contact = anymal_box_->getContacts().size();
-
                         if (num_anymal_future_contact > 0) {
                             collision_idx_cp[i] = 1;
                         }
@@ -537,14 +536,14 @@ namespace raisim
             if (server_)
                 server_->unlockVisualizationServerMutex();
 
-            /// reset object
-            for (int i=0; i<obstacle_spheres.size(); i++)
-                world_->removeObject(obstacle_spheres[i]);
-            for (int i=0; i<obstacle_boxes.size(); i++)
-                world_->removeObject(obstacle_boxes[i]);
+            // /// reset object
+            // for (int i=0; i<obstacle_spheres.size(); i++)
+            //     world_->removeObject(obstacle_spheres[i]);
+            // for (int i=0; i<obstacle_boxes.size(); i++)
+            //     world_->removeObject(obstacle_boxes[i]);
 
-            obstacle_spheres.clear();
-            obstacle_boxes.clear();
+            // obstacle_spheres.clear();
+            // obstacle_boxes.clear();
 
             rewards_p = rewards_cp.cast<float>();
             collision_idx = collision_idx_cp.cast<float>();
@@ -894,7 +893,7 @@ namespace raisim
 //        rewards_p = rewards_cp.cast<float>();
 //        collision_idx = collision_idx_cp.cast<float>();
 //    }
-//
+
     void init() final {}
 
     void reset() final
@@ -1037,7 +1036,7 @@ namespace raisim
         raisim::Mat<3,3> lidarOri;
         anymal_->getFramePosition("lidar_cage_to_lidar", lidarPos);
         anymal_->getFrameOrientation("lidar_cage_to_lidar", lidarOri);
-        ray_length = 10;
+        ray_length = 10.;
         Eigen::Vector3d direction;
         Eigen::Vector3d rayDirection;
 

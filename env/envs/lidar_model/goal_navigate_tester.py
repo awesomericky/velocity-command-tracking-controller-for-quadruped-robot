@@ -251,9 +251,21 @@ else:
 
     command_log = []
 
+    # log traversal distance
+    traversal_distance = 0.
+    previous_coordinate = None
+    current_coordinate = None
+
     while n_test_case < num_goals:
         frame_start = time.time()
         new_action_time = step % command_period_steps == 0
+
+        # log traversal distance (just env 0)
+        previous_coordinate = current_coordinate
+        current_coordinate = env.coordinate_observe()
+        if previous_coordinate is not None:
+            delta_coordinate = current_coordinate[0, :-1] - previous_coordinate[0, :-1]
+            traversal_distance += (delta_coordinate[0] ** 2 + delta_coordinate[1] ** 2) ** 0.5
 
         obs, _ = env.observe(False)  # observation before taking step
         if step % COM_history_update_period == 0:
@@ -392,8 +404,8 @@ else:
         #         print(f"Std: {np.std(time_check[50:])}")
         #         pdb.set_trace()
 
-        if new_action_time:
-            print(frame_end - frame_start)
+        # if new_action_time:
+        #    print(frame_end - frame_start)
 
         wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
@@ -421,6 +433,9 @@ else:
             sample_user_command = np.zeros(3)
             goal_current_duration = 0.
             print(f"Intermediate result : {n_success_test_case} / {n_test_case}")
+            traversal_distance = 0.
+            previous_coordinate = None
+            current_coordinate = None
         # success
         elif current_goal_distance < 0.5:
             # print(goal_current_duration)
@@ -436,8 +451,11 @@ else:
             sample_user_command = np.zeros(3)
             n_success_test_case += 1
             goal_current_duration = 0.
-            print(f"Intermediate result : {n_success_test_case} / {n_test_case} || Number of steps: {step}")
+            print(f"Intermediate result : {n_success_test_case} / {n_test_case} || Number of steps: {step} || Traversal distance: {traversal_distance}")
             step = 0
+            traversal_distance = 0.
+            previous_coordinate = None
+            current_coordinate = None
 
             plot_command_result(command_traj=np.array(command_log),
                                 folder_name="command_trajectory",

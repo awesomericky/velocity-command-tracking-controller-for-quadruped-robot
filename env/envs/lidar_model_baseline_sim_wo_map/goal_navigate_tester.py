@@ -177,7 +177,6 @@ while n_test_case < num_goals:
     if new_action_time:
         action_candidates = action_planner.sample()
         action_candidates = action_candidates.astype(np.float32)
-
         # compute reward (goal reward + safety reward)
         goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
         current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
@@ -186,7 +185,7 @@ while n_test_case < num_goals:
         # reward_compute_start = time.time()
         goal_rewards, collision_idx_list = env.baseline_compute_reward(action_candidates, np.swapaxes(goal_position_L, 0, 1), goal_rewards, collision_idx_list,
                                                                        n_prediction_step, cfg["data_collection"]["command_period"], MUST_safety_period)
-        # pdb.set_trace()
+        #pdb.set_trace()
         # reward_compute_end = time.time()
         # print(reward_compute_end - reward_compute_start)
         coll_idx = np.where(collision_idx_list == 1)[0]
@@ -204,7 +203,8 @@ while n_test_case < num_goals:
         action_size /= np.max(action_size)
 
         reward = 1.2 * np.squeeze(goal_rewards, -1) + 0.1 * action_size
-
+        # pdb.set_trace()
+        print(len(coll_idx))
         if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
             reward[coll_idx] = 0  # exclude trajectory that collides with obstacle
 

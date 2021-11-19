@@ -83,7 +83,7 @@ namespace raisim
                 obstacle_circle_dr.setZero(n_obstacle);
                 for (int i=0; i<n_obstacle; i++) {
 //                    obstacle_circle_dr[i] = 0.4;
-                     obstacle_circle_dr[i] = uniform_obstacle(env_generator);
+                    obstacle_circle_dr[i] = uniform_obstacle(env_generator);
                 }
 
                 // set raw height value

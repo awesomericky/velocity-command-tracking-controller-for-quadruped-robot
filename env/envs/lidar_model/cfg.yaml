@@ -189,11 +189,11 @@ CVAE_architecture:
 CVAE_training:
   seed: 0  # important for creating training & validation dataset
   num_epochs: 10000
-  evaluate_period: 50  # number of epochs
+  evaluate_period: 25  # number of epochs
   objective_type: BMS  # CVAE / BMS (https://arxiv.org/abs/1806.07772)  ==> changes are meaningful only when n_latent_sample > 1
   n_latent_sample: 500
-  learning_rate: 3e-4
-  batch_size: 128 # 512
+  learning_rate: 4e-4
+  batch_size: 512
   num_workers: 6
   shuffle_batch: True
   clip_gradient: False

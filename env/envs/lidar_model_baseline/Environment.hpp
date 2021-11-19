@@ -54,7 +54,7 @@ namespace raisim
             /// sample obstacle center
 //            double obstacle_grid_size = sample_obstacle_grid_size;
 //            obstacle_dr = sample_obstacle_dr;
-            double obstacle_grid_size = 3.;
+            double obstacle_grid_size = 2.5;
             int n_x_grid = int(hm_sizeX / obstacle_grid_size);
             int n_y_grid = int(hm_sizeY / obstacle_grid_size);
             n_obstacle = n_x_grid * n_y_grid;

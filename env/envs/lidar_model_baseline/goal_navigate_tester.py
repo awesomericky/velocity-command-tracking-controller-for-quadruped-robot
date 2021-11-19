@@ -17,7 +17,7 @@ import argparse
 from collections import defaultdict
 import pdb
 from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
-from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin
+from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin, Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal
 from raisimGymTorch.env.envs.lidar_model.action import Zeroth_action_planner, Modified_zeroth_action_planner, Stochastic_action_planner_uniform_bin_baseline
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 
@@ -100,7 +100,6 @@ assert env.num_obs == proprioceptive_sensor_dim + lidar_dim, "Check configured s
 # Evaluating
 n_steps = math.floor(cfg['environment']['max_time'] / cfg['environment']['control_dt'])
 command_period_steps = math.floor(cfg['data_collection']['command_period'] / cfg['environment']['control_dt'])
-evaluate_command_sampling_steps = math.floor(cfg['evaluating']['command_period'] / cfg['environment']['control_dt'])
 
 state_dim = cfg["architecture"]["state_encoder"]["input"]
 command_dim = cfg["architecture"]["command_encoder"]["input"]
@@ -133,6 +132,19 @@ action_planner = Stochastic_action_planner_uniform_bin_baseline(command_range=cf
                                                                  gamma=cfg["evaluating"]["gamma"],
                                                                  action_dim=command_dim)
 
+
+#action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal(command_range=cfg["environment"]["command"],
+#                                                                                 n_sample=cfg["evaluating"]["number_of_sample"],
+#                                                                                 n_horizon=n_prediction_step,
+#                                                                                 n_bin=cfg["evaluating"]["number_of_bin"],
+#                                                                                 beta=cfg["evaluating"]["beta"],
+#                                                                                 gamma=cfg["evaluating"]["gamma"],
+#                                                                                 sigma=cfg["evaluating"]["sigma"],
+#                                                                                 noise_sigma=0.1,
+#                                                                                 noise=False,
+#                                                                                 action_dim=command_dim,
+#                                                                                 random_command_sampler=user_command)
+
 env.initialize_n_step()
 env.reset()
 action_planner.reset()
@@ -147,10 +159,12 @@ command_traj = []
 step = 0
 n_test_case = 0
 n_success_test_case = 0
-num_goals = 12
+num_goals = 8
+
+total_step = 0
 
 # MUST safe period from collision
-MUST_safety_period = 3.
+MUST_safety_period = 3.  # not 2 because we want long distance planning
 MUST_safety_period_n_steps = int(MUST_safety_period / cfg['data_collection']['command_period'])
 sample_user_command = np.zeros(3)
 prev_coordinate_obs = np.zeros((1, 3))
@@ -167,6 +181,11 @@ goal_time_limit = 180.
 goal_current_duration = 0.
 command_log = []
 
+# log traversal distance
+traversal_distance = 0.
+previous_coordinate = None
+current_coordinate = None
+
 while n_test_case < num_goals:
 
     frame_start = time.time()
@@ -180,6 +199,12 @@ while n_test_case < num_goals:
         action_candidates = action_planner.sample()
         action_candidates = action_candidates.astype(np.float32)
 
+        # log traversal distance (just env 0)
+        previous_coordinate = current_coordinate
+        current_coordinate = env.coordinate_observe()
+        if previous_coordinate is not None:
+            delta_coordinate = current_coordinate[0, :-1] - previous_coordinate[0, :-1]
+            traversal_distance += (delta_coordinate[0] ** 2 + delta_coordinate[1] ** 2) ** 0.5
 
         # # predict trajectory
         # n_sample = action_candidates.shape[0]
@@ -227,7 +252,8 @@ while n_test_case < num_goals:
         action_size = np.sqrt((action_candidates[:, 0] / 1) ** 2 + (action_candidates[:, 1] / 0.4) ** 2 + (action_candidates[:, 2] / 1.2) ** 2)
         action_size /= np.max(action_size)
 
-        reward = 1.2 * np.squeeze(goal_rewards, -1) + 0.1 * action_size
+        # reward = 1.2 * np.squeeze(goal_rewards, -1) + 0.1 * action_size
+        reward = 1. * np.squeeze(goal_rewards, -1)
 
         if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
             reward[coll_idx] = 0  # exclude trajectory that collides with obstacle
@@ -270,8 +296,8 @@ while n_test_case < num_goals:
     #         print(f"Std: {np.std(time_check[50:])}")
     #         pdb.set_trace()
 
-    if new_action_time:
-        print(frame_end - frame_start)
+    # if new_action_time:
+    #     print(frame_end - frame_start)
 
     wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
@@ -282,6 +308,8 @@ while n_test_case < num_goals:
         goal_current_duration += cfg['environment']['control_dt']
     else:
         goal_current_duration += (frame_end - frame_start)
+
+    total_step += 1
 
     if goal_current_duration > goal_time_limit:
         done[0] = True
@@ -297,6 +325,10 @@ while n_test_case < num_goals:
         sample_user_command = np.zeros(3)
         goal_current_duration = 0.
         print(f"Intermediate result : {n_success_test_case} / {n_test_case}")
+        total_step = 0
+        traversal_distance = 0.
+        previous_coordinate = None
+        current_coordinate = None
     # success
     elif current_goal_distance < 0.5:
         env.reset()
@@ -311,7 +343,11 @@ while n_test_case < num_goals:
         sample_user_command = np.zeros(3)
         n_success_test_case += 1
         goal_current_duration = 0.
-        print(f"Intermediate result : {n_success_test_case} / {n_test_case}")
+        print(f"Intermediate result : {n_success_test_case} / {n_test_case} || Total step: {total_step} || Traversal distance: {traversal_distance}")
+        total_step = 0
+        traversal_distance = 0.
+        previous_coordinate = None
+        current_coordinate = None
 
         plot_command_result(command_traj=np.array(command_log),
                             folder_name="command_trajectory",
