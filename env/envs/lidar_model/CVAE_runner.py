@@ -44,7 +44,7 @@ np.random.seed(seed)
 data_folder_path = "/home/student/quadruped/raisimLib/raisimGymTorch/CVAE_data"
 data_file_list = os.listdir(data_folder_path)
 n_data_files = len(data_file_list)
-train_data_ratio = 0.9
+train_data_ratio = 0.8
 n_train_data_files = int(n_data_files * train_data_ratio)
 n_val_data_files = n_data_files - n_train_data_files
 indices = np.random.permutation(n_data_files)
@@ -186,6 +186,7 @@ for epoch in range(cfg["CVAE_training"]["num_epochs"]):
         mean_reconstruction_loss /= n_update
         mean_KL_posterior_loss /= n_update
         mean_inference_reconstruction_loss /= n_update
+        mean_min_inference_reconstruction_loss /= n_update
 
         if cfg["logging"]:
             # Log data

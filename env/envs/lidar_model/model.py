@@ -180,8 +180,8 @@ class CVAE_implicit_distribution(nn.Module):
                                    self.activation_map[self.command_encoding_config["activation"]],
                                    self.command_encoding_config["input"],
                                    self.command_encoding_config["output"],
-                                   dropout=self.state_encoding_config["dropout"],
-                                   batchnorm=self.state_encoding_config["batchnorm"])
+                                   dropout=self.command_encoding_config["dropout"],
+                                   batchnorm=self.command_encoding_config["batchnorm"])
         self.recurrence_encoder = torch.nn.GRU(self.recurrence_encoding_config["input"],
                                                 self.recurrence_encoding_config["hidden"],
                                                 self.recurrence_encoding_config["layer"],
@@ -190,20 +190,20 @@ class CVAE_implicit_distribution(nn.Module):
                                        self.activation_map[self.latent_encoding_config["activation"]],
                                        self.latent_encoding_config["input"],
                                        self.latent_encoding_config["output"],
-                                       dropout=self.state_encoding_config["dropout"],
-                                       batchnorm=self.state_encoding_config["batchnorm"])
+                                       dropout=self.latent_encoding_config["dropout"],
+                                       batchnorm=self.latent_encoding_config["batchnorm"])
         self.latent_log_var_encoder = MLP(self.latent_encoding_config["shape"],
                                           self.activation_map[self.latent_encoding_config["activation"]],
                                           self.latent_encoding_config["input"],
                                           self.latent_encoding_config["output"],
-                                          dropout=self.state_encoding_config["dropout"],
-                                          batchnorm=self.state_encoding_config["batchnorm"])
+                                          dropout=self.latent_encoding_config["dropout"],
+                                          batchnorm=self.latent_encoding_config["batchnorm"])
         self.latent_decoder = MLP(self.latent_decoding_config["shape"],
                                   self.activation_map[self.latent_decoding_config["activation"]],
                                   self.latent_decoding_config["input"],
                                   self.latent_decoding_config["output"],
-                                  dropout=self.state_encoding_config["dropout"],
-                                  batchnorm=self.state_encoding_config["batchnorm"])
+                                  dropout=self.latent_decoding_config["dropout"],
+                                  batchnorm=self.latent_decoding_config["batchnorm"])
         self.recurrence_decoder = torch.nn.GRU(self.recurrence_decoding_config["input"],
                                                self.recurrence_decoding_config["hidden"],
                                                self.recurrence_decoding_config["layer"],
@@ -212,8 +212,8 @@ class CVAE_implicit_distribution(nn.Module):
                                    self.activation_map[self.command_decoding_config["activation"]],
                                    self.command_decoding_config["input"],
                                    self.command_decoding_config["output"],
-                                   dropout=self.state_encoding_config["dropout"],
-                                   batchnorm=self.state_encoding_config["batchnorm"])
+                                   dropout=self.command_decoding_config["dropout"],
+                                   batchnorm=self.command_decoding_config["batchnorm"])
 
         # Prepare weights too be loaded
         pretrained_state_encoder_state_dict = dict()
@@ -393,8 +393,8 @@ class CVAE_implicit_distribution_inference(nn.Module):
                                   self.activation_map[self.latent_decoding_config["activation"]],
                                   self.latent_decoding_config["input"],
                                   self.latent_decoding_config["output"],
-                                  dropout=self.state_encoding_config["dropout"],
-                                  batchnorm=self.state_encoding_config["batchnorm"])
+                                  dropout=self.latent_decoding_config["dropout"],
+                                  batchnorm=self.latent_decoding_config["batchnorm"])
         self.recurrence_decoder = torch.nn.GRU(self.recurrence_decoding_config["input"],
                                                self.recurrence_decoding_config["hidden"],
                                                self.recurrence_decoding_config["layer"],
@@ -403,8 +403,8 @@ class CVAE_implicit_distribution_inference(nn.Module):
                                    self.activation_map[self.command_decoding_config["activation"]],
                                    self.command_decoding_config["input"],
                                    self.command_decoding_config["output"],
-                                   dropout=self.state_encoding_config["dropout"],
-                                   batchnorm=self.state_encoding_config["batchnorm"])
+                                   dropout=self.command_decoding_config["dropout"],
+                                   batchnorm=self.command_decoding_config["batchnorm"])
 
         # Prepare weights too be loaded
         trained_state_encoder_state_dict = dict()

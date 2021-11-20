@@ -171,8 +171,8 @@ CVAE_architecture:
     shape: [64, 64]
     output: 32
     activation: leakyrelu
-    dropout: 0.0
-    batchnorm: False
+    dropout: 0.2
+    batchnorm: True
   recurrence_decoder:
     input: 32  # input and hidden(output) size should be sames because recursive process happens (check other good method)
     hidden: 32
