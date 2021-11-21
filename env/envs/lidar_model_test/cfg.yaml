@@ -5,7 +5,7 @@ environment:
   render: True
   evaluate: True
   determine_env: 0  # 0: not determine / 1: circle / 2: box / 3: corridor
-  type: 9
+  type: 2
   #    1 : 90 degree maze
   #    2 : diagonal maze (env1)  ===
   #    3 : scattered obstacle (seen)
@@ -68,7 +68,7 @@ evaluating:
 
 evaluating_w_CVAE:
   wo_CVAE_number_of_sample: 0  # should be at least 0 (0 is available)
-  CVAE_number_of_sample: 1  # should be at least 1
+  CVAE_number_of_sample: 100  # should be at least 1
   gamma: 20
   beta: 0.4
   time_correlation_beta: 0.1
@@ -160,8 +160,8 @@ CVAE_architecture:
     shape: [64, 64]
     output: 32
     activation: leakyrelu
-    dropout: 0.0
-    batchnorm: False
+    dropout: 0.2
+    batchnorm: True
   recurrence_decoder:
     input: 32  # input and hidden(output) size should be sames because recursive process happens (check other good method)
     hidden: 32

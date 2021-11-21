@@ -41,8 +41,8 @@ namespace raisim
             env_type = sample_env_type;  // 1: scattered circle, 2: scattered box, 3: cross corridor
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
-            hm_sizeX = 30., hm_sizeY = 30.;
-//            hm_sizeX = 40., hm_sizeY = 40.;
+//            hm_sizeX = 30., hm_sizeY = 30.;
+            hm_sizeX = 40., hm_sizeY = 40.;
 //            double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
             double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
             double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
@@ -59,8 +59,8 @@ namespace raisim
             n_obstacle = n_x_grid * n_y_grid;
 
             obstacle_centers.setZero(n_obstacle, 2); 
-//            std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
-            std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
+            std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
+//            std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
             for (int i=0; i<n_obstacle; i++) {
                 int current_n_y = int(i / n_x_grid);
                 int current_n_x = i - current_n_y * n_x_grid;
@@ -196,8 +196,8 @@ namespace raisim
                 n_obstacle = n_x_grid * n_y_grid;
 
                 obstacle_centers.setZero(n_obstacle, 2);
-                std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
-                // std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
+                std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
+//                std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
                 for (int i=0; i<n_obstacle; i++) {
                     int current_n_y = int(i / n_x_grid);
                     int current_n_x = i - current_n_y * n_x_grid;

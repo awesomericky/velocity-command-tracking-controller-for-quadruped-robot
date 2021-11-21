@@ -161,6 +161,8 @@ n_test_case = 0
 n_success_test_case = 0
 num_goals = 8
 
+goal_distance_threshold = 10
+
 total_step = 0
 
 # MUST safe period from collision
@@ -236,6 +238,8 @@ while n_test_case < num_goals:
         # compute reward (goal reward + safety reward)
         goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
         current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
+        if current_goal_distance > goal_distance_threshold:
+            goal_position_L *= (goal_distance_threshold / current_goal_distance)
 
         ##### Needed check
         # reward_compute_start = time.time()
@@ -249,8 +253,8 @@ while n_test_case < num_goals:
         else:
             command_difference_rewards = 0
 
-        action_size = np.sqrt((action_candidates[:, 0] / 1) ** 2 + (action_candidates[:, 1] / 0.4) ** 2 + (action_candidates[:, 2] / 1.2) ** 2)
-        action_size /= np.max(action_size)
+        # action_size = np.sqrt((action_candidates[:, 0] / 1) ** 2 + (action_candidates[:, 1] / 0.4) ** 2 + (action_candidates[:, 2] / 1.2) ** 2)
+        # action_size /= np.max(action_size)
 
         # reward = 1.2 * np.squeeze(goal_rewards, -1) + 0.1 * action_size
         reward = 1. * np.squeeze(goal_rewards, -1)

@@ -161,6 +161,8 @@ prev_coordinate_obs = np.zeros((1, 3))
 goal_rewards = np.zeros((cfg["evaluating"]["number_of_sample"], 1), dtype=np.float32)
 collision_idx_list = np.zeros((cfg["evaluating"]["number_of_sample"], 1), dtype=np.float32)
 
+goal_distance_threshold = 10
+
 # Needed for computing real time factor
 total_time = 0
 total_n_step = 0
@@ -182,6 +184,11 @@ while n_test_case < num_goals:
         # compute reward (goal reward + safety reward)
         goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
         current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
+
+        goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
+        current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
+        if current_goal_distance > goal_distance_threshold:
+            goal_position_L *= (goal_distance_threshold / current_goal_distance)
 
         goal_rewards, collision_idx_list = env.baseline_compute_reward(action_candidates, np.swapaxes(goal_position_L, 0, 1), goal_rewards, collision_idx_list,
                                                                        n_prediction_step, cfg["data_collection"]["command_period"], MUST_safety_period)
@@ -286,10 +293,10 @@ while n_test_case < num_goals:
         else:
             command_difference_rewards = 0
 
-        action_size = np.sqrt((action_candidates[:, 0] / 1) ** 2 + (action_candidates[:, 1] / 0.4) ** 2 + (action_candidates[:, 2] / 1.2) ** 2)
-        action_size /= np.max(action_size)
+        # action_size = np.sqrt((action_candidates[:, 0] / 1) ** 2 + (action_candidates[:, 1] / 0.4) ** 2 + (action_candidates[:, 2] / 1.2) ** 2)
+        # action_size /= np.max(action_size)
 
-        reward = 1.2 * np.squeeze(goal_rewards, -1) + 0.1 * action_size
+        reward = 1.0 * np.squeeze(goal_rewards, -1)
 
         if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
             reward[coll_idx] = 0  # exclude trajectory that collides with obstacle

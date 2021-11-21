@@ -57,7 +57,7 @@ evaluating:
   command_period: 3.0
   sigma: 1.0
   number_of_sample: 90
-  gamma: 7
+  gamma: 20
   beta: 0.5
   number_of_bin: 4
 

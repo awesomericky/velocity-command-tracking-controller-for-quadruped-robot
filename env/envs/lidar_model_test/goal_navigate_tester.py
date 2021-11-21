@@ -234,6 +234,7 @@ else:
             current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
             if current_goal_distance > goal_distance_threshold:
                 goal_position_L *= (goal_distance_threshold / current_goal_distance)
+            current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
             delta_goal_distance = current_goal_distance - np.sqrt(np.sum(np.power(predicted_coordinates - goal_position_L, 2), axis=-1))
             # delta_goal_distance *= goal_kernel
 
@@ -252,8 +253,8 @@ else:
             # command_difference_reward /= np.abs(np.min(command_difference_reward)) + 1e-5
             # command_difference_reward -= np.min(command_difference_reward)  # normalize reward
 
-            action_size = np.sqrt((action_candidates[0, :, 0] / 1) ** 2 + (action_candidates[0, :, 1] / 0.4) ** 2 + (action_candidates[0, :, 2] / 1.2) ** 2)
-            action_size /= np.max(action_size)
+            # action_size = np.sqrt((action_candidates[0, :, 0] / 1) ** 2 + (action_candidates[0, :, 1] / 0.4) ** 2 + (action_candidates[0, :, 2] / 1.2) ** 2)
+            # action_size /= np.max(action_size)
             # action_size = abs(action_candidates[0, :, 0] / 1) + abs(action_candidates[0, :, 1] / 0.4) + abs(action_candidates[0, :, 2] / 1.2)
             # action_size /= 3
 

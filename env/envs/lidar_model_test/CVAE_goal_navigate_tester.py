@@ -269,6 +269,7 @@ else:
             current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
             if current_goal_distance > goal_distance_threshold:
                 goal_position_L *= (goal_distance_threshold / current_goal_distance)
+            current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
 
             COM_history_feature = COM_buffer.return_data(flatten=True)[0, :]
             state = np.concatenate((lidar_data, COM_history_feature)).astype(np.float32)

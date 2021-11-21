@@ -84,6 +84,7 @@ assert cfg["environment"]["determine_env"] == 0, "Environment should not be dete
 assert not cfg["environment"]["evaluate"], "Change cfg[environment][evaluate] to False"
 assert not cfg["environment"]["random_initialize"], "Change cfg[environment][random_initialize] to False"
 assert not cfg["environment"]["point_goal_initialize"], "Change cfg[environment][point_goal_initialize] to False"
+assert not cfg["environment"]["CVAE_data_collection_initialize"], "Change cfg[environment][ CVAE_data_collection_initialize] to False"
 assert not cfg["environment"]["safe_control_initialize"], "Change cfg[environment][safe_control_initialize] to False"
 assert cfg["environment"]["CVAE_environment_initialize"], "Change cfg[environment][CVAE_environment_evaluation_initialize] to True"
 
@@ -91,7 +92,7 @@ assert cfg["environment"]["CVAE_environment_initialize"], "Change cfg[environmen
 user_command = UserCommand(cfg, cfg['environment']['num_envs'])
 command_sampler_constant = Command_sampler(user_command)
 command_sampler_correlated = Time_correlated_command_sampler(user_command, beta=cfg["data_collection"]["time_correlated_command_sampler_beta"])
-command_sampler_normal_correlated = Normal_time_correlated_command_sampler(user_command, cfg["environment"]["command"], sigma=cfg["data_collection"]["normal_time_correlated_command_sampler_sigma"])
+command_sampler_normal_correlated = Normal_time_correlated_command_sampler(user_command, cfg["environment"]["command"], sigma=cfg["data_collection"]["normal_time_correlated_command_sampler_sigma"], std_scale_fixed=True)
 
 # create environment from the configuration file
 env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
@@ -131,7 +132,8 @@ environment_model = Lidar_environment_model(COM_encoding_config=cfg["architectur
                                             command_encoding_config=cfg["architecture"]["command_encoder"],
                                             recurrence_config=cfg["architecture"]["recurrence"],
                                             prediction_config=cfg["architecture"]["traj_predictor"],
-                                            device=device)
+                                            device=device,
+                                            cvae_retrain=True)
 
 # Generate trainer for training
 trainer = Trainer(environment_model=environment_model,

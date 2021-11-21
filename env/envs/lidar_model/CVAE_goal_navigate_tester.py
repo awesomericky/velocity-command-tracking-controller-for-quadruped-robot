@@ -289,6 +289,7 @@ else:
             current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
             if current_goal_distance > goal_distance_threshold:
                 goal_position_L *= (goal_distance_threshold / current_goal_distance)
+            current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
 
             COM_history_feature = COM_buffer.return_data(flatten=True)[0, :]
             state = np.concatenate((lidar_data, COM_history_feature)).astype(np.float32)
@@ -306,7 +307,7 @@ else:
 
             # # Test
             # predicted_P_cols_label = np.where(predicted_P_cols > collision_threshold, 1, 0)
-            # for sample_id in range(2000):
+            # for sample_id in range(100):
             #     total_collision_idx = np.argwhere(predicted_P_cols_label[:, sample_id])
             #     if len(total_collision_idx) != 0:
             #         first_collision_idx = np.min(total_collision_idx)
@@ -341,12 +342,12 @@ else:
             cand_sample_user_command, sample_user_command_traj = action_planner.action(reward)
             sample_user_command = cand_sample_user_command.copy()
 
-            # # plot predicted trajectory
-            # traj_len, n_sample, coor_dim = predicted_coordinates.shape
-            # for j in range(n_sample):
-            #     plt.plot(predicted_coordinates[:, j, 0], predicted_coordinates[:, j, 1])
-            # plt.savefig("sampled_traj (ours).png")
-            # plt.clf()
+            # plot predicted trajectory
+            traj_len, n_sample, coor_dim = predicted_coordinates.shape
+            for j in range(n_sample):
+                plt.plot(predicted_coordinates[:, j, 0], predicted_coordinates[:, j, 1])
+            plt.savefig("sampled_traj (ours).png")
+            plt.clf()
             # pdb.set_trace()
 
             # predict modified command trajectory

@@ -47,7 +47,7 @@ class Normal_time_correlated_command_sampler:
 
     Time coorelation factor is controlled with 'sigma'.
     """
-    def __init__(self, random_command_sampler, cfg_command, sigma=0.3):
+    def __init__(self, random_command_sampler, cfg_command, sigma=0.3, std_scale_fixed=False):
         self.old_command = None
         self.random_command_sampler = random_command_sampler
         self.cfg_command = cfg_command
@@ -55,6 +55,7 @@ class Normal_time_correlated_command_sampler:
                                          cfg_command["lateral_vel"]["max"] - cfg_command["lateral_vel"]["min"],
                                          cfg_command["yaw_rate"]["max"] - cfg_command["yaw_rate"]["min"]])
         self.max_sigma_scale = sigma
+        self.std_scale_fixed = std_scale_fixed
 
     def random_sample(self, training=True):
         if training:
@@ -67,7 +68,10 @@ class Normal_time_correlated_command_sampler:
         if isinstance(self.old_command, type(None)):
             modified_command = self.random_sample()
         else:
-            sigma_scale = np.random.uniform(0, self.max_sigma_scale, (self.random_command_sampler.n_envs, 3))  # sample command std scale (uniform distribution)
+            if self.std_scale_fixed:
+                sigma_scale = self.max_sigma_scale
+            else:
+                sigma_scale = np.random.uniform(0, self.max_sigma_scale, (self.random_command_sampler.n_envs, 3))  # sample command std scale (uniform distribution)
             sigma = self.max_sigma * sigma_scale
             modified_command = np.random.normal(self.old_command, sigma)  # sample command (normal distribution)
             modified_command = np.clip(modified_command,
@@ -693,6 +697,20 @@ class Stochastic_action_planner_w_CVAE:
         self.optimized_command_traj = None
 
     def update(self, rewards):
+        # # Just use top N% samples
+        # ratio = 0.01
+        # n_sample = rewards.shape[0]
+        # n_consider_sample = int(ratio * n_sample)
+        # safe_idx = np.argpartition(rewards, - n_consider_sample)[-n_consider_sample:]
+        # if len(safe_idx) != 0:
+        #     probs = np.exp(self.gamma * rewards[safe_idx])
+        #     probs /= np.sum(probs) + 1e-10
+        #     self.optimized_command_traj = np.sum(self.sampled_command_traj[:, safe_idx, :] * probs[np.newaxis, :, np.newaxis], axis=1)
+        # else:
+        #     probs = np.exp(self.gamma * rewards)
+        #     probs /= np.sum(probs) + 1e-10
+        #     self.optimized_command_traj = np.sum(self.sampled_command_traj * probs[np.newaxis, :, np.newaxis], axis=1)
+
         safe_idx = np.where(rewards != 0)[0]
         if len(safe_idx) != 0:
             probs = np.exp(self.gamma * rewards[safe_idx])

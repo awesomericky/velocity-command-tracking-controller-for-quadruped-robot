@@ -312,6 +312,7 @@ else:
             current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
             if current_goal_distance > goal_distance_threshold:
                 goal_position_L *= (goal_distance_threshold / current_goal_distance)
+            current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
             delta_goal_distance = current_goal_distance - np.sqrt(np.sum(np.power(predicted_coordinates - goal_position_L, 2), axis=-1))
 
             goal_reward = np.sum(delta_goal_distance, axis=0)

@@ -5,8 +5,8 @@ logging: True
 environment:
   render: True
   # just testing commenting
-  evaluate: True
-  determine_env: 1  # 0: not determine / 1: circle / 2: box / 3: corridor
+  evaluate: False
+  determine_env: 0  # 0: not determine / 1: circle / 2: box / 3: corridor
   num_envs: 500
   max_n_update: 30000
   eval_every_n: 100
@@ -14,14 +14,14 @@ environment:
   seed:
     train: 0
     evaluate: 600
-  num_threads: 4 # 4 is (optimal for data collection)
+  num_threads: 12 # 4 is (optimal for data collection)
   evaluate_num_threads: 12  # Number of threads for evaluating model prediction
   test_num_threads: 3  # Number of threads for evaluating model based RL
   simulation_dt: 0.0025
   control_dt: 0.01
   max_time: 9.0
   obstacle_grid_size:
-    min: 2.5
+    min: 3.0
     max: 4.0
   obstacle_dr:  # not used
     min: 0.3
@@ -39,9 +39,9 @@ environment:
   randomization: False  # 1) Base COM position, 2) Mass of links, 3) Joint position
   random_initialize: False  # yaw angle is only randomized
   random_external_force: False  # 50N force for 1s for lateral direction
-  point_goal_initialize: True
+  point_goal_initialize: False
   CVAE_data_collection_initialize: False
-  CVAE_environment_initialize: False
+  CVAE_environment_initialize: True
   safe_control_initialize: False
 
 training:
@@ -64,10 +64,10 @@ training:
       linear_correlated: 0.
       normal_correlated: 1.
     CVAE_retraining:
-      constant: 0.2
-      linear_correlated: 0.2
-      normal_correlated: 0.2
-      cvae: 0.4
+      constant: 0.0
+      linear_correlated: 0.0
+      normal_correlated: 0.5
+      cvae: 0.5
 
 evaluating:
   number_of_sample: 2000
@@ -78,8 +78,8 @@ evaluating:
   number_of_bin: 10
 
 evaluating_w_CVAE:
- wo_CVAE_number_of_sample: 1000
- CVAE_number_of_sample: 100
+ wo_CVAE_number_of_sample: 0 # 1000
+ CVAE_number_of_sample: 100 # 1000
  gamma: 20
  beta: 0.4
  time_correlation_beta: 0.1

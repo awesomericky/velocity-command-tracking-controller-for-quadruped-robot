@@ -116,7 +116,7 @@ namespace raisim
                         if (!not_available_init) {
                             init_set.push_back({x, y});
 
-                            if (sqrt(pow(x, 2) + pow(y, 2)) > 7)
+                            if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
                                 goal_set.push_back({x, y});
                         }
                     }
@@ -129,8 +129,8 @@ namespace raisim
                 Eigen::VectorXd obstacle_box_size;
                 obstacle_box_size.setZero(n_obstacle);
                 for (int i=0; i<n_obstacle; i++) {
-                    obstacle_box_size[i] = 0.8;
-//                    obstacle_box_size[i] = uniform_obstacle(env_generator);
+//                    obstacle_box_size[i] = 0.8;
+                    obstacle_box_size[i] = uniform_obstacle(env_generator);
                 }
 
                 for (int j=0; j<hm_samplesY; j++) {
@@ -162,7 +162,7 @@ namespace raisim
                         if (!not_available_init) {
                             init_set.push_back({x, y});
 
-                            if (sqrt(pow(x, 2) + pow(y, 2)) > 7)
+                            if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
                                 goal_set.push_back({x, y});
                         }
                     }

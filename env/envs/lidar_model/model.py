@@ -7,7 +7,7 @@ import pdb
 
 class Lidar_environment_model(nn.Module):
     def __init__(self, COM_encoding_config, state_encoding_config, command_encoding_config,
-                 recurrence_config, prediction_config, device):
+                 recurrence_config, prediction_config, device, cvae_retrain=False):
         super(Lidar_environment_model, self).__init__()
         
         self.use_TCN = COM_encoding_config["use_TCN"]
@@ -17,6 +17,7 @@ class Lidar_environment_model(nn.Module):
         self.recurrence_config = recurrence_config
         self.prediction_config = prediction_config
         self.device = device
+        self.cvae_retrain = cvae_retrain
         self.activation_map = {"relu": nn.ReLU, "tanh": nn.Tanh, "leakyrelu": nn.LeakyReLU}
 
         assert self.state_encoding_config["activation"] in list(self.activation_map.keys()), "Unavailable activation."
@@ -91,13 +92,19 @@ class Lidar_environment_model(nn.Module):
         state = state.contiguous()
         command_traj = command_traj.contiguous()
 
-        encoded_state = self.state_encoder.architecture(state)
+        if self.cvae_retrain:
+            encoded_state = self.state_encoder.architecture(state).detach()
+        else:
+            encoded_state = self.state_encoder.architecture(state)
         initial_cell_state = torch.broadcast_to(encoded_state, (self.recurrence_config["layer"], *encoded_state.shape)).contiguous()
         initial_hidden_state = torch.zeros_like(initial_cell_state).to(self.device)
 
         traj_len, n_sample, single_command_dim = command_traj.shape
         command_traj = command_traj.view(-1, single_command_dim)
-        encoded_command = self.command_encoder.architecture(command_traj).view(traj_len, n_sample, -1)
+        if self.cvae_retrain:
+            encoded_command = self.command_encoder.architecture(command_traj).view(traj_len, n_sample, -1).detach()
+        else:
+            encoded_command = self.command_encoder.architecture(command_traj).view(traj_len, n_sample, -1)
 
         encoded_prediction, (_, _) = self.recurrence(encoded_command, (initial_hidden_state, initial_cell_state))
         traj_len, n_sample, encoded_prediction_dim = encoded_prediction.shape
