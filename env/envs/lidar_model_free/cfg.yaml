@@ -1,0 +1,206 @@
+seed: 1
+record_video: yes
+logging: True
+
+environment:
+  render: True
+  # just testing commenting
+  evaluate: False
+  determine_env: 0  # 0: not determine / 1: circle / 2: box / 3: corridor
+  num_envs: 500
+  max_n_update: 30000
+  eval_every_n: 100
+  new_environment_every_n: 100
+  seed:
+    train: 0
+    evaluate: 600
+  num_threads: 12 # 4 is (optimal for data collection)
+  evaluate_num_threads: 12  # Number of threads for evaluating model prediction
+  test_num_threads: 3  # Number of threads for evaluating model based RL
+  simulation_dt: 0.0025
+  control_dt: 0.01
+  max_time: 9.0
+  obstacle_grid_size:
+    min: 3.0
+    max: 4.0
+  obstacle_dr:  # not used
+    min: 0.3
+    max: 0.6 #0.5
+  command:
+    forward_vel:
+      min: -1.0
+      max: 1.0
+    lateral_vel:
+      min: -0.4
+      max: 0.4
+    yaw_rate:
+      min: -1.2
+      max: 1.2
+  randomization: False  # 1) Base COM position, 2) Mass of links, 3) Joint position
+  random_initialize: False  # yaw angle is only randomized
+  random_external_force: False  # 50N force for 1s for lateral direction
+  point_goal_initialize: False
+  CVAE_data_collection_initialize: False
+  CVAE_environment_initialize: True
+  safe_control_initialize: False
+
+training:
+  learning_rate: 3e-4
+  batch_size: 512
+  storage_size: 15000 # 3150
+  num_epochs: 8
+  shuffle_batch: True
+  clip_gradient: True
+  max_gradient_norm: 2.0
+  loss_weight:
+    collision: 2.0
+    coordinate: 1.5
+  interpolate_probability: False
+  weight_decay: False
+  weight_decay_lamda: 0.1
+  command_sampler_probability:
+    Naive:
+      constant: 0.
+      linear_correlated: 0.
+      normal_correlated: 1.
+    CVAE_retraining:
+      constant: 0.0
+      linear_correlated: 0.0
+      normal_correlated: 0.5
+      cvae: 0.5
+
+evaluating:
+  number_of_sample: 2000
+  gamma: 20
+  beta: 0.4  # 0.8  # bigger == more consider a_hat
+  time_correlation_beta: 0.1   # 0.1
+  sigma: 0.3
+  number_of_bin: 10
+
+evaluating_w_CVAE:
+ wo_CVAE_number_of_sample: 0 # 1000
+ CVAE_number_of_sample: 100 # 1000
+ gamma: 20
+ beta: 0.4
+ time_correlation_beta: 0.1
+ sigma: 0.3
+ number_of_bin: 10  # only used for command_sampler not using CVAE
+
+data_collection:
+  time_correlated_command_sampler_beta: 0.7
+  normal_time_correlated_command_sampler_sigma: 0.3
+  prediction_period: 6  # [s]
+  command_period: 0.5  # [s]
+  prioritized_data_update: True
+  prioritized_data_update_magnitude: 0.8
+
+architecture:
+  command_tracking_policy_net: [128, 128]
+  COM_encoder:
+    use_TCN: False
+    TCN:
+      input: 9
+      output: [32, 32, 32]
+      activation: leakyrelu
+      dropout: 0.2
+      time_step: 57  # 1.14 [s]
+      update_period: 0.02
+    naive:
+      input: 9   # body_orientation + vel + ang_vel
+      time_step: 10  # 0.5 [s]
+      update_period: 0.05  # [s]
+  state_encoder:  # state = lidar + (encoded COM history)
+    input: 450  # COM_encoder output is included in the input  (360 + 32)
+    output: 100
+    shape: [256, 256, 128, 128]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+  command_encoder:
+    input: 3
+    output: 64
+    shape: [32]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+  recurrence:
+    input: 64
+    hidden: 100
+    layer: 2
+    dropout: 0.2
+  traj_predictor:
+    input: 100
+    shape: [64, 32, 16]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+    collision:
+      output: 1
+    coordinate:
+      output: 2
+
+CVAE_architecture:
+  state_encoder: # state = lidar + (encoded COM history)
+    input: 450  # COM_encoder output is included in the input (360 + 32)
+    output: 100
+    shape: [ 256, 256, 128, 128 ]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+  command_encoder:
+    input: 3
+    output: 64
+    shape: [ 32 ]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+  recurrence_encoder:
+    input: 64
+    hidden: 100
+    layer: 1
+    dropout: 0.0  # just available when n_layer > 1
+  latent_encoder:
+    input: 202  # 100 + 100 + 2 (goal_position)
+    output: 16  # latent dimension (model outputs 'mean' and 'log_std' each of corresponding size'
+    shape: [64, 32]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+  latent_decoder:
+    input: 118  # 16 + 100 + 2 (goal_position)
+    shape: [64, 64]
+    output: 32
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+  recurrence_decoder:
+    input: 32  # input and hidden(output) size should be sames because recursive process happens (check other good method)
+    hidden: 32
+    layer: 1
+    dropout: 0.0  # just available when n_layer > 1
+  command_decoder:
+    input: 32
+    output: 3
+    shape: [ 32 ]
+    activation: leakyrelu
+    dropout: 0.2
+    batchnorm: True
+
+CVAE_training:
+  seed: 0  # important for creating training & validation dataset
+  num_epochs: 10000
+  evaluate_period: 25  # number of epochs
+  objective_type: BMS  # CVAE / BMS (https://arxiv.org/abs/1806.07772)  ==> changes are meaningful only when n_latent_sample > 1
+  n_latent_sample: 500
+  learning_rate: 4e-4
+  batch_size: 512
+  num_workers: 6
+  shuffle_batch: True
+  clip_gradient: False
+  max_gradient_norm: 2.0
+  loss_weight:
+    reconsturction: 1
+    KL_posterior: 1
+
+CVAE_inference:
+  n_sample: 100
