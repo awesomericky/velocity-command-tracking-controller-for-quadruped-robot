@@ -13,3 +13,5 @@ CVAE_environment_evaluation_initialize
 - goal randomly sampled without considering the frame
 
 ** Don't forget to check whether env.initialize_n_step() is called after the environment is done, because it will decide to initialize in different position or not.
+
+** You don't have to put "wait time" when training!!!! It is just for realistic visualization in training.

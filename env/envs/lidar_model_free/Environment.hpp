@@ -41,12 +41,14 @@ namespace raisim
             env_type = sample_env_type;  // 1: scattered circle, 2: scattered box, 3: cross corridor
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
-//            hm_sizeX = 30., hm_sizeY = 30.;
-            hm_sizeX = 40., hm_sizeY = 40.;
-//            double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
+            hm_sizeX = 20., hm_sizeY = 20.;
             double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
             double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
             double obstacle_height = 2;
+
+            /// initialization for each specific task
+            random_initialize = cfg["random_initialize"].template As<bool>();
+            point_goal_initialize = cfg["point_goal_initialize"].template As<bool>();
 
             random_seed = seed;
             static std::default_random_engine env_generator(random_seed);
@@ -115,10 +117,12 @@ namespace raisim
 
                         if (!not_available_init) {
                             init_set.push_back({x, y});
-
-                            /// For goal point distance condition, should also consider the "hm_size" because there should be enough goals in all four squares for evaluating in point_goal_initialize
-                            if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
+                            if (point_goal_initialize) {
+                                if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
+                                    goal_set.push_back({x, y});
+                            } else {
                                 goal_set.push_back({x, y});
+                            }
                         }
                     }
                 }
@@ -162,20 +166,22 @@ namespace raisim
 
                         if (!not_available_init) {
                             init_set.push_back({x, y});
-
-                            /// For goal point distance condition, should also consider the "hm_size" because there should be enough goals in all four squares for evaluating in point_goal_initialize
-                            if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
+                            if (point_goal_initialize) {
+                                if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
+                                    goal_set.push_back({x, y});
+                            } else {
                                 goal_set.push_back({x, y});
+                            }
                         }
                     }
                 }
             }
             else {
                 // sample environment size
-//                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 4.0);
-                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 6.0);
-//                std::uniform_real_distribution<> uniform_obstacle_long(8.0, 12.0);
-                std::uniform_real_distribution<> uniform_obstacle_long(26.0, 30.0);
+                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 4.0);
+//                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 6.0);
+                std::uniform_real_distribution<> uniform_obstacle_long(8.0, 12.0);
+//                std::uniform_real_distribution<> uniform_obstacle_long(26.0, 30.0);
                 double obstacle_corridor_short = uniform_obstacle_short(env_generator);
                 double obstacle_corridor_long = uniform_obstacle_long(env_generator);
 //                double obstacle_corridor_short = 2.0;
@@ -194,42 +200,6 @@ namespace raisim
                 int n_x_grid = int(hm_sizeX / obstacle_grid_size);
                 int n_y_grid = int(hm_sizeY / obstacle_grid_size);
                 n_obstacle = n_x_grid * n_y_grid;
-
-                obstacle_centers.setZero(n_obstacle, 2);
-                std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
-//                std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
-                for (int i=0; i<n_obstacle; i++) {
-                    int current_n_y = int(i / n_x_grid);
-                    int current_n_x = i - current_n_y * n_x_grid;
-                    double sampled_x = uniform(env_generator);
-                    double sampled_y = uniform(env_generator);
-                    sampled_x +=  obstacle_grid_size * current_n_x;
-                    sampled_x -= hm_sizeX/2;
-                    sampled_y += obstacle_grid_size * current_n_y;
-                    sampled_y -= hm_sizeY/2;
-                    obstacle_centers(i, 0) = sampled_x;
-                    obstacle_centers(i, 1) = sampled_y;
-                }
-
-                /// sample obstacle size
-                std::uniform_int_distribution<> random_obstacle_sampling(1, 2);
-                std::uniform_real_distribution<> uniform_cylinder_obstacle(0.3, 0.5);
-                std::uniform_real_distribution<> uniform_box_obstacle(0.6, 1.0);
-                Eigen::VectorXd obstacle_type_list, obstacle_circle_dr, obstacle_box_size;
-                obstacle_type_list.setZero(n_obstacle);
-                obstacle_circle_dr.setZero(n_obstacle);
-                obstacle_box_size.setZero(n_obstacle);
-                for (int i=0; i<n_obstacle; i++) {
-                    int random_obstacle = random_obstacle_sampling(env_generator);
-                    obstacle_type_list[i] = random_obstacle;
-                    if (random_obstacle == 1) {
-                        /// generate cylinder
-                        obstacle_circle_dr[i] = uniform_cylinder_obstacle(env_generator);
-                    } else {
-                        /// generate box
-                        obstacle_box_size[i] = uniform_box_obstacle(env_generator);
-                    }
-                }
 
                 double obstacle_idx_big = obstacle_corridor_short / 2;
                 double obstacle_idx_small = - obstacle_corridor_short / 2;
@@ -268,25 +238,6 @@ namespace raisim
                              y < (- hm_sizeY/2 + 1) || (hm_sizeY/2 - 1) < y)
                             available_init = false;
 
-                        /// consider box and cylinder obstacle
-                        for (int k=0; k<n_obstacle; k++) {
-                            double obstacle_x = obstacle_centers(k, 0), obstacle_y = obstacle_centers(k, 1);
-
-                            if (obstacle_type_list[k] == 1) {
-                                /// cylinder obstacle
-                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < obstacle_circle_dr[k])
-                                    available_obstacle = true;
-                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < (obstacle_circle_dr[k] + 0.8))
-                                    available_init = false;
-                            } else {
-                                /// box obstacle
-                                if (abs(x - obstacle_x) <= obstacle_box_size[k]/2 && abs(y - obstacle_y) <= obstacle_box_size[k]/2)
-                                    available_obstacle = true;
-                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < ((obstacle_box_size[k] * sqrt(2)) / 2 + 0.8))
-                                    available_init = false;
-                            }
-                        }
-
                         if (!available_obstacle)
                             hm_raw_value.push_back(0.0);
                         else
@@ -294,10 +245,12 @@ namespace raisim
 
                         if (available_init) {
                             init_set.push_back({x, y});
-
-                            /// For goal point distance condition, should also consider the "hm_size" because there should be enough goals in all four squares for evaluating in point_goal_initialize
-                            if (sqrt(pow(x, 2) + pow(y, 2)) > 5)
+                            if (point_goal_initialize) {
+                                if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
+                                    goal_set.push_back({x, y});
+                            } else {
                                 goal_set.push_back({x, y});
+                            }
                         }
                     }
                 }
@@ -309,15 +262,10 @@ namespace raisim
 //            int total_n_point_goal = 8;
 
             assert(n_init_set > 0);
-            assert(n_goal_set >= total_n_point_goal);
-
-            /// initialization for each specific task
-            point_goal_initialize = cfg["point_goal_initialize"].template As<bool>();
-            CVAE_data_collection_initialize = cfg["CVAE_data_collection_initialize"].template As<bool>();
-            safe_control_initialize = cfg["safe_control_initialize"].template As<bool>();
-            CVAE_environment_initialize = cfg["CVAE_environment_initialize"].template As<bool>();
 
             if (point_goal_initialize) {
+                assert(n_goal_set >= total_n_point_goal);
+
                 /// sample goals for point goal navigation (sample equally in each frame)
                 static std::default_random_engine generator(random_seed);
                 std::vector<int> one_square_goal, two_square_goal, three_square_goal, four_square_goal;
@@ -419,8 +367,10 @@ namespace raisim
             COMPosition_ = anymal_->getBodyCOM_B()[0].e();
 
             /// reward weights
-            reward_obstacle_distance_coeff = cfg["reward"]["obstacle_distance"]["coeff"].As<double>();
-            reward_command_similarity_coeff = cfg["reward"]["command_similarity"]["coeff"].As<double>();
+            reward_goal_distance_coeff = cfg["reward"]["goal_distance"]["coeff"].As<double>();
+            reward_traversal_distance_terminate_coeff = cfg["reward"]["traversal_distance"]["coeff"].As<double>();
+            reward_goal_terminate_coeff = cfg["reward"]["goal_terminate"]["coeff"].As<double>();
+            reward_obstacle_terminate_coeff = cfg["reward"]["obstacle_terminate"]["coeff"].As<double>();
 
             /// total trajectory length
             double control_dt = cfg["control_dt"].As<double>();
@@ -436,10 +386,9 @@ namespace raisim
                 noisify_Dynamics();
                 noisify_Mass_and_COM();
             }
-            random_initialize = cfg["random_initialize"].template As<bool>();
             random_external_force = cfg["random_external_force"].template As<bool>();
 
-            if (point_goal_initialize || CVAE_data_collection_initialize) {
+            if (point_goal_initialize) {
                 /// find the point closest to the center
                 double min_distance= 100;
                 double distance;
@@ -487,6 +436,10 @@ namespace raisim
             actionStd_.setZero(actionDim_);
             obDouble_.setZero(obDim_);
             coordinateDouble.setZero(3);
+            previous_coordinateDouble.setZero(3);
+
+            /// goal posiiton
+            goal_pos_.setZero(2);
 
             /// action scaling
             actionMean_ = gc_init_.tail(nJoints_);
@@ -521,7 +474,7 @@ namespace raisim
                     modified_command_traj.push_back(server_->addVisualBox("modified_command_pos" + std::to_string(i), 0.08, 0.08, 0.08, 0, 0, 1));  // blue
                 }
 
-                if (point_goal_initialize || CVAE_data_collection_initialize || CVAE_environment_initialize) {
+                if (random_initialize || point_goal_initialize) {
                     /// goal
                     server_->addVisualCylinder("goal", 0.4, 0.8, 2, 1, 0);
                 }
@@ -537,7 +490,7 @@ namespace raisim
     {
         static std::default_random_engine generator(random_seed);
 
-        if (random_initialize || CVAE_environment_initialize) {
+        if (random_initialize) {
             if (current_n_step == 0) {
                 /// Random initialization by sampling available x, y position
                 std::uniform_int_distribution<> uniform_init(0, n_init_set-1);
@@ -569,7 +522,7 @@ namespace raisim
                 initHistory();
             }
         }
-        else if (point_goal_initialize || CVAE_data_collection_initialize) {
+        else if (point_goal_initialize) {
             if (current_n_step == 0) {
                 // position
                 for (int i = 0; i < 2; i++)
@@ -651,7 +604,14 @@ namespace raisim
 
         updateObservation();
 
-        return 0.0;
+        calculate_reward();
+
+        rewards_.record("goal_distance", goal_distance_reward);
+        rewards_.record("traversal_distance", traversal_distance_reward);
+        rewards_.record("goal_terminate", 0.0);
+        rewards_.record("obstacle_terminate", 0.0);
+
+        return rewards_.sum();
     }
 
     void updateObservation()
@@ -713,8 +673,8 @@ namespace raisim
         /// Update coordinate
         double yaw = atan2(rot.e().col(0)[1], rot.e().col(0)[0]);
 
+        previous_coordinateDouble << coordinateDouble[0], coordinateDouble[1], coordinateDouble[2];
         coordinateDouble << gc_[0], gc_[1], yaw;
-
     }
 
     void updateHistory(Eigen::VectorXd current_joint_position_error,
@@ -750,10 +710,12 @@ namespace raisim
         coordinate = coordinateDouble.cast<float>();
     }
 
-    void calculate_cost()
+    void calculate_reward()
     {
-        /// New rewards for collision avoidance
-        obstacle_distance_cost = 0.0, command_similarity_cost = 0.0;
+        double previous_goal_distance = (goal_pos_ - previous_coordinateDouble.segment(0, 2)).norm();
+        double current_goal_distance = (goal_pos_ - coordinateDouble.segment(0, 2)).norm();
+        goal_distance_reward = previous_goal_distance - current_goal_distance;
+        traversal_distance_reward = - (coordinateDouble.segment(0, 2) - previous_coordinateDouble.segment(0, 2)).norm();
     }
 
     void comprehend_contacts()
@@ -974,15 +936,12 @@ namespace raisim
 
     void set_goal(Eigen::Ref<EigenVec> goal_pos)
     {
-        Eigen::VectorXd goal_pos_;
-        goal_pos_.setZero(2);
-
         // Goal position
         if (point_goal_initialize) {
             for (int i=0; i<2; i++)
                 goal_pos_[i] = goal_set[sampled_goal_set[current_n_goal]][i];
         }
-        else if (CVAE_data_collection_initialize || CVAE_environment_initialize) {
+        else if (random_initialize) {
             static std::default_random_engine generator(random_seed + current_n_goal * 10);
             std::uniform_int_distribution<> uniform_sample_goal(0, n_goal_set-1);
             int sampled_goal_idx = uniform_sample_goal(generator);
@@ -1013,26 +972,28 @@ namespace raisim
 
     bool isTerminalState(float &terminalReward) final
     {
-        terminalReward = float(terminalRewardCoeff_);
-
         /// if anymal falls down
         // raisim::Vec<3> base_position;
         // anymal_->getFramePosition("base_to_base_inertia", base_position);
         // if (base_position[2] < 0.3)
         //    return true;
 
-        /// if the contact body is not feet (this terminal condition includes crashing with obstacle)
+        /// if the contact body is not feet (this terminal condition includes colliding with obstacle)
         for (auto &contact : anymal_->getContacts()) {
             if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end()) {
+                terminalReward = - reward_obstacle_terminate_coeff;
                 return true;
             }
-////            for (int i=0; i<4; i++) {
-////                if (shank_Pos_difference[i] < 1e-2)
-////                    return true;
-////            }
         }
-        terminalReward = 0.f;
 
+        /// if the robot reach the goal, terminate
+        double current_goal_distance = (goal_pos_ - coordinateDouble.segment(0, 2)).norm();
+        if (current_goal_distance < 0.5) {
+            terminalReward = reward_goal_terminate_coeff;
+            return true;
+        }
+
+        terminalReward = 0.f;
         return false;
     }
 
@@ -1070,7 +1031,7 @@ namespace raisim
     int random_seed = 0;
 
     /// Randomization
-    bool randomization = false, random_initialize = false, random_external_force = false;
+    bool randomization = false, random_external_force = false;
     int random_external_force_final = 0, random_external_force_direction = 0;
     std::vector<raisim::Vec<3>> defaultJointPositions_;
     std::vector<double> defaultBodyMasses_;
@@ -1097,19 +1058,18 @@ namespace raisim
     Eigen::MatrixXd obstacle_centers;
 
     /// Reward (Cost) - New
-    double obstacle_distance_cost = 0.0, command_similarity_cost = 0.0;
-    double reward_obstacle_distance_coeff, reward_command_similarity_coeff;
+    double goal_distance_reward = 0.0, traversal_distance_reward = 0.0, goal_terminate_reward = 0.0, obstacle_terminate_reward = 0.0;
+    double reward_goal_distance_coeff, reward_traversal_distance_terminate_coeff, reward_goal_terminate_coeff, reward_obstacle_terminate_coeff;
 
     /// Observation to be predicted
-    Eigen::VectorXd coordinateDouble;
+    Eigen::VectorXd coordinateDouble, previous_coordinateDouble;
 
     /// Trajectory prediction
     int n_prediction_step = 12;   // Determined manually
     std::vector<raisim::Visuals *> desired_command_traj, modified_command_traj;
 
     /// Task specific initialization for evaluation
-    bool point_goal_initialize= false, CVAE_data_collection_initialize= false;
-    bool safe_control_initialize= false, CVAE_environment_initialize=false;
+    bool random_initialize = false, point_goal_initialize= false;
     raisim::Vec<2> point_goal_init;
 
     /// goal position
@@ -1117,6 +1077,7 @@ namespace raisim
     int n_goal_set;
     int current_n_goal = 0;
     std::vector<int> sampled_goal_set = {};
+    Eigen::VectorXd goal_pos_;
 
     /// environment type
     int env_type;

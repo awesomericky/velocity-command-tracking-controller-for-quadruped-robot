@@ -58,7 +58,7 @@ class PPO:
 
         # Log
         self.log_dir = os.path.join(log_dir, datetime.now().strftime('%b%d_%H-%M-%S'))
-        self.writer = SummaryWriter(log_dir=self.log_dir, flush_secs=10)
+        # self.writer = SummaryWriter(log_dir=self.log_dir, flush_secs=10)
         self.tot_timesteps = 0
         self.tot_time = 0
 
@@ -97,8 +97,8 @@ class PPO:
         # self.writer.add_scalar('Loss/surrogate', variables['mean_surrogate_loss'], variables['it'])
         # self.writer.add_scalar('Policy/mean_noise_std', mean_std.item(), variables['it'])
 
-        wandb.log({'Loss/value_function': variables['mean_value_loss'], \
-                    'Loss/surrogate': variables['mean_surrogate_loss'], \
+        wandb.log({'Loss/value_function': variables['mean_value_loss'],
+                    'Loss/surrogate': variables['mean_surrogate_loss'],
                     'Policy/mean_noise_std': mean_std.item()})
     
     def reward_std_logging(self, reward_names, reward_std_values, step=None):
