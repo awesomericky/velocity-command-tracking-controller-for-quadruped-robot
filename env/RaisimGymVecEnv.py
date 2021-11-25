@@ -31,8 +31,10 @@ class RaisimGymVecEnv:
         # self.rewards = [[] for _ in range(self.num_envs)]
         try:
             self.reward_log = np.zeros([self.num_envs, cfg["n_rewards"] + 1], dtype=np.float32)
+            self.reward_w_cpeff_log = np.zeros([self.num_envs, cfg["n_rewards"] + 1], dtype=np.float32)
         except:
             self.reward_log = None
+            self.reward_w_cpeff_log = None
         self.contact_log = np.zeros([self.num_envs, 4], dtype=np.float32)
         self.torque_and_velocity_log = np.zeros([self.num_envs, 24], dtype=np.float32)
 
@@ -81,6 +83,24 @@ class RaisimGymVecEnv:
                 self.obs_rms_second.count = count
                 self.obs_rms_second.mean = np.loadtxt(mean_file_name, dtype=np.float32)
                 self.obs_rms_second.var = np.loadtxt(var_file_name, dtype=np.float32)
+
+    def get_running_mean_var_explicit(self, type=None):
+        assert type in [1, 2], "Unavailable scaling type."
+        if type == 1:
+            return self.obs_rms.mean, self.obs_rms.var, self.obs_rms.count
+        else:
+            return self.obs_rms_second.mean, self.obs_rms_second.var, self.obs_rms_second.count
+
+    def set_running_mean_var_explicit(self, mean, var, count, type=None):
+        assert type in [1, 2], "Unavailable scaling type."
+        if type == 1:
+            self.obs_rms.mean = mean
+            self.obs_rms.var = var
+            self.obs_rms.count = count
+        else:
+            self.obs_rms_second.mean = mean
+            self.obs_rms_second.var = var
+            self.obs_rms_second.count = count
 
     def save_scaling(self, dir_name, iteration, type=None):
         mean_file_name = dir_name + "/mean" + iteration + ".csv"
@@ -205,8 +225,8 @@ class RaisimGymVecEnv:
     def set_user_command(self, command):
         self.wrapper.set_user_command(command)
     
-    def reward_logging(self):
-        self.wrapper.reward_logging(self.reward_log)
+    def reward_logging(self, n_reward):
+        self.wrapper.reward_logging(self.reward_log, self.reward_w_cpeff_log, n_reward)
 
     def contact_logging(self):
         self.wrapper.contact_logging(self.contact_log)

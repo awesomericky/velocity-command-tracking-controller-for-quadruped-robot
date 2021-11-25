@@ -41,7 +41,8 @@ namespace raisim
             env_type = sample_env_type;  // 1: scattered circle, 2: scattered box, 3: cross corridor
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
-            hm_sizeX = 20., hm_sizeY = 20.;
+//            hm_sizeX = 20., hm_sizeY = 20.;
+            hm_sizeX = 30., hm_sizeY = 30.;
             double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
             double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
             double obstacle_height = 2;
@@ -177,10 +178,12 @@ namespace raisim
                 }
             }
             else {
+                double min_corridor_short_width = cfg["corridor_short_width"]["min"].template As<double>();
+                double max_corridor_short_width = cfg["corridor_short_width"]["max"].template As<double>();
                 // sample environment size
-                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 4.0);
+                std::uniform_real_distribution<> uniform_obstacle_short(min_corridor_short_width, max_corridor_short_width);
 //                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 6.0);
-                std::uniform_real_distribution<> uniform_obstacle_long(8.0, 12.0);
+                std::uniform_real_distribution<> uniform_obstacle_long(18.0, 22.0);
 //                std::uniform_real_distribution<> uniform_obstacle_long(26.0, 30.0);
                 double obstacle_corridor_short = uniform_obstacle_short(env_generator);
                 double obstacle_corridor_long = uniform_obstacle_long(env_generator);
@@ -192,14 +195,6 @@ namespace raisim
                 hm_samplesX = int(hm_sizeX * 12), hm_samplesY = int(hm_sizeY * 12);
                 unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
                 obstacle_height = 2;
-
-                /// sample obstacle center for cross-corridor
-                std::uniform_real_distribution<> uniform_corridor_grid_size(3., 4.);   // sample different grid size in different available range for data collection stability
-                double obstacle_grid_size = uniform_corridor_grid_size(env_generator);
-//                double obstacle_grid_size = 2.5;
-                int n_x_grid = int(hm_sizeX / obstacle_grid_size);
-                int n_y_grid = int(hm_sizeY / obstacle_grid_size);
-                n_obstacle = n_x_grid * n_y_grid;
 
                 double obstacle_idx_big = obstacle_corridor_short / 2;
                 double obstacle_idx_small = - obstacle_corridor_short / 2;
@@ -246,7 +241,7 @@ namespace raisim
                         if (available_init) {
                             init_set.push_back({x, y});
                             if (point_goal_initialize) {
-                                if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
+                                if (sqrt(pow(x, 2) + pow(y, 2)) > 5)
                                     goal_set.push_back({x, y});
                             } else {
                                 goal_set.push_back({x, y});
@@ -481,7 +476,6 @@ namespace raisim
 
                 server_->focusOn(anymal_);
             }
-
         }
 
     void init() final {}
@@ -606,10 +600,10 @@ namespace raisim
 
         calculate_reward();
 
+        rewards_.setZero();
         rewards_.record("goal_distance", goal_distance_reward);
         rewards_.record("traversal_distance", traversal_distance_reward);
-        rewards_.record("goal_terminate", 0.0);
-        rewards_.record("obstacle_terminate", 0.0);
+        rewards_.record("goal_terminate", goal_terminate_reward);
 
         return rewards_.sum();
     }
@@ -716,6 +710,13 @@ namespace raisim
         double current_goal_distance = (goal_pos_ - coordinateDouble.segment(0, 2)).norm();
         goal_distance_reward = previous_goal_distance - current_goal_distance;
         traversal_distance_reward = - (coordinateDouble.segment(0, 2) - previous_coordinateDouble.segment(0, 2)).norm();
+        /// if the robot reach the goal, terminate
+        if (current_goal_distance < 0.5) {
+            goal_terminate_reward = reward_goal_terminate_coeff;
+        } else {
+            goal_terminate_reward = 0.0;
+        }
+        obstacle_terminate_reward = 0.0;
     }
 
     void comprehend_contacts()
@@ -838,7 +839,25 @@ namespace raisim
 
     void set_user_command(Eigen::Ref<EigenVec> command) {}
 
-    void reward_logging(Eigen::Ref<EigenVec> rewards) {}
+    void reward_logging(Eigen::Ref<EigenVec> rewards, Eigen::Ref<EigenVec> rewards_w_coeff, int n_rewards) {
+        reward_log.setZero(n_rewards);
+        reward_log[0] = goal_distance_reward;
+        reward_log[1] = traversal_distance_reward;
+        reward_log[2] = goal_terminate_reward;
+        reward_log[3] = obstacle_terminate_reward;
+        reward_log[4] = 0.0;
+
+        reward_w_coeff_log.setZero(n_rewards);
+        reward_w_coeff_log[0] = goal_distance_reward * reward_goal_distance_coeff;
+        reward_w_coeff_log[1] = traversal_distance_reward * reward_traversal_distance_terminate_coeff;
+        reward_w_coeff_log[2] = goal_terminate_reward;
+        reward_w_coeff_log[3] = obstacle_terminate_reward;
+        reward_w_coeff_log[4] = goal_distance_reward * reward_goal_distance_coeff + traversal_distance_reward * reward_traversal_distance_terminate_coeff +
+                                goal_terminate_reward + obstacle_terminate_reward;
+
+        rewards = reward_log.cast<float>();
+        rewards_w_coeff = reward_w_coeff_log.cast<float>();
+    }
 
     void noisify_Dynamics() {
         static std::default_random_engine generator(random_seed);
@@ -938,7 +957,7 @@ namespace raisim
     {
         // Goal position
         if (point_goal_initialize) {
-            for (int i=0; i<2; i++)
+            for (int i = 0; i < 2; i++)
                 goal_pos_[i] = goal_set[sampled_goal_set[current_n_goal]][i];
         }
         else if (random_initialize) {
@@ -982,18 +1001,12 @@ namespace raisim
         for (auto &contact : anymal_->getContacts()) {
             if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end()) {
                 terminalReward = - reward_obstacle_terminate_coeff;
+                obstacle_terminate_reward = - reward_obstacle_terminate_coeff;
                 return true;
             }
         }
 
-        /// if the robot reach the goal, terminate
-        double current_goal_distance = (goal_pos_ - coordinateDouble.segment(0, 2)).norm();
-        if (current_goal_distance < 0.5) {
-            terminalReward = reward_goal_terminate_coeff;
-            return true;
-        }
-
-        terminalReward = 0.f;
+        terminalReward = 0.0;
         return false;
     }
 
@@ -1007,7 +1020,7 @@ namespace raisim
     Eigen::Vector3d bodyLinearVel_, bodyAngularVel_;
     std::set<size_t> footIndices_;
 
-    Eigen::VectorXd torque, reward_log, previous_action, target_postion, before_user_command, after_user_command;
+    Eigen::VectorXd torque, reward_log, reward_w_coeff_log, previous_action, target_postion, before_user_command, after_user_command;
     Eigen::Vector3d roll_and_pitch;
     Eigen::Vector4d foot_idx, shank_idx;
     size_t numContact_;

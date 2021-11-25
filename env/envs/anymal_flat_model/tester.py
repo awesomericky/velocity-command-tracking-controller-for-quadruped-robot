@@ -12,7 +12,12 @@ import argparse
 import numpy as np
 import datetime
 import pdb
+import random
 
+
+random.seed(1)
+np.random.seed(1)
+torch.manual_seed(1)
 
 # configuration
 parser = argparse.ArgumentParser()

@@ -20,6 +20,7 @@ from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
 from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin, Stochastic_action_planner_uniform_bin_w_time_correlation, Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal
 from raisimGymTorch.env.envs.lidar_model.action import Zeroth_action_planner, Modified_zeroth_action_planner
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
+import random
 
 """
 Check!!!!
@@ -59,7 +60,9 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     l_coordinate_traj = np.matmul(l_coordinate_traj, transition_matrix.T)
     return l_coordinate_traj
 
+random.seed(1)
 np.random.seed(1)
+torch.manual_seed(1)
 
 # task specification
 task_name = "point_goal_nav"

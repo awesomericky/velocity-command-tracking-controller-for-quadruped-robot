@@ -21,8 +21,11 @@ from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
 from raisimGymTorch.env.envs.lidar_model.trainer import Trainer, Trainer_TCN
 from raisimGymTorch.env.envs.lidar_model.action import Command_sampler, Time_correlated_command_sampler, Normal_time_correlated_command_sampler
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
+import random
 
+random.seed(1)
 np.random.seed(1)
+torch.manual_seed(1)
 
 # task specification
 task_name = "lidar_environment_model_evaluate"

@@ -21,6 +21,7 @@ from raisimGymTorch.env.envs.lidar_model.trainer import Trainer, Trainer_TCN
 from raisimGymTorch.env.envs.lidar_model.action import Command_sampler, Time_correlated_command_sampler, Normal_time_correlated_command_sampler
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 from raisimGymTorch.env.envs.lidar_model.model import CVAE_implicit_distribution_inference
+import random
 
 
 def transform_coordinate_LW(w_init_coordinate, l_coordinate_traj):
@@ -53,7 +54,9 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     l_coordinate_traj = np.matmul(l_coordinate_traj, transition_matrix.T)
     return l_coordinate_traj
 
+random.seed(0)
 np.random.seed(0)
+torch.manual_seed(0)
 
 # task specification
 task_name = "CVAE_lidar_environment_model"

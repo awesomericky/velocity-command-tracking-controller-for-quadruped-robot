@@ -16,6 +16,12 @@ import argparse
 from collections import defaultdict
 import pdb
 import wandb
+import random
+
+
+random.seed(0)
+np.random.seed(0)
+torch.manual_seed(0)
 
 # task specification
 task_name = "anymal_locomotion_rough"
@@ -161,7 +167,7 @@ for update in range(20000):
         done_sum = done_sum + sum(dones)
         reward_ll_sum = reward_ll_sum + sum(reward)
 
-        env.reward_logging()
+        env.reward_logging(cfg['environment']['n_rewards'] + 1)
         reward_trajectory[:, step, :] = env.reward_log
 
     # take st step to get value obs

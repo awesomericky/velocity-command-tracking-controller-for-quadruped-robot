@@ -22,6 +22,7 @@ from raisimGymTorch.env.envs.lidar_model.action import Zeroth_action_planner, Mo
 from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_w_CVAE
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 from raisimGymTorch.env.envs.lidar_model.model import CVAE_implicit_distribution_inference
+import random
 
 """
 Check!!!!
@@ -61,7 +62,10 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     l_coordinate_traj = np.matmul(l_coordinate_traj, transition_matrix.T)
     return l_coordinate_traj
 
+
+random.seed(1)
 np.random.seed(1)
+torch.manual_seed(1)
 
 # task specification
 task_name = "CVAE_point_goal_nav"

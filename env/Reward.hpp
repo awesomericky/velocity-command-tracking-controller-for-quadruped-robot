@@ -46,7 +46,7 @@ class Reward {
     if(!accumulate)
       rewards_[name].reward = 0.f;
     rewards_[name].reward += reward * rewards_[name].coefficient;
-    rewards_[name].integral += rewards_[name].reward;
+//    rewards_[name].integral += rewards_[name].reward;
   }
 
   float sum() {

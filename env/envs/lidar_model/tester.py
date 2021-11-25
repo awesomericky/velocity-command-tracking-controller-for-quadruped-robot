@@ -20,6 +20,7 @@ from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 from fastdtw import fastdtw
 import matplotlib.pyplot as plt
+import random
 
 
 def transform_coordinate(w_init_coordinate, l_coordinate_traj):
@@ -36,7 +37,13 @@ def transform_coordinate(w_init_coordinate, l_coordinate_traj):
     w_coordinate_traj += w_init_coordinate[:, :-1]
     return w_coordinate_traj
 
-np.random.seed(8)
+"""
+Safety controller task
+"""
+
+random.seed(1)
+np.random.seed(1)
+torch.manual_seed(1)
 
 # task specification
 task_name = "lidar_environment_model"

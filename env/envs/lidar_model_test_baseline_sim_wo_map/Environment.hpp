@@ -1530,7 +1530,7 @@ namespace raisim
 
     void set_user_command(Eigen::Ref<EigenVec> command) {}
 
-    void reward_logging(Eigen::Ref<EigenVec> rewards) {}
+    void reward_logging(Eigen::Ref<EigenVec> rewards, Eigen::Ref<EigenVec> rewards_w_coeff, int n_rewards) {}
 
     void noisify_Dynamics() {
         static std::default_random_engine generator(random_seed);

@@ -45,6 +45,27 @@ class Actor:
     def action_shape(self):
         return self.architecture.output_shape
 
+class Actor_two_side_clip(Actor):
+    def __init__(self, architecture, distribution, clipping_range, device='cpu'):
+        """
+        :param clipping_range: (N, 2) (numpy tensor) ==> [:, 0]: min, [:, 1]: max, N: number of value types (= architecture output dim)
+        """
+        super(Actor_two_side_clip, self).__init__(architecture, distribution, device)
+        assert self.action_shape[0] == clipping_range.shape[0], "Clipping range dimension does not match with output dimension"
+        self.min_clip = torch.from_numpy(clipping_range[:, 0].astype(np.float32)).to(device)
+        self.max_clip = torch.from_numpy(clipping_range[:, 1].astype(np.float32)).to(device)
+        self.final_activation_fn = nn.Tanh()
+
+    def sample(self, obs):
+        logits = self.architecture.architecture(obs)
+        logits = self.final_activation_fn(logits) * self.max_clip
+        actions, log_prob = self.distribution.sample(logits)
+        return actions.cpu().detach(), log_prob.cpu().detach()
+
+    def evaluate(self, obs, actions):
+        action_mean = self.architecture.architecture(obs)
+        action_mean = self.final_activation_fn(action_mean) * self.max_clip
+        return self.distribution.evaluate(obs, action_mean, actions)
 
 class Critic:
     def __init__(self, architecture, device='cpu'):
@@ -127,5 +148,25 @@ class MultivariateGaussianDiagonalCovariance(nn.Module):
 
     def enforce_minimum_std(self, min_std):
         current_std = self.std.detach()
-        new_std = torch.max(current_std, min_std.detach()).detach()
+        new_std = torch.maximum(current_std, min_std.detach()).detach()
         self.std.data = new_std
+
+class MultivariateGaussianDiagonalCovariance_two_side_clip(MultivariateGaussianDiagonalCovariance):
+    def __init__(self, dim, init_std, clipping_range):
+        """
+
+        :param clipping_range: (N, 2) (numpy tensor) ==> [:, 0]: min, [:, 1]: max, N: number of value types (= dim)
+        """
+        assert dim == clipping_range.shape[0], "Clipping range dimension does not match with action dimension"
+        super(MultivariateGaussianDiagonalCovariance_two_side_clip, self).__init__(dim, init_std)
+        self.min_clip = torch.from_numpy(clipping_range[:, 0].astype(np.float32))
+        self.max_clip = torch.from_numpy(clipping_range[:, 1].astype(np.float32))
+
+    def sample(self, logits):
+        self.distribution = Normal(logits, self.std.reshape(self.dim))
+
+        samples = self.distribution.sample()
+        samples = torch.clamp(samples, min=self.min_clip, max=self.max_clip)
+        log_prob = self.distribution.log_prob(samples).sum(dim=1)
+
+        return samples, log_prob

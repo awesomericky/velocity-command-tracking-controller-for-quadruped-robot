@@ -20,7 +20,7 @@ from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
 from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin
 from raisimGymTorch.env.envs.lidar_model.action import Zeroth_action_planner, Modified_zeroth_action_planner, Stochastic_action_planner_uniform_bin_baseline
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
-
+import random
 
 def transform_coordinate_LW(w_init_coordinate, l_coordinate_traj):
     """
@@ -52,10 +52,12 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     l_coordinate_traj = np.matmul(l_coordinate_traj, transition_matrix.T)
     return l_coordinate_traj
 
-np.random.seed(0)
+random.seed(1)
+np.random.seed(1)
+torch.manual_seed(1)
 
 # task specification
-task_name = "lidar_environment_model"
+task_name = "lidar_model_baseline_CWOM"
 
 # configuration
 parser = argparse.ArgumentParser()

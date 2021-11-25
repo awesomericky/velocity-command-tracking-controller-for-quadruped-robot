@@ -15,6 +15,7 @@ import pdb
 from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
 from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_uniform_bin, Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
+import random
 
 """
 Must check 
@@ -53,8 +54,9 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     l_coordinate_traj = np.matmul(l_coordinate_traj, transition_matrix.T)
     return l_coordinate_traj
 
-
+random.seed(0)
 np.random.seed(0)
+torch.manual_seed(0)
 
 # task specification
 task_name = "CVAE_data_collection"

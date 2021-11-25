@@ -19,6 +19,7 @@ import wandb
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 from raisimGymTorch.env.envs.lidar_model.model import MLP
 from collections import Counter
+import random
 
 
 def transform_coordinate_LW(w_init_coordinate, l_coordinate_traj):
@@ -51,7 +52,12 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     l_coordinate_traj = np.matmul(l_coordinate_traj, transition_matrix.T)
     return l_coordinate_traj
 
+def curriculum_update(current_scale, power_factor):
+    return current_scale ** power_factor
+
+random.seed(0)
 np.random.seed(0)
+torch.manual_seed(0)
 
 # task specification
 task_name = "lidar_model_free"
@@ -155,10 +161,15 @@ if logging:
     else:
         wandb.init(name=task_name, project="Quadruped_RL")
 
-actor = ppo_module.Actor(ppo_module.MLP(cfg['architecture']['policy_net'], nn.LeakyReLU, ob_dim, act_dim),
-                         ppo_module.MultivariateGaussianDiagonalCovariance(act_dim, 1.0),
-                         device)
-critic = ppo_module.Critic(ppo_module.MLP(cfg['architecture']['value_net'], nn.LeakyReLU, ob_dim, 1),
+action_clipping_range = np.array([[cfg["environment"]["command"]["forward_vel"]["min"], cfg["environment"]["command"]["forward_vel"]["max"]],
+                                  [cfg["environment"]["command"]["lateral_vel"]["min"], cfg["environment"]["command"]["lateral_vel"]["max"]],
+                                  [cfg["environment"]["command"]["yaw_rate"]["min"], cfg["environment"]["command"]["yaw_rate"]["max"]]])
+
+actor = ppo_module.Actor_two_side_clip(ppo_module.MLP(cfg['architecture']['policy_net'], nn.LeakyReLU, planning_ob_dim, planning_act_dim),
+                                       ppo_module.MultivariateGaussianDiagonalCovariance_two_side_clip(planning_act_dim, list(action_clipping_range[:, 1] * 0.2), action_clipping_range),
+                                       action_clipping_range,
+                                       device)
+critic = ppo_module.Critic(ppo_module.MLP(cfg['architecture']['value_net'], nn.LeakyReLU, planning_ob_dim, 1),
                            device)
 
 saver = ConfigurationSaver(log_dir=home_path + "/raisimGymTorch/data/"+task_name,
@@ -170,13 +181,15 @@ ppo = PPO.PPO(actor=actor,
               critic=critic,
               num_envs=num_envs,
               num_transitions_per_env=n_steps,
-              num_learning_epochs=4,
-              gamma=0.9988,  # discount factor
-              lam=0.95,
-              num_mini_batches=4,
+              num_learning_epochs=cfg["training"]["num_learning_epochs"],
+              num_mini_batches=cfg["training"]["num_mini_batches"],
+              gamma=cfg["training"]["gamma"],
+              lam=cfg["training"]["lamda"],
+              entropy_coef=cfg["training"]["entropy_coef"],
+              learning_rate=cfg["training"]["learning_rate"],
               device=device,
               log_dir=saver.data_dir,
-              shuffle_batch=False)
+              shuffle_batch=cfg["training"]["shuffle_batch"])
 
 if mode == 'retrain':
     load_param(weight_path, env, actor, critic, ppo.optimizer, saver.data_dir)
@@ -196,6 +209,12 @@ env.set_running_mean_var(first_type_dim=[num_envs, planning_ob_dim],
 env.load_scaling(command_tracking_weight_dir, int(iteration_number), type=2)
 
 goal_distance_threshold = 10.
+final_activation = nn.Tanh()
+
+# curriculum learning
+init_curriculum_scale = 0.1
+curriculum_power_factor = 0.997
+current_curriculum_scale = init_curriculum_scale
 
 pdb.set_trace()
 
@@ -261,23 +280,22 @@ for update in range(cfg["environment"]["max_n_update"]):
                 goal_position_L = transform_coordinate_WL(coordinate_obs, goal_position)
                 current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2), axis=-1))[:, np.newaxis]
                 goal_position_L *= np.clip(goal_distance_threshold / current_goal_distance, a_min=None, a_max=1.)
-                temp_state = np.concatenate((lidar_data, COM_history, goal_position_L), axis=1)
 
                 if use_latent_state:
+                    temp_state = np.concatenate((lidar_data, COM_history), axis=1).astype(np.float32)
                     planning_obs = state_encoder.architecture(torch.from_numpy(temp_state).to(device))
                     planning_obs = planning_obs.cpu().detach().numpy()
+                    planning_obs = np.concatenate((planning_obs, goal_position_L), axis=1)
                 else:
-                    planning_obs = temp_state
+                    planning_obs = np.concatenate((lidar_data, COM_history, goal_position_L), axis=1)
 
                 planning_obs = env.force_normalize_observation(planning_obs, type=1)
+                planning_obs = planning_obs.astype(np.float32)
                 sample_user_command = loaded_graph.architecture(torch.from_numpy(planning_obs).to(device))
-                sample_user_command = sample_user_command.cpu().detach().numpy()
-                sample_user_command = np.clip(sample_user_command,
-                                              [cfg["environment"]["command"]["forward_vel"]["min"], cfg["environment"]["command"]["lateral_vel"]["min"], cfg["environment"]["command"]["yaw_rate"]["min"]],
-                                              [cfg["environment"]["command"]["forward_vel"]["max"], cfg["environment"]["command"]["lateral_vel"]["max"], cfg["environment"]["command"]["yaw_rate"]["max"]])
+                sample_user_command = final_activation(sample_user_command).cpu().detach().numpy() * action_clipping_range[:, 1]
 
             tracking_obs = np.concatenate((sample_user_command, obs[:, :proprioceptive_sensor_dim]), axis=1)
-            tracking_obs = env.force_normalize_observation(tracking_obs, type=2)
+            tracking_obs = env.force_normalize_observation(tracking_obs, type=2).astype(np.float32)
             with torch.no_grad():
                 tracking_action = command_tracking_policy.architecture(torch.from_numpy(tracking_obs).to(device))
             rewards, dones = env.partial_step(tracking_action.cpu().detach().numpy())
@@ -341,14 +359,28 @@ for update in range(cfg["environment"]["max_n_update"]):
         print('{:<40} {:>6}'.format("elapsed time: ", '{:6.4f}'.format(end - start)))
         print('====================================================\n')
 
-    """
-    No terminate reward??
-    Reward logging
-    Curriculum learning
-    Periodic environment generation
-    """
 
     start = time.time()
+
+    # generate new environment
+    if update % cfg["environment"]["new_environment_every_n"] == 0:
+        print("Sample new environment")
+        # save previous running mean and std count
+        obs_mean, obs_var, obs_count = env.get_running_mean_var_explicit(type=1)
+
+        # curriculum learning
+        current_curriculum_scale = curriculum_update(current_scale=current_curriculum_scale, power_factor=curriculum_power_factor)
+        cfg["environment"]["obstacle_grid_size"]["min"] = cfg["environment"]["obstacle_grid_size"]["max"] - 2.5 * current_curriculum_scale  # 4.75 ~ 5.0 ==> 2.5 ~ 5.0
+        cfg["environment"]["corridor_short_width"]["min"] = cfg["environment"]["corridor_short_width"]["max"] - 4.0 * current_curriculum_scale  # 5.6 ~ 6.0 ==? 2.0 ~ 6.0
+
+        # create environment from the configuration file
+        cfg["environment"]["seed"]["train"] = update + 2000
+        env = VecEnv(lidar_model_free.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
+        # Set and load runnning mean and variance
+        env.set_running_mean_var(first_type_dim=[num_envs, planning_ob_dim],
+                                 second_type_dim=[num_envs, command_tracking_ob_dim])
+        env.set_running_mean_var_explicit(obs_mean, obs_var, obs_count, type=1)
+        env.load_scaling(command_tracking_weight_dir, int(iteration_number), type=2)
 
     env.initialize_n_step()
     goal_position = env.parallel_set_goal()
@@ -357,6 +389,7 @@ for update in range(cfg["environment"]["max_n_update"]):
 
     reward_sum = np.zeros(num_envs, dtype=np.float32)
     reward_trajectory = np.zeros((num_envs, total_n_plan_steps, cfg['environment']['n_rewards'] + 1))
+    reward_w_coeff_trajectory = np.zeros((num_envs, total_n_plan_steps, cfg['environment']['n_rewards'] + 1))
     done_envs = set()
     done_sum = 0.
     total_n_plan_steps = int(n_steps / command_period_steps) * num_envs
@@ -391,16 +424,17 @@ for update in range(cfg["environment"]["max_n_update"]):
             goal_position_L = transform_coordinate_WL(coordinate_obs, goal_position)
             current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2), axis=-1))[:, np.newaxis]
             goal_position_L *= np.clip(goal_distance_threshold / current_goal_distance, a_min=None, a_max=1.)
-            temp_state = np.concatenate((lidar_data, COM_history, goal_position_L), axis=1)
 
             if use_latent_state:
+                temp_state = np.concatenate((lidar_data, COM_history), axis=1).astype(np.float32)
                 planning_obs = state_encoder.architecture(torch.from_numpy(temp_state).to(device))
                 planning_obs = planning_obs.cpu().detach().numpy()
+                planning_obs = np.concatenate((planning_obs, goal_position_L), axis=1)
             else:
-                planning_obs = temp_state
+                planning_obs = np.concatenate((lidar_data, COM_history, goal_position_L), axis=1)
 
             env.force_update_ob_rms(planning_obs, type=1)
-            planning_obs = env.force_normalize_observation(planning_obs, type=1)
+            planning_obs = env.force_normalize_observation(planning_obs, type=1).astype(np.float32)
             sample_user_command = ppo.observe(planning_obs)
 
         tracking_obs = np.concatenate((sample_user_command, obs[:, :proprioceptive_sensor_dim]), axis=1)
@@ -426,9 +460,11 @@ for update in range(cfg["environment"]["max_n_update"]):
         reward_sum[not_done_envs] += rewards[not_done_envs]
 
         # logging different types of reward
-        env.reward_logging()
+        env.reward_logging(cfg['environment']['n_rewards'] + 1)
         reward_trajectory[new_done_envs, int(step / command_period_steps), :] += env.reward_log[new_done_envs, :]
         reward_trajectory[not_done_envs, int(step / command_period_steps), :] += env.reward_log[not_done_envs, :]
+        reward_w_coeff_trajectory[new_done_envs, int(step / command_period_steps), :] += env.reward_w_cpeff_log[new_done_envs, :]
+        reward_w_coeff_trajectory[not_done_envs, int(step / command_period_steps), :] += env.reward_w_cpeff_log[not_done_envs, :]
 
         # sum done
         if update_time:
@@ -456,21 +492,22 @@ for update in range(cfg["environment"]["max_n_update"]):
     goal_position_L = transform_coordinate_WL(coordinate_obs, goal_position)
     current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2), axis=-1))[:, np.newaxis]
     goal_position_L *= np.clip(goal_distance_threshold / current_goal_distance, a_min=None, a_max=1.)
-    temp_state = np.concatenate((lidar_data, COM_history, goal_position_L), axis=1)
 
     if use_latent_state:
+        temp_state = np.concatenate((lidar_data, COM_history), axis=1).astype(np.float32)
         planning_obs = state_encoder.architecture(torch.from_numpy(temp_state).to(device))
         planning_obs = planning_obs.cpu().detach().numpy()
+        planning_obs = np.concatenate((planning_obs, goal_position_L), axis=1)
     else:
-        planning_obs = temp_state
+        planning_obs = np.concatenate((lidar_data, COM_history, goal_position_L), axis=1)
 
     env.force_update_ob_rms(planning_obs, type=1)
-    planning_obs = env.force_normalize_observation(planning_obs, type=1)
+    planning_obs = env.force_normalize_observation(planning_obs, type=1).astype(np.float32)
 
     # take st step to get value obs
-    ppo.update(actor_obs=planning_obs, value_obs=planning_obs, log_this_iteration=update % 10 == 0, update=update)
+    ppo.update(actor_obs=planning_obs, value_obs=planning_obs, log_this_iteration=(update % 10 == 0) and logging, update=update)
 
-    actor.distribution.enforce_minimum_std((torch.ones(user_command_dim)*0.1).to(device))
+    actor.distribution.enforce_minimum_std(torch.from_numpy((action_clipping_range[:, 1] * 0.05).astype(np.float32)).to(device))
 
     mean_reward_sum = np.mean(reward_sum)
     mean_done_sum = done_sum / total_n_plan_steps
@@ -479,24 +516,26 @@ for update in range(cfg["environment"]["max_n_update"]):
         if update % 5 == 0:
             # reward logging (value & std)
             reward_trajectory_mean = np.mean(reward_trajectory, axis=0)  # (n_steps, cfg['environment']['n_rewards'] + 1)
+            reward_w_coeff_trajectory_mean = np.mean(reward_w_coeff_trajectory, axis=0)  # (n_steps, cfg['environment']['n_rewards'] + 1)
+            reward_trajectory_mean[:, -1] = reward_w_coeff_trajectory_mean[:, -1]  # log reward sum considering the reward coeff
             reward_mean = np.mean(reward_trajectory_mean, axis=0)
-            reward_std = np.std(reward_trajectory_mean, axis=0)
+            reward_std = np.std(reward_w_coeff_trajectory_mean, axis=0)
             assert reward_mean.shape[0] == cfg['environment']['n_rewards'] + 1
             assert reward_std.shape[0] == cfg['environment']['n_rewards'] + 1
-            ppo.reward_logging(reward_names, reward_mean)
-            ppo.reward_std_logging(reward_names, reward_std)
+            ppo.reward_logging(reward_names, reward_mean)   # logging mean of each reward (w/o coeff) and mean of reward sum (w/ coeff)
+            ppo.reward_std_logging(reward_names, reward_std)   # logging std of each reward (w/ coeff) and std of reward sum (w/ coeff)
 
     end = time.time()
 
     print('----------------------------------------------------')
     print('{:>6}th iteration'.format(update))
-    print('{:<40} {:>6}'.format("average reward: ", '{:0.10f}'.format(mean_reward_sum)))
+    print('{:<40} {:>6}'.format("average reward: ", '{:0.10f}'.format(mean_reward_sum)))   # logging mean of reward sum (w/ coeff)
     print('{:<40} {:>6}'.format("average dones: ", '{:0.6f}'.format(mean_done_sum)))
     print('{:<40} {:>6}'.format("elapsed time: ", '{:6.4f}'.format(end - start)))
     print('{:<40} {:>6}'.format("fps: ", '{:6.0f}'.format(total_n_track_steps / (end - start))))
     print('{:<40} {:>6}'.format("real time factor: ", '{:6.0f}'.format(total_n_track_steps / (end - start)
                                                                        * cfg['environment']['control_dt'])))
     print('std: ')
-    print(np.exp(actor.distribution.std.cpu().detach().numpy()))
+    print(actor.distribution.std.cpu().detach().numpy())
     print('----------------------------------------------------\n')
 

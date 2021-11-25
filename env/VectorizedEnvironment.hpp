@@ -236,10 +236,10 @@ class VectorizedEnvironment {
       env->curriculumUpdate();
   };
 
-  void reward_logging(Eigen::Ref<EigenRowMajorMat> &rewards) {
+  void reward_logging(Eigen::Ref<EigenRowMajorMat> &rewards, Eigen::Ref<EigenRowMajorMat> &rewards_w_coeff, int n_rewards) {
 #pragma omp parallel for
     for (int i = 0; i < num_envs_; i++)
-      environments_[i]->reward_logging(rewards.row(i));
+      environments_[i]->reward_logging(rewards.row(i), rewards_w_coeff.row(i), n_rewards);
   }
 
   void contact_logging(Eigen::Ref<EigenRowMajorMat> &contacts) {
@@ -280,10 +280,10 @@ class VectorizedEnvironment {
     float terminalReward = 0.0;
     done[agentId] = environments_[agentId]->isTerminalState(terminalReward);
 
-//    if (done[agentId]) {
-//      environments_[agentId]->reset();
-//      reward[agentId] += terminalReward;
-//    }
+    if (done[agentId]) {
+//      environments_[agentId]->reset();  // automatic reset after termination
+      reward[agentId] += terminalReward;
+    }
   }
 
   std::vector<ChildEnvironment *> environments_;

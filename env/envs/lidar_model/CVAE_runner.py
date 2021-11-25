@@ -12,6 +12,11 @@ import pdb
 import os
 import argparse
 import numpy as np
+import random
+
+random.seed(0)
+np.random.seed(0)
+torch.manual_seed(0)
 
 # task specification
 task_name = "CVAE_train"
