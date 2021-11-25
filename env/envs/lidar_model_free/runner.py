@@ -166,7 +166,7 @@ action_clipping_range = np.array([[cfg["environment"]["command"]["forward_vel"][
                                   [cfg["environment"]["command"]["yaw_rate"]["min"], cfg["environment"]["command"]["yaw_rate"]["max"]]])
 
 actor = ppo_module.Actor_two_side_clip(ppo_module.MLP(cfg['architecture']['policy_net'], nn.LeakyReLU, planning_ob_dim, planning_act_dim),
-                                       ppo_module.MultivariateGaussianDiagonalCovariance_two_side_clip(planning_act_dim, list(action_clipping_range[:, 1] * 0.2), action_clipping_range),
+                                       ppo_module.MultivariateGaussianDiagonalCovariance_two_side_clip(planning_act_dim, list(action_clipping_range[:, 1] * 0.2), action_clipping_range, device),
                                        action_clipping_range,
                                        device)
 critic = ppo_module.Critic(ppo_module.MLP(cfg['architecture']['value_net'], nn.LeakyReLU, planning_ob_dim, 1),

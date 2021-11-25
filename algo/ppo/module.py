@@ -2,7 +2,7 @@ import torch.nn as nn
 import numpy as np
 import torch
 from torch.distributions import Normal
-
+import pdb
 
 class Actor:
     def __init__(self, architecture, distribution, device='cpu'):
@@ -152,15 +152,15 @@ class MultivariateGaussianDiagonalCovariance(nn.Module):
         self.std.data = new_std
 
 class MultivariateGaussianDiagonalCovariance_two_side_clip(MultivariateGaussianDiagonalCovariance):
-    def __init__(self, dim, init_std, clipping_range):
+    def __init__(self, dim, init_std, clipping_range, device):
         """
 
         :param clipping_range: (N, 2) (numpy tensor) ==> [:, 0]: min, [:, 1]: max, N: number of value types (= dim)
         """
         assert dim == clipping_range.shape[0], "Clipping range dimension does not match with action dimension"
         super(MultivariateGaussianDiagonalCovariance_two_side_clip, self).__init__(dim, init_std)
-        self.min_clip = torch.from_numpy(clipping_range[:, 0].astype(np.float32))
-        self.max_clip = torch.from_numpy(clipping_range[:, 1].astype(np.float32))
+        self.min_clip = torch.from_numpy(clipping_range[:, 0].astype(np.float32)).to(device)
+        self.max_clip = torch.from_numpy(clipping_range[:, 1].astype(np.float32)).to(device)
 
     def sample(self, logits):
         self.distribution = Normal(logits, self.std.reshape(self.dim))
