@@ -28,6 +28,7 @@ class RaisimGymVecEnv:
         self._done = np.zeros(self.num_envs, dtype=np.bool)
         self._goal = np.zeros(2, dtype=np.float32)
         self._parallel_goal = np.zeros((self.num_envs, 2), dtype=np.float32)
+        self._parallel_collision = np.zeros(self.num_envs, dtype=np.bool)
         # self.rewards = [[] for _ in range(self.num_envs)]
         try:
             self.reward_log = np.zeros([self.num_envs, cfg["n_rewards"] + 1], dtype=np.float32)
@@ -239,6 +240,15 @@ class RaisimGymVecEnv:
 
     def initialize_n_step(self):
         self.wrapper.initialize_n_step()
+
+    def single_env_collision_check(self):
+        # check collision for env0
+        return self.wrapper.single_env_collision_check()
+
+    def parallel_env_collision_check(self):
+        # check collision for multiple environments
+        self.wrapper.parallel_env_collision_check(self._parallel_collision)
+        return self._parallel_collision.copy()
 
 
 class RunningMeanStd(object):

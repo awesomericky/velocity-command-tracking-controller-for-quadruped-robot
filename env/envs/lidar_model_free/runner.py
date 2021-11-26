@@ -22,21 +22,6 @@ from collections import Counter
 import random
 
 
-def transform_coordinate_LW(w_init_coordinate, l_coordinate_traj):
-    """
-    Transform LOCAL frame coordinate trajectory to WORLD frame coordinate trajectory
-    (LOCAL frame --> WORLD frame)
-
-    :param w_init_coordinate: initial coordinate in WORLD frame (1, coordinate_dim)
-    :param l_coordinate_traj: coordintate trajectory in LOCAL frame (n_step, coordinate_dim)
-    :return:
-    """
-    transition_matrix = np.array([[np.cos(w_init_coordinate[0, 2]), np.sin(w_init_coordinate[0, 2])],
-                                  [- np.sin(w_init_coordinate[0, 2]), np.cos(w_init_coordinate[0, 2])]], dtype=np.float32)
-    w_coordinate_traj = np.matmul(l_coordinate_traj, transition_matrix)
-    w_coordinate_traj += w_init_coordinate[:, :-1]
-    return w_coordinate_traj
-
 def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     """
     Transform WORLD frame coordinate trajectory to LOCAL frame coordinate trajectory
@@ -143,7 +128,7 @@ command_tracking_act_dim = env.num_acts
 
 # Training
 n_steps = math.floor(cfg['environment']['max_time'] / cfg['environment']['control_dt'])
-evaluate_n_steps = n_steps * 2
+evaluate_n_steps = n_steps
 command_period_steps = math.floor(cfg['environment']['command_period'] / cfg['environment']['control_dt'])
 num_envs = cfg['environment']['num_envs']
 assert n_steps % command_period_steps == 0, "Total steps in training should be divided by command period steps."
@@ -245,10 +230,12 @@ for update in range(cfg["environment"]["max_n_update"]):
         # env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_"+str(update)+'.mp4')
 
         done_envs = set()
+        done_envs_storage = set()
+        total_n_plan_steps = int(evaluate_n_steps / command_period_steps)
+        total_n_track_steps = evaluate_n_steps
         reward_sum = np.zeros(num_envs, dtype=np.float32)
-        done_sum = 0.
-        total_n_plan_steps = int(evaluate_n_steps / command_period_steps) * num_envs
-        total_n_track_steps = evaluate_n_steps * num_envs
+        reward_trajectory = np.zeros((num_envs, total_n_plan_steps, cfg['environment']['n_rewards'] + 1))
+        reward_w_coeff_trajectory = np.zeros((num_envs, total_n_plan_steps, cfg['environment']['n_rewards'] + 1))
 
         for step in range(evaluate_n_steps):
             frame_start = time.time()
@@ -316,9 +303,15 @@ for update in range(cfg["environment"]["max_n_update"]):
             not_done_envs = np.array(sorted((counter_total_envs - counter_current_done_envs).elements())).astype(int)
             reward_sum[not_done_envs] += rewards[not_done_envs]
 
+            env.reward_logging(cfg['environment']['n_rewards'] + 1)
+            reward_trajectory[new_done_envs, int(step / command_period_steps), :] += env.reward_log[new_done_envs, :]
+            reward_trajectory[not_done_envs, int(step / command_period_steps), :] += env.reward_log[not_done_envs, :]
+            reward_w_coeff_trajectory[new_done_envs, int(step / command_period_steps), :] += env.reward_w_cpeff_log[new_done_envs, :]
+            reward_w_coeff_trajectory[not_done_envs, int(step / command_period_steps), :] += env.reward_w_cpeff_log[not_done_envs, :]
+
             # sum done
             if update_time:
-                done_sum += len(list(done_envs))
+                done_envs_storage.update(np.array(list(done_envs)))
 
             # reset COM buffer for terminated environment
             COM_buffer.partial_reset(current_done_envs)
@@ -335,32 +328,31 @@ for update in range(cfg["environment"]["max_n_update"]):
         env.save_scaling(saver.data_dir, str(update), type=1)
 
         mean_reward_sum = np.mean(reward_sum)
-        std_reward_sum = np.std(reward_sum)
-        minimum_reward_sum = np.min(reward_sum)
-        maximum_reward_sum = np.max(reward_sum)
-        mean_done_sum = done_sum / total_n_plan_steps
+        mean_done_sum = len(list(done_envs_storage)) / num_envs
+
+        # reward logging (value & std)
+        reward_trajectory_mean = np.mean(reward_trajectory, axis=0)  # (n_plan_steps, cfg['environment']['n_rewards'] + 1)
+        reward_w_coeff_trajectory_mean = np.mean(reward_w_coeff_trajectory, axis=0)  # (n_plan_steps, cfg['environment']['n_rewards'] + 1)
+        reward_trajectory_mean[:, -1] = reward_w_coeff_trajectory_mean[:, -1]  # log reward sum considering the reward coeff
+        reward_mean = np.mean(reward_trajectory_mean, axis=0)  # average reward for each planning step
+        assert reward_mean.shape[0] == cfg['environment']['n_rewards'] + 1
 
         if logging:
             logging_data = dict()
             logging_data["Evaluate/Mean_reward"] = mean_reward_sum
-            logging_data["Evaluate/Std_reward"] = std_reward_sum
-            logging_data["Evaluate/Min_reward"] = minimum_reward_sum
-            logging_data["Evaluate/Max_reward"] = maximum_reward_sum
+            for name, value in zip(reward_names, reward_mean):
+                logging_name = f"Evaluate/Reward/value/{name}"
+                logging_data[logging_name] = value
             logging_data["Evaluate/Mean_done"] = mean_done_sum
             wandb.log(logging_data)
 
         print('====================================================')
         print('{:>6}th evaluation'.format(update))
-        print('{:<40} {:>6}'.format("average reward: ", '{:0.10f}'.format(mean_reward_sum)))
-        print('{:<40} {:>6}'.format("reward std: ", '{:0.10f}'.format(std_reward_sum)))
-        print('{:<40} {:>6}'.format("minimum reward: ", '{:0.10f}'.format(minimum_reward_sum)))
-        print('{:<40} {:>6}'.format("maximum reward: ", '{:0.10f}'.format(maximum_reward_sum)))
+        print('{:<40} {:>6}'.format("average reward sum: ", '{:0.10f}'.format(mean_reward_sum)))
         print('{:<40} {:>6}'.format("average dones: ", '{:0.6f}'.format(mean_done_sum)))
         print('{:<40} {:>6}'.format("elapsed time: ", '{:6.4f}'.format(end - start)))
         print('====================================================\n')
 
-
-    start = time.time()
 
     # generate new environment
     if update % cfg["environment"]["new_environment_every_n"] == 0:
@@ -382,20 +374,22 @@ for update in range(cfg["environment"]["max_n_update"]):
         env.set_running_mean_var_explicit(obs_mean, obs_var, obs_count, type=1)
         env.load_scaling(command_tracking_weight_dir, int(iteration_number), type=2)
 
+    start = time.time()
+
+    # actual training
     env.initialize_n_step()
     goal_position = env.parallel_set_goal()
     env.reset()
     COM_buffer.reset()
 
+    done_envs = set()
+    done_envs_storage = set()
+    total_n_plan_steps = int(n_steps / command_period_steps)
+    total_n_track_steps = n_steps
     reward_sum = np.zeros(num_envs, dtype=np.float32)
     reward_trajectory = np.zeros((num_envs, total_n_plan_steps, cfg['environment']['n_rewards'] + 1))
     reward_w_coeff_trajectory = np.zeros((num_envs, total_n_plan_steps, cfg['environment']['n_rewards'] + 1))
-    done_envs = set()
-    done_sum = 0.
-    total_n_plan_steps = int(n_steps / command_period_steps) * num_envs
-    total_n_track_steps = n_steps * num_envs
 
-    # actual training
     for step in range(n_steps):
         new_command_time = step % command_period_steps == 0
         update_time = (step + 1) % command_period_steps == 0
@@ -469,7 +463,7 @@ for update in range(cfg["environment"]["max_n_update"]):
         # sum done
         if update_time:
             ppo.step(value_obs=planning_obs, rews=reward_sum, dones=dones)
-            done_sum += len(list(done_envs))
+            done_envs_storage.update(np.array(list(done_envs)))
 
         # reset COM buffer for terminated environment
         COM_buffer.partial_reset(current_done_envs)
@@ -510,16 +504,16 @@ for update in range(cfg["environment"]["max_n_update"]):
     actor.distribution.enforce_minimum_std(torch.from_numpy((action_clipping_range[:, 1] * 0.05).astype(np.float32)).to(device))
 
     mean_reward_sum = np.mean(reward_sum)
-    mean_done_sum = done_sum / total_n_plan_steps
+    mean_done_sum = len(list(done_envs_storage)) / num_envs
 
     if logging:
         if update % 5 == 0:
             # reward logging (value & std)
-            reward_trajectory_mean = np.mean(reward_trajectory, axis=0)  # (n_steps, cfg['environment']['n_rewards'] + 1)
-            reward_w_coeff_trajectory_mean = np.mean(reward_w_coeff_trajectory, axis=0)  # (n_steps, cfg['environment']['n_rewards'] + 1)
+            reward_trajectory_mean = np.mean(reward_trajectory, axis=0)  # (n_plan_steps, cfg['environment']['n_rewards'] + 1)
+            reward_w_coeff_trajectory_mean = np.mean(reward_w_coeff_trajectory, axis=0)  # (n_plan_steps, cfg['environment']['n_rewards'] + 1)
             reward_trajectory_mean[:, -1] = reward_w_coeff_trajectory_mean[:, -1]  # log reward sum considering the reward coeff
-            reward_mean = np.mean(reward_trajectory_mean, axis=0)
-            reward_std = np.std(reward_w_coeff_trajectory_mean, axis=0)
+            reward_mean = np.mean(reward_trajectory_mean, axis=0)  # average reward for each planning step
+            reward_std = np.std(reward_w_coeff_trajectory_mean, axis=0)  # variance of rewards in single trajectory
             assert reward_mean.shape[0] == cfg['environment']['n_rewards'] + 1
             assert reward_std.shape[0] == cfg['environment']['n_rewards'] + 1
             ppo.reward_logging(reward_names, reward_mean)   # logging mean of each reward (w/o coeff) and mean of reward sum (w/ coeff)
@@ -529,7 +523,7 @@ for update in range(cfg["environment"]["max_n_update"]):
 
     print('----------------------------------------------------')
     print('{:>6}th iteration'.format(update))
-    print('{:<40} {:>6}'.format("average reward: ", '{:0.10f}'.format(mean_reward_sum)))   # logging mean of reward sum (w/ coeff)
+    print('{:<40} {:>6}'.format("average reward sum: ", '{:0.10f}'.format(mean_reward_sum)))   # logging mean of reward sum (w/ coeff)
     print('{:<40} {:>6}'.format("average dones: ", '{:0.6f}'.format(mean_done_sum)))
     print('{:<40} {:>6}'.format("elapsed time: ", '{:6.4f}'.format(end - start)))
     print('{:<40} {:>6}'.format("fps: ", '{:6.0f}'.format(total_n_track_steps / (end - start))))

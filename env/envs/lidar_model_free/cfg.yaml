@@ -17,7 +17,7 @@ environment:
   test_num_threads: 2
   simulation_dt: 0.0025
   control_dt: 0.01
-  max_time: 6.0
+  max_time: 10.0
   command_period: 0.5
   obstacle_grid_size:
     min: 2.5
@@ -28,13 +28,13 @@ environment:
   n_rewards: 4
   reward:
     goal_distance:  # (+)
-      coeff: 1.0
+      coeff: 5.0
     traversal_distance:  # (-)
-      coeff: 0.2
+      coeff: 0.0
     goal_terminate:  # (+)
       coeff: 1.0
     obstacle_terminate:  # (-)
-      coeff: 0.5
+      coeff: 0.05
   command:
     forward_vel:
       min: -1.0
@@ -51,16 +51,16 @@ environment:
   point_goal_initialize: False  # used for evaluating
 
 training:
-  learning_rate: 5e-4
+  learning_rate: 3e-4
   num_learning_epochs: 4
-  num_mini_batches: 6
+  num_mini_batches: 4
   gamma: 0.9988
   lamda: 0.95
   entropy_coef: 0.0
   shuffle_batch: True
 
 architecture:
-  use_latent_state: True
+  use_latent_state: False
   state_encoder: # state = lidar + (encoded COM history)
     input: 450  # COM_encoder output is included in the input  (360 + 32)
     output: 100

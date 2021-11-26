@@ -240,11 +240,12 @@ for goal_id in range(total_n_goals):
         step += 1
 
         if dones[0]:
+            print(f"{goal_id + 1}/{total_n_goals}: Reward={reward_sum} || Step={step} || Fail")
             break
 
         if current_goal_distance < 0.5:
             n_success += 1
-            print(f"{goal_id}/{total_n_goals}: Reward={reward_sum} || Step={step}")
+            print(f"{goal_id + 1}/{total_n_goals}: Reward={reward_sum} || Step={step} || Succes")
             break
 
 end = time.time()

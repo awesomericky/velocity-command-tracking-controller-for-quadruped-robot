@@ -1,0 +1,7 @@
+environment:
+  seed: 0
+  obstacle_grid_size: 2.5  # 2.5 / 3.0 / 4.0
+  obstacle_center_distribution_type: 0  # 0: (0.3 ~ g.s - 0.3) / 1: (0.8 ~ g.s - 0.8)
+  initialize:
+    point_goal: True
+    safety_control: False

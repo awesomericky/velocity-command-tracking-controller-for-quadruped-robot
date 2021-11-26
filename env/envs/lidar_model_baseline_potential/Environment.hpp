@@ -793,6 +793,8 @@ namespace raisim
         current_n_step = 0;
     }
 
+    bool collision_check() {return false;}
+
     bool isTerminalState(float &terminalReward) final
     {
         terminalReward = float(terminalRewardCoeff_);

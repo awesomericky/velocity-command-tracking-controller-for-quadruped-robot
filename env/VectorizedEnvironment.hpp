@@ -168,7 +168,7 @@ class VectorizedEnvironment {
           environments_[i]->set_goal(goal.row(i));
   }
 
-  void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> &sampled_command,
+  void baseline_compute_reward(std::vector<EigenRowMajorMat> sampled_command,
                                Eigen::Ref<EigenVec> &goal_Pos_local,
                                Eigen::Ref<EigenVec> &rewards_p,
                                Eigen::Ref<EigenVec> &collision_idx,
@@ -197,7 +197,15 @@ class VectorizedEnvironment {
       env->close();
   }
 
-  void isTerminalState(Eigen::Ref<EigenBoolVec>& terminalState) {
+  bool single_env_collision_check() {return environments_[0]->collision_check();}
+
+  void parallel_env_collision_check(Eigen::Ref<EigenBoolVec> &collision) {
+      for (int i = 0; i < num_envs_; i++) {
+          collision[i] = environments_[i]->collision_check();
+      }
+  }
+
+  void isTerminalState(Eigen::Ref<EigenBoolVec> &terminalState) {
     for (int i = 0; i < num_envs_; i++) {
       float terminalReward;
       terminalState[i] = environments_[i]->isTerminalState(terminalReward);

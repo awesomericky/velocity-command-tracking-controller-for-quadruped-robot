@@ -51,6 +51,8 @@ PYBIND11_MODULE(RAISIMGYM_TORCH_ENV_NAME, m) {
     .def("parallel_set_goal", &VectorizedEnvironment<ENVIRONMENT>::parallel_set_goal)
     .def("baseline_compute_reward", &VectorizedEnvironment<ENVIRONMENT>::baseline_compute_reward)
     .def("computed_heading_direction", &VectorizedEnvironment<ENVIRONMENT>::computed_heading_direction)
+    .def("single_env_collision_check", &VectorizedEnvironment<ENVIRONMENT>::single_env_collision_check)
+    .def("parallel_env_collision_check", &VectorizedEnvironment<ENVIRONMENT>::parallel_env_collision_check)
 
     .def(py::pickle(
         [](const VectorizedEnvironment<ENVIRONMENT> &p) { // __getstate__ --> Pickling to Python

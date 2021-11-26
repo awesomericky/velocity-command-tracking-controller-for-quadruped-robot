@@ -989,6 +989,8 @@ namespace raisim
 
     void computed_heading_direction(Eigen::Ref<EigenVec> heading_direction_) {}
 
+    bool collision_check() {return false;}
+
     bool isTerminalState(float &terminalReward) final
     {
         /// if anymal falls down
