@@ -168,7 +168,7 @@ class VectorizedEnvironment {
           environments_[i]->set_goal(goal.row(i));
   }
 
-  void baseline_compute_reward(std::vector<EigenRowMajorMat> sampled_command,
+  void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> sampled_command,
                                Eigen::Ref<EigenVec> &goal_Pos_local,
                                Eigen::Ref<EigenVec> &rewards_p,
                                Eigen::Ref<EigenVec> &collision_idx,

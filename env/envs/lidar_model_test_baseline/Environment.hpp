@@ -194,10 +194,10 @@ namespace raisim
             footIndices_.insert(anymal_->getBodyIdx("RF_SHANK"));
             footIndices_.insert(anymal_->getBodyIdx("LH_SHANK"));
             footIndices_.insert(anymal_->getBodyIdx("RH_SHANK"));
-            footIndices_.insert(anymal_->getBodyIdx("LF_THIGH"));
-            footIndices_.insert(anymal_->getBodyIdx("RF_THIGH"));
-            footIndices_.insert(anymal_->getBodyIdx("LH_THIGH"));
-            footIndices_.insert(anymal_->getBodyIdx("RH_THIGH"));
+//            footIndices_.insert(anymal_->getBodyIdx("LF_THIGH"));
+//            footIndices_.insert(anymal_->getBodyIdx("RF_THIGH"));
+//            footIndices_.insert(anymal_->getBodyIdx("LH_THIGH"));
+//            footIndices_.insert(anymal_->getBodyIdx("RH_THIGH"));
 
             /// visualize if it is the first environment
             if (visualizable_)
@@ -241,77 +241,143 @@ namespace raisim
             }
         }
 
-    void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> sampled_command,
-                                 Eigen::Ref<EigenVec> goal_Pos_local,
-                                 Eigen::Ref<EigenVec> rewards_p,
-                                 Eigen::Ref<EigenVec> collision_idx,
-                                 int steps, double delta_t, double must_safe_time)
-    {
-        int n_sample = sampled_command.rows();
-        raisim::Vec<3> future_coordinate;
-        raisim::Vec<4> future_quaternion;
-        Eigen::VectorXd rewards_cp;
-        Eigen::VectorXd collision_idx_cp;
-        int must_safe_n_steps = int(must_safe_time / delta_t);
+        void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> sampled_command,
+                                     Eigen::Ref<EigenVec> goal_Pos_local,
+                                     Eigen::Ref<EigenVec> rewards_p,
+                                     Eigen::Ref<EigenVec> collision_idx,
+                                     int steps, double delta_t, double must_safe_time)
+        {
+            int n_sample = sampled_command.rows();
+            raisim::Vec<3> future_coordinate;
+            raisim::Vec<4> future_quaternion;
+            Eigen::VectorXd rewards_cp;
+            Eigen::VectorXd collision_idx_cp;
+            int must_safe_n_steps = int(must_safe_time / delta_t);
 
-        rewards_cp.setZero(n_sample);
-        collision_idx_cp.setZero(n_sample);
-        double current_goal_distance = goal_Pos_local.norm();
+            rewards_cp.setZero(n_sample);
+            collision_idx_cp.setZero(n_sample);
+            double current_goal_distance = goal_Pos_local.norm();
 
-        if (server_)
-            server_->lockVisualizationServerMutex();
+            if (server_)
+                server_->lockVisualizationServerMutex();
 
-        for (int i=0; i<n_sample; i++) {
-            double local_x = 0;
-            double local_y = 0;
-            double local_yaw = 0;
-            for (int j=0; j<steps; j++) {
-                local_yaw += sampled_command(i, 2) * delta_t;
-                local_x += sampled_command(i, 0) * delta_t * cos(local_yaw) - sampled_command(i, 1) * delta_t * sin(local_yaw);
-                local_y += sampled_command(i, 0) * delta_t * sin(local_yaw) + sampled_command(i, 1) * delta_t * cos(local_yaw);
-                future_coordinate[0] = local_x * cos(coordinateDouble[2]) - local_y * sin(coordinateDouble[2]) + coordinateDouble[0];
-                future_coordinate[1] = local_x * sin(coordinateDouble[2]) + local_y * cos(coordinateDouble[2]) + coordinateDouble[1];
-                future_coordinate[2] = local_yaw + coordinateDouble[2];
+            for (int i=0; i<n_sample; i++) {
+                double local_x = 0.;
+                double local_y = 0.;
+                double local_yaw = 0.;
+                double final_local_x = 0.;
+                double final_local_y = 0.;
+                bool not_collide = true;
+                for (int j=0; j<steps; j++) {
+                    if (not_collide) {
+                        local_yaw += sampled_command(i, 2) * delta_t;
+                        local_x += sampled_command(i, 0) * delta_t * cos(local_yaw) - sampled_command(i, 1) * delta_t * sin(local_yaw);
+                        local_y += sampled_command(i, 0) * delta_t * sin(local_yaw) + sampled_command(i, 1) * delta_t * cos(local_yaw);
+                        future_coordinate[0] = local_x * cos(coordinateDouble[2]) - local_y * sin(coordinateDouble[2]) + coordinateDouble[0];
+                        future_coordinate[1] = local_x * sin(coordinateDouble[2]) + local_y * cos(coordinateDouble[2]) + coordinateDouble[1];
+                        future_coordinate[2] = local_yaw + coordinateDouble[2];
 
-                raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
+                        raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
 
-//                if (i == 0) {
-//                    prediction_box_1[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
-//                    prediction_box_1[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
-//                }
-//                else if (i == 1) {
-//                    prediction_box_2[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
-//                    prediction_box_2[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
-//                }
+                        anymal_box_->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
+                        anymal_box_->setOrientation(future_quaternion);
 
-                if (j < must_safe_n_steps) {
-                    anymal_box_->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
-                    anymal_box_->setOrientation(future_quaternion);
+                        world_->integrate1();
 
-                    world_->integrate1();
+                        int num_anymal_future_contact = anymal_box_->getContacts().size();
+                        if (num_anymal_future_contact > 0) {
+                            not_collide = false;
+                            if (j < must_safe_n_steps)
+                                collision_idx_cp[i] = 1;
+                        }
 
-                    int num_anymal_future_contact = anymal_box_->getContacts().size();
-                    if (num_anymal_future_contact > 0) {
-                        collision_idx_cp[i] = 1;
+                        final_local_x = local_x;
+                        final_local_y = local_y;
                     }
 
-//                    if (future_coordinate[0] < -2 || hm_sizeX - 2 < future_coordinate[0] ||
-//                        future_coordinate[1] < 0 || hm_sizeY < future_coordinate[1]) {
-//                        collision_idx_cp[i] = 1;
-//                    }
+                    double future_goal_distance = sqrt(pow(final_local_x - goal_Pos_local[0], 2) + pow(final_local_y - goal_Pos_local[1], 2));
+                    rewards_cp[i] += current_goal_distance - future_goal_distance;
                 }
-
-                double future_goal_distance = sqrt(pow(local_x - goal_Pos_local[0], 2) + pow(local_y - goal_Pos_local[1], 2));
-                rewards_cp[i] += current_goal_distance - future_goal_distance;
             }
+
+            if (server_)
+                server_->unlockVisualizationServerMutex();
+
+            rewards_p = rewards_cp.cast<float>();
+            collision_idx = collision_idx_cp.cast<float>();
         }
 
-        if (server_)
-            server_->unlockVisualizationServerMutex();
-
-        rewards_p = rewards_cp.cast<float>();
-        collision_idx = collision_idx_cp.cast<float>();
-    }
+//    void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> sampled_command,
+//                                 Eigen::Ref<EigenVec> goal_Pos_local,
+//                                 Eigen::Ref<EigenVec> rewards_p,
+//                                 Eigen::Ref<EigenVec> collision_idx,
+//                                 int steps, double delta_t, double must_safe_time)
+//    {
+//        int n_sample = sampled_command.rows();
+//        raisim::Vec<3> future_coordinate;
+//        raisim::Vec<4> future_quaternion;
+//        Eigen::VectorXd rewards_cp;
+//        Eigen::VectorXd collision_idx_cp;
+//        int must_safe_n_steps = int(must_safe_time / delta_t);
+//
+//        rewards_cp.setZero(n_sample);
+//        collision_idx_cp.setZero(n_sample);
+//        double current_goal_distance = goal_Pos_local.norm();
+//
+//        if (server_)
+//            server_->lockVisualizationServerMutex();
+//
+//        for (int i=0; i<n_sample; i++) {
+//            double local_x = 0;
+//            double local_y = 0;
+//            double local_yaw = 0;
+//            for (int j=0; j<steps; j++) {
+//                local_yaw += sampled_command(i, 2) * delta_t;
+//                local_x += sampled_command(i, 0) * delta_t * cos(local_yaw) - sampled_command(i, 1) * delta_t * sin(local_yaw);
+//                local_y += sampled_command(i, 0) * delta_t * sin(local_yaw) + sampled_command(i, 1) * delta_t * cos(local_yaw);
+//                future_coordinate[0] = local_x * cos(coordinateDouble[2]) - local_y * sin(coordinateDouble[2]) + coordinateDouble[0];
+//                future_coordinate[1] = local_x * sin(coordinateDouble[2]) + local_y * cos(coordinateDouble[2]) + coordinateDouble[1];
+//                future_coordinate[2] = local_yaw + coordinateDouble[2];
+//
+//                raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
+//
+////                if (i == 0) {
+////                    prediction_box_1[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
+////                    prediction_box_1[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
+////                }
+////                else if (i == 1) {
+////                    prediction_box_2[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
+////                    prediction_box_2[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
+////                }
+//
+//                if (j < must_safe_n_steps) {
+//                    anymal_box_->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
+//                    anymal_box_->setOrientation(future_quaternion);
+//
+//                    world_->integrate1();
+//
+//                    int num_anymal_future_contact = anymal_box_->getContacts().size();
+//                    if (num_anymal_future_contact > 0) {
+//                        collision_idx_cp[i] = 1;
+//                    }
+//
+////                    if (future_coordinate[0] < -2 || hm_sizeX - 2 < future_coordinate[0] ||
+////                        future_coordinate[1] < 0 || hm_sizeY < future_coordinate[1]) {
+////                        collision_idx_cp[i] = 1;
+////                    }
+//                }
+//
+//                double future_goal_distance = sqrt(pow(local_x - goal_Pos_local[0], 2) + pow(local_y - goal_Pos_local[1], 2));
+//                rewards_cp[i] += current_goal_distance - future_goal_distance;
+//            }
+//        }
+//
+//        if (server_)
+//            server_->unlockVisualizationServerMutex();
+//
+//        rewards_p = rewards_cp.cast<float>();
+//        collision_idx = collision_idx_cp.cast<float>();
+//    }
 
     void init() final {}
 

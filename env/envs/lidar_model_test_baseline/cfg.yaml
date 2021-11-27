@@ -3,7 +3,7 @@ record_video: yes
 
 environment:
   render: True
-  type: 2
+  type: 8
   evaluate: True
   #    1 : 90 degree maze
   #    2 : diagonal maze   ===
@@ -58,7 +58,7 @@ evaluating:
   sigma: 1.0
   number_of_sample: 90
   gamma: 20
-  beta: 0.5
+  beta: 0.4
   number_of_bin: 4
 
 data_collection:

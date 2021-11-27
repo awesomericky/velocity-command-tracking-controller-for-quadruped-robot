@@ -33,12 +33,13 @@ namespace raisim
         explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable, int sample_env_type, int seed, double sample_obstacle_grid_size, double sample_obstacle_dr)
         : RaisimGymEnv(resourceDir, cfg), visualizable_(visualizable)
         {
+            /*
+             * For testing, we do not use sampled sample_env_type, seed, sample_obstacle_grid_size, sample_obstacle_dr.
+             * We rather use deterministic configuration.
+             */
 
             /// create world
             world_ = std::make_unique<raisim::World>();
-
-            /// environment type to be generated
-            env_type = 4;  // cylinders and boxes
 
             double hm_centerX = 0.0, hm_centerY = 0.0;
             hm_sizeX = 40., hm_sizeY = 40.;
@@ -46,26 +47,31 @@ namespace raisim
             double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
             double obstacle_height = 2;
 
-            random_seed = cfg["seed"];
+            random_seed = cfg["seed"]["evaluate"].template As<int>();
             static std::default_random_engine env_generator(random_seed);
 
             /// sample obstacle center
-            double obstacle_grid_size = cfg["obstacle_grid_size"];
+            double obstacle_grid_size = cfg["test_obstacle_grid_size"].template As<double>();
             int n_x_grid = int(hm_sizeX / obstacle_grid_size);
             int n_y_grid = int(hm_sizeY / obstacle_grid_size);
             n_obstacle = n_x_grid * n_y_grid;
 
             obstacle_centers.setZero(n_obstacle, 2);
-            double obstacle_center_distribution_type = cfg["obstacle_center_distribution_type"];
-            if (obstacle_center_distribution_type == 0)
-                std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
-            else
-                std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
+            int obstacle_center_distribution_type = cfg["test_obstacle_center_distribution_type"].template As<int>();
+            std::uniform_real_distribution<> uniform_distrib_1(0.3, obstacle_grid_size - 0.3);
+            std::uniform_real_distribution<> uniform_distrib_2(0.8, obstacle_grid_size - 0.8);
             for (int i=0; i<n_obstacle; i++) {
                 int current_n_y = int(i / n_x_grid);
                 int current_n_x = i - current_n_y * n_x_grid;
-                double sampled_x = uniform(env_generator);
-                double sampled_y = uniform(env_generator);
+                double sampled_x;
+                double sampled_y;
+                if (obstacle_center_distribution_type == 0) {
+                    sampled_x = uniform_distrib_1(env_generator);
+                    sampled_y = uniform_distrib_1(env_generator);
+                } else {
+                    sampled_x = uniform_distrib_2(env_generator);
+                    sampled_y = uniform_distrib_2(env_generator);
+                }
                 sampled_x +=  obstacle_grid_size * current_n_x;
                 sampled_x -= hm_sizeX/2;
                 sampled_y += obstacle_grid_size * current_n_y;
@@ -143,11 +149,11 @@ namespace raisim
 
             n_init_set = init_set.size();
             n_goal_set = goal_set.size();
-            int total_n_point_goal = 12;
+            int total_n_point_goal = cfg_["n_goals_per_env"].template As<int>();
 
             /// initialization for each specific task
-            point_goal_initialize = cfg["initialize"]["point_goal"].template As<bool>();
-            safe_control_initialize = cfg["initialize"]["safe_control"].template As<bool>();
+            point_goal_initialize = cfg["test_initialize"]["point_goal"].template As<bool>();
+            safe_control_initialize = cfg["test_initialize"]["safety_control"].template As<bool>();
 
             if (point_goal_initialize) {
                 /// sample goals for point goal navigation (sample equally in each frame)
@@ -203,6 +209,10 @@ namespace raisim
             anymal_ = world_->addArticulatedSystem(resourceDir_ + "/anymal_c/urdf/anymal.urdf");
             anymal_->setName("anymal");
             anymal_->setControlMode(raisim::ControlMode::PD_PLUS_FEEDFORWARD_TORQUE);
+
+            /// add box for contact checking for anymal
+            anymal_box_ = world_->addBox(1.1, 0.55, 0.2, 0.1, "default", raisim::COLLISION(2), RAISIM_STATIC_COLLISION_GROUP);
+            anymal_box_->setName("anymal_box");
 
             /// get robot data
             gcDim_ = anymal_->getGeneralizedCoordinateDim(); // 3(base position) + 4(base orientation) + 12(joint position) = 19
@@ -268,9 +278,6 @@ namespace raisim
             actionMean_ = gc_init_.tail(nJoints_);
             actionStd_.setConstant(0.3);
 
-            /// Reward coefficients
-            rewards_.initializeFromConfigurationFile(cfg["reward"]);
-
             /// indices of links that could make contact
             footIndices_.insert(anymal_->getBodyIdx("LF_SHANK"));
             footIndices_.insert(anymal_->getBodyIdx("RF_SHANK"));
@@ -304,7 +311,6 @@ namespace raisim
 
                 server_->focusOn(anymal_);
             }
-
         }
 
     void init() final {}
@@ -576,13 +582,16 @@ namespace raisim
         current_n_goal += 1;
     }
 
-    void baseline_compute_reward(std::vector<EigenRowMajorMat> sampled_command,
+    void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> sampled_command,
                                  Eigen::Ref<EigenVec> goal_Pos_local,
                                  Eigen::Ref<EigenVec> rewards_p,
                                  Eigen::Ref<EigenVec> collision_idx,
-                                 int steps, double delta_t, double must_safe_time) {
-        /////// sampled_command type is changed! If it works, should change other related codes
-        int n_sample = sampled_command.size();
+                                 int steps, double delta_t, double must_safe_time)
+    {
+        int n_sample = sampled_command.rows();
+        bool constant_command_sequence = true;
+        if (sampled_command.cols() != 3)
+            constant_command_sequence = false;
         raisim::Vec<3> future_coordinate;
         raisim::Vec<4> future_quaternion;
         Eigen::VectorXd rewards_cp;
@@ -597,20 +606,29 @@ namespace raisim
             server_->lockVisualizationServerMutex();
 
         for (int i=0; i<n_sample; i++) {
-            double local_x = 0;
-            double local_y = 0;
-            double local_yaw = 0;
+            double local_x = 0.;
+            double local_y = 0.;
+            double local_yaw = 0.;
+            double final_local_x = 0.;
+            double final_local_y = 0.;
+            bool not_collide = true;
             for (int j=0; j<steps; j++) {
-                local_yaw += sampled_command[i](j, 2) * delta_t;
-                local_x += sampled_command[i](j, 0) * delta_t * cos(local_yaw) - sampled_command[i](j, 1) * delta_t * sin(local_yaw);
-                local_y += sampled_command[i](j, 0) * delta_t * sin(local_yaw) + sampled_command[i](j, 1) * delta_t * cos(local_yaw);
-                future_coordinate[0] = local_x * cos(coordinateDouble[2]) - local_y * sin(coordinateDouble[2]) + coordinateDouble[0];
-                future_coordinate[1] = local_x * sin(coordinateDouble[2]) + local_y * cos(coordinateDouble[2]) + coordinateDouble[1];
-                future_coordinate[2] = local_yaw + coordinateDouble[2];
+                if (not_collide) {
+                    if (constant_command_sequence) {
+                        local_yaw += sampled_command(i, 2) * delta_t;
+                        local_x += sampled_command(i, 0) * delta_t * cos(local_yaw) - sampled_command(i, 1) * delta_t * sin(local_yaw);
+                        local_y += sampled_command(i, 0) * delta_t * sin(local_yaw) + sampled_command(i, 1) * delta_t * cos(local_yaw);
+                    } else {
+                        local_yaw += sampled_command(i, 3*j + 2) * delta_t;
+                        local_x += sampled_command(i, 3*j) * delta_t * cos(local_yaw) - sampled_command(i, 3*j + 1) * delta_t * sin(local_yaw);
+                        local_y += sampled_command(i, 3*j) * delta_t * sin(local_yaw) + sampled_command(i, 3*j + 1) * delta_t * cos(local_yaw);
+                    }
+                    future_coordinate[0] = local_x * cos(coordinateDouble[2]) - local_y * sin(coordinateDouble[2]) + coordinateDouble[0];
+                    future_coordinate[1] = local_x * sin(coordinateDouble[2]) + local_y * cos(coordinateDouble[2]) + coordinateDouble[1];
+                    future_coordinate[2] = local_yaw + coordinateDouble[2];
 
-                raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
+                    raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
 
-                if (j < must_safe_n_steps) {
                     anymal_box_->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
                     anymal_box_->setOrientation(future_quaternion);
 
@@ -618,10 +636,23 @@ namespace raisim
 
                     int num_anymal_future_contact = anymal_box_->getContacts().size();
                     if (num_anymal_future_contact > 0) {
-                        collision_idx_cp[i] = 1;
+                        not_collide = false;
+                        if (j < must_safe_n_steps)
+                            collision_idx_cp[i] = 1;
                     }
+
+                    if (future_coordinate[0] < -hm_sizeX / 2 || hm_sizeX / 2 < future_coordinate[0] ||
+                        future_coordinate[1] < -hm_sizeY / 2 || hm_sizeY / 2 < future_coordinate[1]) {
+                        not_collide = false;
+                        if (j < must_safe_n_steps)
+                            collision_idx_cp[i] = 1;
+                    }
+
+                    final_local_x = local_x;
+                    final_local_y = local_y;
                 }
-                double future_goal_distance = sqrt(pow(local_x - goal_Pos_local[0], 2) + pow(local_y - goal_Pos_local[1], 2));
+
+                double future_goal_distance = sqrt(pow(final_local_x - goal_Pos_local[0], 2) + pow(final_local_y - goal_Pos_local[1], 2));
                 rewards_cp[i] += current_goal_distance - future_goal_distance;
             }
         }
@@ -667,6 +698,7 @@ namespace raisim
     int gcDim_, gvDim_, nJoints_;
     bool visualizable_ = false;
     raisim::ArticulatedSystem *anymal_;
+    raisim::Box *anymal_box_;
     Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_, vTarget_;
     double terminalRewardCoeff_ = -10.;
     Eigen::VectorXd actionMean_, actionStd_, obDouble_;
@@ -717,9 +749,6 @@ namespace raisim
     int n_goal_set;
     int current_n_goal = 0;
     std::vector<int> sampled_goal_set = {};
-
-    /// environment type
-    int env_type;
 
     };
 }

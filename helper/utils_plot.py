@@ -20,7 +20,7 @@ def plot_command_result(command_traj, folder_name, task_name, run_name, n_update
     // 0: forward_vel, 1: lateral_vel, 2: yaw_rate
     """
 
-    save_folder_name = f"{folder_name}/{task_name}/{run_name}"
+    save_folder_name = f"{task_name}/{folder_name}/{run_name}"
     check_saving_folder(save_folder_name)
     x_value = np.arange(command_traj.shape[0]) * control_dt
     ylabels = ['Forward velocity [m/s]', 'Lateral velocity [m/s]', 'Yaw rate [rad/s]']

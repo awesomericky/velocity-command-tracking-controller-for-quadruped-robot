@@ -1,7 +1,160 @@
+realistic: False   # if True, consider wait_time
+plot_command: True
+
 environment:
-  seed: 0
-  obstacle_grid_size: 2.5  # 2.5 / 3.0 / 4.0
-  obstacle_center_distribution_type: 0  # 0: (0.3 ~ g.s - 0.3) / 1: (0.8 ~ g.s - 0.8)
-  initialize:
+  render: True
+  evaluate: True
+  determine_env: 0  # not used
+  num_envs: 1
+  seed:
+    train: 0   # not used
+    evaluate: 600
+  num_threads: 2
+  simulation_dt: 0.0025
+  control_dt: 0.01
+  obstacle_grid_size:  # not used
+    min: 2.5
+    max: 5.0
+  obstacle_dr:  # not used
+    min: 0.3
+    max: 0.5
+  command:
+    forward_vel:
+      min: -1.0
+      max: 1.0
+    lateral_vel:
+      min: -0.4
+      max: 0.4
+    yaw_rate:
+      min: -1.2
+      max: 1.2
+  test_obstacle_grid_size: 2.5  # 2.5 / 3.0 / 4.0
+  test_obstacle_center_distribution_type: 0  # 0: (0.3 ~ g.s - 0.3) / 1: (0.8 ~ g.s - 0.8)
+  test_initialize:
     point_goal: True
     safety_control: False
+  n_goals_per_env: 4 # 12
+  n_evaluate_envs: 2 #20
+
+command_tracking:
+  command_period: 0.5
+  architecture: [128, 128]
+
+environment_model:
+  architecture:
+    COM_encoder:
+      use_TCN: False
+      TCN:
+        input: 9
+        output: [ 32, 32, 32 ]
+        activation: leakyrelu
+        dropout: 0.2
+        time_step: 57  # 1.14 [s]
+        update_period: 0.02
+      naive:
+        input: 9   # body_orientation + vel + ang_vel
+        time_step: 10  # 0.5 [s]
+        update_period: 0.05  # [s]
+    state_encoder: # state = lidar + (encoded COM history)
+      input: 450  # COM_encoder output is included in the input  (360 + 32)
+      output: 100
+      shape: [ 256, 256, 128, 128 ]
+      activation: leakyrelu
+      dropout: 0.2
+      batchnorm: True
+    command_encoder:
+      input: 3
+      output: 64
+      shape: [ 32 ]
+      activation: leakyrelu
+      dropout: 0.2
+      batchnorm: True
+    recurrence:
+      input: 64
+      hidden: 100
+      layer: 2
+      dropout: 0.2
+    traj_predictor:
+      input: 100
+      shape: [ 64, 32, 16 ]
+      activation: leakyrelu
+      dropout: 0.2
+      batchnorm: True
+      collision:
+        output: 1
+      coordinate:
+        output: 2
+
+Naive:
+  planner:
+    prediction_period: 6.0
+    number_of_sample: 2000
+    gamma: 20
+    beta: 0.4  # 0.8  # bigger == more consider a_hat
+    sigma: 0.3
+    number_of_bin: 10
+
+CVAE:
+  planner:
+    prediction_period: 6.0
+    wo_CVAE_number_of_sample: 0 # 1000
+    CVAE_number_of_sample: 100 # 1000
+    gamma: 20
+    beta: 0.4
+    sigma: 0.3
+    number_of_bin: 10  # only used for command_sampler not using CVAE
+  architecture:
+    state_encoder: # state = encoder(lidar + COM history)
+      input: 450
+      output: 100
+      shape: [ 256, 256, 128, 128 ]
+      activation: leakyrelu
+      dropout: 0.2
+      batchnorm: True
+    command_encoder:
+      input: 3
+      output: 64
+      shape: [ 32 ]
+      activation: leakyrelu
+      dropout: 0.2
+      batchnorm: True
+    recurrence_encoder:
+      input: 64
+      hidden: 100
+      layer: 1
+      dropout: 0.0  # just available when n_layer > 1
+    latent_encoder:
+      input: 202  # 100 + 100 + 2 (goal_position)
+      output: 16  # latent dimension (model outputs 'mean' and 'log_std' each of corresponding size'
+      shape: [ 64, 32 ]
+      activation: leakyrelu
+      dropout: 0.2
+      batchnorm: True
+    latent_decoder:
+      input: 118  # 16 + 100 + 2 (goal_position)
+      shape: [ 64, 64 ]
+      output: 32
+      activation: leakyrelu
+      dropout: 0.2
+      batchnorm: True
+    recurrence_decoder:
+      input: 32  # input and hidden(output) size should be sames because recursive process happens (check other good method)
+      hidden: 32
+      layer: 1
+      dropout: 0.0  # just available when n_layer > 1
+    command_decoder:
+      input: 32
+      output: 3
+      shape: [ 32 ]
+      activation: leakyrelu
+      dropout: 0.2
+      batchnorm: True
+
+CWM:
+  planner:
+    prediction_period: 6.0
+    number_of_sample: 90
+    gamma: 20
+    beta: 0.4
+    sigma: 1.0
+    number_of_bin: 4
