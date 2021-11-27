@@ -193,6 +193,8 @@ check_saving_folder(result_save_directory)
 
 pdb.set_trace()
 
+print("<<-- Evaluating Naive -->>")
+
 for grid_size in [2.5, 3., 4.]:
     eval_start = time.time()
 
@@ -280,11 +282,11 @@ for grid_size in [2.5, 3., 4.]:
 
                 goal_reward = np.sum(delta_goal_distance, axis=0)
                 goal_reward -= np.min(goal_reward)
-                goal_reward /= np.max(goal_reward) + 1e-5  # normalize reward
+                goal_reward /= (np.max(goal_reward) + 1e-5)  # normalize reward
 
                 safety_reward = 1 - predicted_P_cols
                 safety_reward = np.mean(safety_reward, axis=0)
-                safety_reward /= np.max(safety_reward) + 1e-5  # normalize reward
+                safety_reward /= (np.max(safety_reward) + 1e-5)  # normalize reward
 
                 reward = 1.0 * goal_reward * safety_reward + 0.3 * safety_reward
 

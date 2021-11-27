@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 from ruamel.yaml import YAML, dump, RoundTripDumper
-from raisimGymTorch.env.bin import lidar_model_baseline
+from raisimGymTorch.env.bin import simul_test
 from raisimGymTorch.env.RaisimGymVecEnv import RaisimGymVecEnv as VecEnv
 from raisimGymTorch.helper.raisim_gym_helper import ConfigurationSaver, load_enviroment_model_param, UserCommand
-from raisimGymTorch.helper.utils_plot import plot_command_result
+from raisimGymTorch.helper.utils_plot import plot_command_result, check_saving_folder
 import os
 import math
 import time
@@ -14,13 +14,21 @@ import torch
 import datetime
 from collections import Counter
 import argparse
-from collections import defaultdict
 import pdb
 from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
-from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin, Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal
-from raisimGymTorch.env.envs.lidar_model.action import Zeroth_action_planner, Modified_zeroth_action_planner, Stochastic_action_planner_uniform_bin_baseline
+from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin, Stochastic_action_planner_uniform_bin_w_time_correlation, Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal
+from raisimGymTorch.env.envs.lidar_model.action import Zeroth_action_planner, Modified_zeroth_action_planner
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 import random
+import json
+from collections import defaultdict
+
+"""
+Check!!!!
+
+1. action_planner type & params
+2. collision_threshold
+"""
 
 def transform_coordinate_LW(w_init_coordinate, l_coordinate_traj):
     """
@@ -52,21 +60,36 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     l_coordinate_traj = np.matmul(l_coordinate_traj, transition_matrix.T)
     return l_coordinate_traj
 
+def compute_num_collision(collision_idx):
+    """
+    :param collision_idx: list of steps where collision occurred (list)
+    :return: num_collsiion : number of collision (int)
+
+    ex) collision_idx = [2, 3, 4, 10, 11, 15] ==> num_collision = 3
+    """
+    num_collision = 0
+    for i in range(len(collision_idx) - 1):
+        if collision_idx[i+1] - collision_idx[i] != 1:
+            num_collision += 1
+
+    if len(collision_idx) == 0:
+        num_collision = 0
+    else:
+        num_collision += 1
+
+    return num_collision
+
 random.seed(1)
 np.random.seed(1)
 torch.manual_seed(1)
 
 # task specification
-task_name = "lidar_model_baseline_CWM"
+task_name = "Simple_point_goal_nav"
 
 # configuration
 parser = argparse.ArgumentParser()
-parser.add_argument('-m', '--mode', help='set mode either train or test', type=str, default='train')
-parser.add_argument('-w', '--weight', help='pre-trained weight path', type=str, default='')
-parser.add_argument('-tw', '--tracking_weight', help='pre-trained command tracking policy weight path', type=str, default='')
+parser.add_argument('-tw', '--tracking_weight', help='trained command tracking policy weight path', type=str, required=True)
 args = parser.parse_args()
-mode = args.mode
-weight_path = args.weight
 command_tracking_weight_path = args.tracking_weight
 
 # check if gpu is available
@@ -79,41 +102,32 @@ home_path = task_path + "/../../../../.."
 # config
 cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 
+assert cfg["environment"]["test_initialize"]["point_goal"], "Change cfg[environment][test_initialize][point_goal] to True"
+assert not cfg["environment"]["test_initialize"]["safety_control"], "Change cfg[environment][test_initialize][safety_control] to False"
+
 # user command sampling
-user_command = UserCommand(cfg, cfg['environment']['num_envs'])
+user_command = UserCommand(cfg, cfg['CWM']['planner']['number_of_sample'])
 
 # create environment from the configuration file
 cfg['environment']['num_envs'] = 1
 
-try:
-    cfg['environment']['num_threads'] = cfg['environment']['test_num_threads']
-except:
-    pass
-
 # create environment from the configuration file
-env = VecEnv(lidar_model_baseline.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
+env = VecEnv(simul_test.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
 
 # shortcuts
 user_command_dim = 3
 proprioceptive_sensor_dim = 81
 lidar_dim = 360
+state_dim = cfg["environment_model"]["architecture"]["state_encoder"]["input"]
+command_period_steps = math.floor(cfg['command_tracking']['command_period'] / cfg['environment']['control_dt'])
 assert env.num_obs == proprioceptive_sensor_dim + lidar_dim, "Check configured sensor dimension"
-
-# Evaluating
-n_steps = math.floor(cfg['environment']['max_time'] / cfg['environment']['control_dt'])
-command_period_steps = math.floor(cfg['data_collection']['command_period'] / cfg['environment']['control_dt'])
-
-state_dim = cfg["architecture"]["state_encoder"]["input"]
-command_dim = cfg["architecture"]["command_encoder"]["input"]
-P_col_dim = cfg["architecture"]["traj_predictor"]["collision"]["output"]
-coordinate_dim = cfg["architecture"]["traj_predictor"]["coordinate"]["output"]   # Just predict x, y coordinate (not yaw)
 
 command_tracking_ob_dim = user_command_dim + proprioceptive_sensor_dim
 command_tracking_act_dim = env.num_acts
 
 # Load pre-trained command tracking policy weight
 assert command_tracking_weight_path != '', "Pre-trained command tracking policy weight path should be determined."
-command_tracking_policy = ppo_module.MLP(cfg['architecture']['command_tracking_policy_net'], nn.LeakyReLU,
+command_tracking_policy = ppo_module.MLP(cfg['command_tracking']['architecture'], nn.LeakyReLU,
                                          command_tracking_ob_dim, command_tracking_act_dim)
 command_tracking_policy.load_state_dict(torch.load(command_tracking_weight_path, map_location=device)['actor_architecture_state_dict'])
 command_tracking_policy.to(device)
@@ -121,254 +135,318 @@ command_tracking_weight_dir = command_tracking_weight_path.rsplit('/', 1)[0] + '
 iteration_number = command_tracking_weight_path.rsplit('/', 1)[1].split('_', 1)[1].rsplit('.', 1)[0]
 env.load_scaling(command_tracking_weight_dir, int(iteration_number))
 
+print("Loaded command tracking policy weight from {}\n".format(command_tracking_weight_path))
 
 start = time.time()
 
-# Load action planner
-n_prediction_step = int(cfg["data_collection"]["prediction_period"] / cfg["data_collection"]["command_period"])
-action_planner = Stochastic_action_planner_uniform_bin_baseline(command_range=cfg["environment"]["command"],
-                                                                 n_sample=cfg["evaluating"]["number_of_sample"],
-                                                                 n_horizon=n_prediction_step,
-                                                                 n_bin=cfg["evaluating"]["number_of_bin"],
-                                                                 beta=cfg["evaluating"]["beta"],
-                                                                 gamma=cfg["evaluating"]["gamma"],
-                                                                 action_dim=command_dim)
+# Set action planner
+n_prediction_step = int(cfg["CWM"]["planner"]["prediction_period"] / cfg['command_tracking']['command_period'])
+action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal(command_range=cfg["environment"]["command"],
+                                                                                 n_sample=cfg["CWM"]["planner"]["number_of_sample"],
+                                                                                 n_horizon=n_prediction_step,
+                                                                                 n_bin=cfg["CWM"]["planner"]["number_of_bin"],
+                                                                                 beta=cfg["CWM"]["planner"]["beta"],
+                                                                                 gamma=cfg["CWM"]["planner"]["gamma"],
+                                                                                 sigma=cfg["CWM"]["planner"]["sigma"],
+                                                                                 noise_sigma=0.1,
+                                                                                 noise=False,
+                                                                                 action_dim=user_command_dim,
+                                                                                 random_command_sampler=user_command)
 
-
-#action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal(command_range=cfg["environment"]["command"],
-#                                                                                 n_sample=cfg["evaluating"]["number_of_sample"],
-#                                                                                 n_horizon=n_prediction_step,
-#                                                                                 n_bin=cfg["evaluating"]["number_of_bin"],
-#                                                                                 beta=cfg["evaluating"]["beta"],
-#                                                                                 gamma=cfg["evaluating"]["gamma"],
-#                                                                                 sigma=cfg["evaluating"]["sigma"],
-#                                                                                 noise_sigma=0.1,
-#                                                                                 noise=False,
-#                                                                                 action_dim=command_dim,
-#                                                                                 random_command_sampler=user_command)
-
-env.initialize_n_step()
-env.reset()
-action_planner.reset()
-goal_position = env.set_goal()[np.newaxis, :]
-env.turn_on_visualization()
-# env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_" + "lidar_2d_normal_sampling" + '.mp4')
-
-# command tracking logging initialize
-command_traj = []
-
-# Initialize number of steps
-step = 0
-n_test_case = 0
-n_success_test_case = 0
-num_goals = 8
-
-goal_distance_threshold = 10
-
-total_step = 0
+assert cfg["CWM"]["planner"]["number_of_sample"] > 1
 
 # MUST safe period from collision
-MUST_safety_period = 3.  # not 2 because we want long distance planning
-MUST_safety_period_n_steps = int(MUST_safety_period / cfg['data_collection']['command_period'])
-sample_user_command = np.zeros(3)
-prev_coordinate_obs = np.zeros((1, 3))
-goal_rewards = np.zeros((cfg["evaluating"]["number_of_sample"], 1), dtype=np.float32)
-collision_idx_list = np.zeros((cfg["evaluating"]["number_of_sample"], 1), dtype=np.float32)
+MUST_safety_period = 3.0
+MUST_safety_period_n_steps = int(MUST_safety_period / cfg['command_tracking']['command_period'])
+
+# Set constant
+collision_threshold = 0.05
+goal_distance_threshold = 10
+num_goals = cfg["environment"]["n_goals_per_env"]
+init_seed = cfg["environment"]["seed"]["evaluate"]
+goal_time_limit = 180.
+
+# Extra container (Do not have to reset everytime. It will be initialized in C++)
+goal_rewards = np.zeros((cfg["CWM"]["planner"]["number_of_sample"], 1), dtype=np.float32)
+collision_idx_list = np.zeros((cfg["CWM"]["planner"]["number_of_sample"], 1), dtype=np.float32)
+
+# Make directory to save results
+result_save_directory = f"{task_name}/Result/CWM"
+check_saving_folder(result_save_directory)
+
+print("<<-- Evaluating CWM -->>")
 
 pdb.set_trace()
 
-eval_start = time.time()
+for grid_size in [2.5, 3., 4.]:
+    eval_start = time.time()
 
-local_optimum_start_time = 0
+    # Set obstacle grid size
+    cfg["environment"]["test_obstacle_grid_size"] = grid_size
 
-goal_time_limit = 180.
-goal_current_duration = 0.
-command_log = []
+    # Set empty list to log result
+    n_total_case = cfg["environment"]["n_evaluate_envs"] * num_goals
+    n_total_success_case = 0
+    list_traversal_time = []
+    list_traversal_distance = []
+    list_num_collision = []
+    list_success = []
 
-# log traversal distance
-traversal_distance = 0.
-previous_coordinate = None
-current_coordinate = None
+    for env_id in range(cfg["environment"]["n_evaluate_envs"]):
+        # Generate new environment with different seed (reset is automatically called)
+        cfg["environment"]["seed"]["evaluate"] = env_id * 10 + init_seed
+        env = VecEnv(simul_test.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
+        env.load_scaling(command_tracking_weight_dir, int(iteration_number))
 
-while n_test_case < num_goals:
-
-    frame_start = time.time()
-    new_action_time = step % command_period_steps == 0
-
-    obs, _ = env.observe(False)  # observation before taking step
-
-    init_coordinate_obs = env.coordinate_observe()
-
-    if new_action_time:
-        action_candidates = action_planner.sample()
-        action_candidates = action_candidates.astype(np.float32)
-
-        # log traversal distance (just env 0)
-        previous_coordinate = current_coordinate
-        current_coordinate = env.coordinate_observe()
-        if previous_coordinate is not None:
-            delta_coordinate = current_coordinate[0, :-1] - previous_coordinate[0, :-1]
-            traversal_distance += (delta_coordinate[0] ** 2 + delta_coordinate[1] ** 2) ** 0.5
-
-        # # predict trajectory
-        # n_sample = action_candidates.shape[0]
-        # n_prediction = 12
-        # delta_t = 0.5
-        # future_position = np.zeros((n_sample, n_prediction + 1, 2))
-        # for i in range(action_candidates.shape[0]):
-        #     local_yaw = 0
-        #     local_x = 0
-        #     local_y = 0
-        #     vel_x, vel_y, vel_yaw = action_candidates[i, :]
-        #     for j in range(n_prediction):
-        #         local_yaw += vel_yaw * delta_t
-        #         local_x += vel_x * delta_t * np.cos(local_yaw) - vel_y * delta_t * np.sin(local_yaw)
-        #         local_y += vel_x * delta_t * np.sin(local_yaw) + vel_y * delta_t * np.cos(local_yaw)
-        #         future_position[i, j+1, 0] = local_x
-        #         future_position[i, j+1, 1] = local_y
-        #
-        # # plot predicted trajectory
-        # n_sample, traj_len, coor_dim = future_position.shape
-        # for i in range(n_sample):
-        #     plt.plot(future_position[i, :, 0], future_position[i, :, 1])
-        # plt.savefig("sampled_traj (baseline).png")
-        # plt.clf()
-        # pdb.set_trace()
-
-
-
-        # compute reward (goal reward + safety reward)
-        goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
-        current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
-        if current_goal_distance > goal_distance_threshold:
-            goal_position_L *= (goal_distance_threshold / current_goal_distance)
-
-        ##### Needed check
-        # reward_compute_start = time.time()
-        goal_rewards, collision_idx_list = env.baseline_compute_reward(action_candidates, np.swapaxes(goal_position_L, 0, 1), goal_rewards, collision_idx_list,
-                                                                       n_prediction_step, cfg["data_collection"]["command_period"], MUST_safety_period)
-        # reward_compute_end = time.time()
-        coll_idx = np.where(collision_idx_list == 1)[0]
-        if cfg["evaluating"]["number_of_sample"] > 1:
-            goal_rewards -= np.min(goal_rewards)
-            goal_rewards /= np.max(goal_rewards) + 1e-5
-        else:
-            command_difference_rewards = 0
-
-        # action_size = np.sqrt((action_candidates[:, 0] / 1) ** 2 + (action_candidates[:, 1] / 0.4) ** 2 + (action_candidates[:, 2] / 1.2) ** 2)
-        # action_size /= np.max(action_size)
-
-        # reward = 1.2 * np.squeeze(goal_rewards, -1) + 0.1 * action_size
-        reward = 1. * np.squeeze(goal_rewards, -1)
-
-        if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
-            reward[coll_idx] = 0  # exclude trajectory that collides with obstacle
-
-        sample_user_command = action_planner.action(reward)
-
-        # # reset action planner if stuck in local optimum
-        # current_pos_change = np.sqrt(np.sum(np.power(init_coordinate_obs[0, :2] - prev_coordinate_obs[0, :2], 2)))
-        # if current_pos_change < 0.005:  # 0.1 [m / s]
-        #     if local_optimum_start_time == 0.0:
-        #         local_optimum_start_time = time.time()
-        #     action_planner.reset()
-
-        prev_coordinate_obs = init_coordinate_obs.copy()
-
-    command_log.append(sample_user_command.copy())
-    tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
-    tracking_obs = env.force_normalize_observation(tracking_obs, type=1)
-    tracking_obs = tracking_obs.astype(np.float32)
-
-    with torch.no_grad():
-        tracking_action = command_tracking_policy.architecture(torch.from_numpy(tracking_obs).to(device))
-
-    _, done = env.step(tracking_action.cpu().detach().numpy())
-
-    step += 1
-
-    # Command logging
-    command_traj.append(sample_user_command)
-
-    frame_end = time.time()
-
-    # # (2000 sample, 10 bin ==> 0.008 sec)
-    # print(frame_end - frame_start)
-    # if new_action_time:
-    #     time_check.append(frame_end - frame_start)
-    #     if len(time_check) == 500:
-    #         time_check = np.array(time_check)
-    #         print(f"Mean: {np.mean(time_check[50:])}")
-    #         print(f"Std: {np.std(time_check[50:])}")
-    #         pdb.set_trace()
-
-    # if new_action_time:
-    #     print(frame_end - frame_start)
-
-    wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
-
-    if wait_time > 0.:
-        time.sleep(wait_time)
-
-    if wait_time > 0.:
-        goal_current_duration += cfg['environment']['control_dt']
-    else:
-        goal_current_duration += (frame_end - frame_start)
-
-    total_step += 1
-
-    if goal_current_duration > goal_time_limit:
-        done[0] = True
-
-    # fail
-    if done[0] == True:
-        env.reset()
+        # Reset
+        env.initialize_n_step()
         action_planner.reset()
         goal_position = env.set_goal()[np.newaxis, :]
-        n_test_case += 1
-        step = 0
-        command_traj = []
-        sample_user_command = np.zeros(3)
-        goal_current_duration = 0.
-        print(f"Intermediate result : {n_success_test_case} / {n_test_case}")
-        total_step = 0
-        traversal_distance = 0.
-        previous_coordinate = None
-        current_coordinate = None
-    # success
-    elif current_goal_distance < 0.5:
-        env.reset()
-        # plot command trajectory
-        command_traj = np.array(command_traj)
-        # reset action planner and set new goal
-        action_planner.reset()
-        goal_position = env.set_goal()[np.newaxis, :]
-        n_test_case += 1
-        step = 0
-        command_traj = []
-        sample_user_command = np.zeros(3)
-        n_success_test_case += 1
-        goal_current_duration = 0.
-        print(f"Intermediate result : {n_success_test_case} / {n_test_case} || Total step: {total_step} || Traversal distance: {traversal_distance}")
-        total_step = 0
-        traversal_distance = 0.
-        previous_coordinate = None
-        current_coordinate = None
+        env.turn_on_visualization()
 
-        plot_command_result(command_traj=np.array(command_log),
-                            folder_name="command_trajectory",
-                            task_name=task_name,
-                            run_name="baseline",
-                            n_update=n_test_case,
-                            control_dt=cfg["environment"]["control_dt"])
+        # Initialize
+        step = 0
+        n_test_case = 0
+        n_success_test_case = 0
+        sample_user_command = np.zeros(3)
+        goal_current_duration = 0.
         command_log = []
+        collision_idx = []
+        traversal_distance = 0.
+        previous_coordinate = None
+        current_coordinate = None
 
-eval_end = time.time()
+        while n_test_case < num_goals:
+            frame_start = time.time()
 
-print("===========================================")
-print(f"Result : {n_success_test_case} / {num_goals}")
-print(f"Time: {eval_end - eval_start}")
-print("===========================================")
+            new_action_time = step % command_period_steps == 0
+
+            # log traversal distance (just env 0)
+            previous_coordinate = current_coordinate
+            current_coordinate = env.coordinate_observe()
+            if previous_coordinate is not None:
+                delta_coordinate = current_coordinate[0, :-1] - previous_coordinate[0, :-1]
+                traversal_distance += (delta_coordinate[0] ** 2 + delta_coordinate[1] ** 2) ** 0.5
+
+            # observation before taking step
+            obs, _ = env.observe(False)
+
+            if new_action_time:
+                # sample command sequences
+                action_candidates = action_planner.sample()
+                action_candidates = np.reshape(action_candidates, (action_candidates.shape[0], -1))
+                action_candidates = action_candidates.astype(np.float32)
+
+                # prepare state
+                init_coordinate_obs = env.coordinate_observe()
+
+                # compute reward (goal reward)
+                goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
+                current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
+                goal_position_L *= np.clip(goal_distance_threshold / current_goal_distance, a_min=None, a_max=1.)
+                current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
+
+                goal_rewards, collision_idx_list = env.baseline_compute_reward(action_candidates, np.swapaxes(goal_position_L, 0, 1), goal_rewards, collision_idx_list,
+                                                                               n_prediction_step, cfg['command_tracking']['command_period'], MUST_safety_period)
+
+                # reward_compute_end = time.time()
+                coll_idx = np.where(collision_idx_list == 1)[0]
+                goal_rewards -= np.min(goal_rewards)
+                goal_rewards /= (np.max(goal_rewards) + 1e-5)
+
+                reward = 1.0 * np.squeeze(goal_rewards, -1)
+
+                # exclude trajectory that collides with obstacle
+                if len(coll_idx) != cfg["CWM"]["planner"]["number_of_sample"]:
+                    reward[coll_idx] = 0  # exclude trajectory that collides with obstacle
+
+                # optimize command sequence
+                cand_sample_user_command, sample_user_command_traj = action_planner.action(reward)
+                sample_user_command = cand_sample_user_command.copy()
+
+                # # plot predicted trajectory
+                # traj_len, n_sample, coor_dim = predicted_coordinates.shape
+                # for j in range(n_sample):
+                #     plt.plot(predicted_coordinates[:, j, 0], predicted_coordinates[:, j, 1])
+                # plt.savefig("sampled_traj (ours).png")
+                # plt.clf()
+                # pdb.set_trace()
+
+            # Execute first command in optimized command sequence using command tracking controller
+            tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
+            tracking_obs = env.force_normalize_observation(tracking_obs, type=1)
+            tracking_obs = tracking_obs.astype(np.float32)
+
+            with torch.no_grad():
+                tracking_action = command_tracking_policy.architecture(torch.from_numpy(tracking_obs).to(device))
+
+            _, done = env.step(tracking_action.cpu().detach().numpy())
+
+            # Check collision
+            collision = env.single_env_collision_check()
+            if collision:
+                collision_idx.append(step)
+
+            # Update progress
+            command_log.append(sample_user_command)
+            step += 1
+            goal_current_duration += cfg['environment']['control_dt']
+
+            frame_end = time.time()
+
+            # # # (2000 sample, 10 bin ==> 0.008 sec)
+            # print(frame_end - frame_start)
+            # if new_action_time:
+            #     time_check.append(frame_end - frame_start)
+            #     if len(time_check) == 500:
+            #         time_check = np.array(time_check)
+            #         print(f"Mean: {np.mean(time_check[50:])}")
+            #         print(f"Std: {np.std(time_check[50:])}")
+            #         pdb.set_trace()
+
+            # if new_action_time:
+            #    print(frame_end - frame_start)
+
+            if cfg["realistic"]:
+                wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
+                if wait_time > 0.:
+                    time.sleep(wait_time)
+
+            if goal_current_duration > goal_time_limit:
+                done[0] = True
+
+            # fail
+            if done[0] == True:
+                # Reset
+                env.initialize_n_step()   # keep start in different initial condiition
+                env.reset()
+                action_planner.reset()
+                goal_position = env.set_goal()[np.newaxis, :]
+
+                # Update
+                n_test_case += 1
+                num_collision = compute_num_collision(collision_idx)
+                # print(f"Intermediate result : {n_success_test_case} / {n_test_case} || Collision: {num_collision}")
+
+                # Save result
+                list_num_collision.append(num_collision)
+                list_success.append(False)
+
+                # Initialize
+                step = 0
+                sample_user_command = np.zeros(3)
+                goal_current_duration = 0.
+                command_log = []
+                collision_idx = []
+                traversal_distance = 0.
+                previous_coordinate = None
+                current_coordinate = None
+            # success
+            elif current_goal_distance < 0.5:
+                # Reset
+                env.initialize_n_step()  # keep start in different initial condiition
+                env.reset()
+                action_planner.reset()
+                goal_position = env.set_goal()[np.newaxis, :]
+
+                # Update
+                n_test_case += 1
+                n_success_test_case += 1
+                num_collision = compute_num_collision(collision_idx)
+                # print(f"Intermediate result : {n_success_test_case} / {n_test_case} || Collision: {num_collision} || Number of steps: {step} || Traversal distance: {traversal_distance}")
+
+                # Save result
+                list_traversal_time.append(step * cfg['environment']['control_dt'])
+                list_traversal_distance.append(traversal_distance)
+                list_num_collision.append(num_collision)
+                list_success.append(True)
+
+                # Plot command
+                if cfg["plot_command"]:
+                    plot_command_result(command_traj=np.array(command_log),
+                                        folder_name="command_trajectory",
+                                        task_name=task_name,
+                                        run_name=f"CWM_{str(grid_size)}",
+                                        n_update=n_test_case + num_goals * env_id,
+                                        control_dt=cfg["environment"]["control_dt"])
+
+                # Initialize
+                step = 0
+                sample_user_command = np.zeros(3)
+                goal_current_duration = 0.
+                command_log = []
+                collision_idx = []
+                traversal_distance = 0.
+                current_coordinate = None
+                previous_coordinate = None
+
+        n_total_success_case += n_success_test_case
+
+    assert len(list_traversal_time) == n_total_success_case
+    assert len(list_traversal_distance) == n_total_success_case
+    assert len(list_num_collision) == n_total_case
+    assert len(list_success) == n_total_case
+
+    success_rate = n_total_success_case / n_total_case
+    list_traversal_time = np.array(list_traversal_time)
+    list_traversal_distance = np.array(list_traversal_distance)
+    list_num_collision = np.array(list_num_collision)
+    list_success = np.array(list_success)
+
+    # Compute statistical indicators
+    quantile_percent = [25, 50, 75]
+    traversal_time_quantile = np.percentile(list_traversal_time, quantile_percent)
+    traversal_time_mean = np.mean(list_traversal_time)
+    traversal_time_std = np.std(list_traversal_time)
+    traversal_distance_quantile = np.percentile(list_traversal_distance, quantile_percent)
+    traversal_distance_mean = np.mean(list_traversal_distance)
+    traversal_distance_std = np.std(list_traversal_distance)
+    num_collision_quantile = np.percentile(list_num_collision, quantile_percent)
+    num_collision_mean = np.mean(list_num_collision)
+    num_collision_std = np.std(list_num_collision)
+
+    # Save summarized result
+    final_result = defaultdict(dict)
+    final_result["SR"]["ratio"] = success_rate
+    final_result["SR"]["n_success"] = n_total_success_case
+    final_result["SR"]["n_total"] = n_total_case
+    final_result["Time"]["mean"] = traversal_time_mean
+    final_result["Time"]["std"] = traversal_time_std
+    final_result["Time"]["q1"] = traversal_time_quantile[0]
+    final_result["Time"]["q2"] = traversal_time_quantile[1]
+    final_result["Time"]["q3"] = traversal_time_quantile[2]
+    final_result["Distance"]["mean"] = traversal_distance_mean
+    final_result["Distance"]["std"] = traversal_distance_std
+    final_result["Distance"]["q1"] = traversal_distance_quantile[0]
+    final_result["Distance"]["q2"] = traversal_distance_quantile[1]
+    final_result["Distance"]["q3"] = traversal_distance_quantile[2]
+    final_result["Num_collision"]["mean"] = num_collision_mean
+    final_result["Num_collision"]["std"] = num_collision_std
+    final_result["Num_collision"]["q1"] = num_collision_quantile[0]
+    final_result["Num_collision"]["q2"] = num_collision_quantile[1]
+    final_result["Num_collision"]["q3"] = num_collision_quantile[2]
+    with open(f"{result_save_directory}/{str(grid_size)}_grid_result.json", "w") as f:
+        json.dump(final_result, f)
+
+    # Save raw result
+    np.savez_compressed(f"{result_save_directory}/{str(grid_size)}_grid_result", time=list_traversal_time,
+                        distance=list_traversal_distance, num_collision=list_num_collision,
+                        success=list_success)
+
+    eval_end = time.time()
+
+    elapse_time_seconds = eval_end - eval_start
+    elaspe_time_minutes = int(elapse_time_seconds / 60)
+    elapse_time_seconds -= (elaspe_time_minutes * 60)
+    elapse_time_seconds = int(elapse_time_seconds)
+
+    print("===========================================")
+    print(f"Grid_{str(grid_size)}:")
+    print(f"SR: {n_total_success_case} / {n_total_case}")
+    print(f"Time: {round(traversal_time_mean, 1)}  [{round(traversal_time_quantile[0], 1)} / {round(traversal_time_quantile[1], 1)} / {round(traversal_time_quantile[2], 1)}]")
+    print(f"Distance: {round(traversal_distance_mean, 1)}  [{round(traversal_distance_quantile[0], 1)} / {round(traversal_distance_quantile[1], 1)} / {round(traversal_distance_quantile[2], 1)}]")
+    print(f"Num_collision: {round(num_collision_mean, 1)}  [{round(num_collision_quantile[0], 1)} / {round(num_collision_quantile[1], 1)} / {round(num_collision_quantile[2], 1)}]")
+    print(f"Elapsed time: {elaspe_time_minutes}m {elapse_time_seconds}s")
 
 # env.stop_video_recording()
 env.turn_off_visualization()

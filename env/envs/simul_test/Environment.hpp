@@ -141,7 +141,7 @@ namespace raisim
                         init_set.push_back({x, y});
 
                         // For goal point distance condition, should also consider the "hm_size" because there should be enough goals in all four squares for evaluating in point_goal_initialize
-                        if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
+                        if (sqrt(pow(x, 2) + pow(y, 2)) > 15)
                             goal_set.push_back({x, y});
                     }
                 }
