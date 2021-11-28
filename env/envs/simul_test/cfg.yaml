@@ -1,5 +1,6 @@
 realistic: False   # if True, consider wait_time
 plot_command: True
+logging: True   # wandb
 
 environment:
   render: True
@@ -8,8 +9,9 @@ environment:
   num_envs: 1
   seed:
     train: 0   # not used
+    validate: 300 
     evaluate: 600
-  num_threads: 2
+  num_threads: 12
   simulation_dt: 0.0025
   control_dt: 0.01
   obstacle_grid_size:  # not used
@@ -29,7 +31,7 @@ environment:
       min: -1.2
       max: 1.2
   test_obstacle_grid_size: 2.5  # 2.5 / 3.0 / 4.0
-  test_obstacle_center_distribution_type: 0  # 0: (0.3 ~ g.s - 0.3) / 1: (0.8 ~ g.s - 0.8)
+  test_obstacle_center_distribution_type: 2  # 0: (0.3 ~ g.s - 0.3) / 1: (0.8 ~ g.s - 0.8) / 2: (0.55 ~ g.s - 0.55)
   test_initialize:
     point_goal: True
     safety_control: False
@@ -158,3 +160,12 @@ CWM:
     beta: 0.4
     sigma: 0.3
     number_of_bin: 4
+
+Oracle:
+  planner:
+    prediction_period: 6.0
+    number_of_sample: 2000
+    gamma: 20
+    beta: 0.4
+    sigma: 0.3
+    number_of_bin: 10

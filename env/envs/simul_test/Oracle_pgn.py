@@ -110,7 +110,7 @@ assert cfg["environment"]["test_initialize"]["point_goal"], "Change cfg[environm
 assert not cfg["environment"]["test_initialize"]["safety_control"], "Change cfg[environment][test_initialize][safety_control] to False"
 
 # user command sampling
-user_command = UserCommand(cfg, cfg['CWM']['planner']['number_of_sample'])
+user_command = UserCommand(cfg, cfg['Oracle']['planner']['number_of_sample'])
 
 # create environment from the configuration file
 cfg['environment']['num_envs'] = 1
@@ -144,20 +144,20 @@ print("Loaded command tracking policy weight from {}\n".format(command_tracking_
 start = time.time()
 
 # Set action planner
-n_prediction_step = int(cfg["CWM"]["planner"]["prediction_period"] / cfg['command_tracking']['command_period'])
+n_prediction_step = int(cfg["Oracle"]["planner"]["prediction_period"] / cfg['command_tracking']['command_period'])
 action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal(command_range=cfg["environment"]["command"],
-                                                                                 n_sample=cfg["CWM"]["planner"]["number_of_sample"],
+                                                                                 n_sample=cfg["Oracle"]["planner"]["number_of_sample"],
                                                                                  n_horizon=n_prediction_step,
-                                                                                 n_bin=cfg["CWM"]["planner"]["number_of_bin"],
-                                                                                 beta=cfg["CWM"]["planner"]["beta"],
-                                                                                 gamma=cfg["CWM"]["planner"]["gamma"],
-                                                                                 sigma=cfg["CWM"]["planner"]["sigma"],
+                                                                                 n_bin=cfg["Oracle"]["planner"]["number_of_bin"],
+                                                                                 beta=cfg["Oracle"]["planner"]["beta"],
+                                                                                 gamma=cfg["Oracle"]["planner"]["gamma"],
+                                                                                 sigma=cfg["Oracle"]["planner"]["sigma"],
                                                                                  noise_sigma=0.1,
                                                                                  noise=False,
                                                                                  action_dim=user_command_dim,
                                                                                  random_command_sampler=user_command)
 
-assert cfg["CWM"]["planner"]["number_of_sample"] > 1
+assert cfg["Oracle"]["planner"]["number_of_sample"] > 1
 
 # MUST safe period from collision
 MUST_safety_period = 3.0
@@ -176,24 +176,24 @@ else:
 goal_time_limit = 180.
 
 # Extra container (Do not have to reset everytime. It will be initialized in C++)
-goal_rewards = np.zeros((cfg["CWM"]["planner"]["number_of_sample"], 1), dtype=np.float32)
-collision_idx_list = np.zeros((cfg["CWM"]["planner"]["number_of_sample"], 1), dtype=np.float32)
+goal_rewards = np.zeros((cfg["Oracle"]["planner"]["number_of_sample"], 1), dtype=np.float32)
+collision_idx_list = np.zeros((cfg["Oracle"]["planner"]["number_of_sample"], 1), dtype=np.float32)
 
 # Make directory to save results
-result_save_directory = f"{task_name}/Result/CWM"
+result_save_directory = f"{task_name}/Result/Oracle"
 check_saving_folder(result_save_directory)
 
 # Backup files
-items_to_save = ["/cfg.yaml", "/CWM_pgn.py"]
+items_to_save = ["/cfg.yaml", "/Oracle_pgn.py"]
 for item_to_save in items_to_save:
     save_location = task_path + "/../../../../" + result_save_directory + item_to_save
     copyfile(task_path + item_to_save, save_location)
 
 # Set wandb logger
 if cfg["logging"]:
-    wandb.init(name="CWM_"+task_name, project="Quadruped_RL")
+    wandb.init(name="Oracle_"+task_name, project="Quadruped_RL")
 
-print("<<-- Evaluating CWM -->>")
+print("<<-- Evaluating Oracle -->>")
 
 pdb.set_trace()
 
@@ -276,7 +276,7 @@ for grid_size in [2.5, 3., 4.]:
                 reward = 1.0 * np.squeeze(goal_rewards, -1)
 
                 # exclude trajectory that collides with obstacle
-                if len(coll_idx) != cfg["CWM"]["planner"]["number_of_sample"]:
+                if len(coll_idx) != cfg["Oracle"]["planner"]["number_of_sample"]:
                     reward[coll_idx] = 0  # exclude trajectory that collides with obstacle
 
                 # optimize command sequence
@@ -385,7 +385,7 @@ for grid_size in [2.5, 3., 4.]:
                     plot_command_result(command_traj=np.array(command_log),
                                         folder_name="command_trajectory",
                                         task_name=task_name,
-                                        run_name=f"CWM_{str(grid_size)}",
+                                        run_name=f"Oracle_{str(grid_size)}",
                                         n_update=n_test_case + num_goals * env_id,
                                         control_dt=cfg["environment"]["control_dt"])
 

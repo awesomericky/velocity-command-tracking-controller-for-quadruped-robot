@@ -60,6 +60,7 @@ namespace raisim
             int obstacle_center_distribution_type = cfg["test_obstacle_center_distribution_type"].template As<int>();
             std::uniform_real_distribution<> uniform_distrib_1(0.3, obstacle_grid_size - 0.3);
             std::uniform_real_distribution<> uniform_distrib_2(0.8, obstacle_grid_size - 0.8);
+            std::uniform_real_distribution<> uniform_distrib_3(0.55, obstacle_grid_size - 0.55);
             for (int i=0; i<n_obstacle; i++) {
                 int current_n_y = int(i / n_x_grid);
                 int current_n_x = i - current_n_y * n_x_grid;
@@ -68,10 +69,16 @@ namespace raisim
                 if (obstacle_center_distribution_type == 0) {
                     sampled_x = uniform_distrib_1(env_generator);
                     sampled_y = uniform_distrib_1(env_generator);
-                } else {
+                } 
+		else if (obstacle_center_distribution_type == 1) {
                     sampled_x = uniform_distrib_2(env_generator);
                     sampled_y = uniform_distrib_2(env_generator);
                 }
+		else {
+		    sampled_x = uniform_distrib_3(env_generator);
+		    sampled_y = uniform_distrib_3(env_generator);
+		}
+
                 sampled_x +=  obstacle_grid_size * current_n_x;
                 sampled_x -= hm_sizeX/2;
                 sampled_y += obstacle_grid_size * current_n_y;

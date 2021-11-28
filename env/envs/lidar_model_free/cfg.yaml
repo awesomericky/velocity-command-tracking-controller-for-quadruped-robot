@@ -17,8 +17,8 @@ environment:
   test_num_threads: 2
   simulation_dt: 0.0025
   control_dt: 0.01
-  max_time: 10.0
-  command_period: 0.5
+  max_time: 6.0
+  command_period: 0.02
   obstacle_grid_size:
     min: 2.5
     max: 5.0
@@ -28,7 +28,7 @@ environment:
   n_rewards: 4
   reward:
     goal_distance:  # (+)
-      coeff: 5.0
+      coeff: 10.0
     traversal_distance:  # (-)
       coeff: 0.0
     goal_terminate:  # (+)
@@ -51,10 +51,10 @@ environment:
   point_goal_initialize: False  # used for evaluating
 
 training:
-  learning_rate: 3e-4
+  learning_rate: 5e-4
   num_learning_epochs: 4
-  num_mini_batches: 4
-  gamma: 0.9988
+  num_mini_batches: 6
+  gamma: 0.997
   lamda: 0.95
   entropy_coef: 0.0
   shuffle_batch: True
@@ -68,6 +68,6 @@ architecture:
     activation: leakyrelu
     dropout: 0.2
     batchnorm: True
-  policy_net: [128, 128]
-  value_net: [128, 128]
+  policy_net: [256, 128]
+  value_net: [256, 128]
   command_tracking_policy_net: [128, 128]

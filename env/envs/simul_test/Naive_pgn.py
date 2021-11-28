@@ -22,6 +22,8 @@ from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 import random
 import json
 from collections import defaultdict
+import wandb
+from shutil import copyfile
 
 """
 Check!!!!
@@ -88,9 +90,11 @@ task_name = "Simple_point_goal_nav"
 
 # configuration
 parser = argparse.ArgumentParser()
+parser.add_argument('-v', '--validate', help='validation or test', type=bool, default=False)
 parser.add_argument('-w', '--weight', help='trained environment model weight path', type=str, required=True)
 parser.add_argument('-tw', '--tracking_weight', help='trained command tracking policy weight path', type=str, required=True)
 args = parser.parse_args()
+validation = args.validate
 weight_path = args.weight
 command_tracking_weight_path = args.tracking_weight
 
@@ -184,12 +188,27 @@ MUST_safety_period_n_steps = int(MUST_safety_period / cfg['command_tracking']['c
 collision_threshold = 0.05
 goal_distance_threshold = 10
 num_goals = cfg["environment"]["n_goals_per_env"]
-init_seed = cfg["environment"]["seed"]["evaluate"]
+if validation:
+    init_seed = cfg["environment"]["seed"]["validate"]
+    print("Validating ...")
+else:
+    init_seed = cfg["environment"]["seed"]["evaluate"]
+    print("Evaluating ...")
 goal_time_limit = 180.
 
 # Make directory to save results
 result_save_directory = f"{task_name}/Result/Naive"
 check_saving_folder(result_save_directory)
+
+# Backup files
+items_to_save = ["/cfg.yaml", "/Naive_pgn.py"]
+for item_to_save in items_to_save:
+    save_location = task_path + "/../../../../" + result_save_directory + item_to_save
+    copyfile(task_path + item_to_save, save_location)
+
+# Set wandb logger
+if cfg["logging"]:
+    wandb.init(name="Naive_"+task_name, project="Quadruped_RL")
 
 pdb.set_trace()
 
@@ -477,6 +496,8 @@ for grid_size in [2.5, 3., 4.]:
     final_result["Num_collision"]["q3"] = num_collision_quantile[2]
     with open(f"{result_save_directory}/{str(grid_size)}_grid_result.json", "w") as f:
         json.dump(final_result, f)
+
+    wandb.log(final_result)
 
     # Save raw result
     np.savez_compressed(f"{result_save_directory}/{str(grid_size)}_grid_result", time=list_traversal_time,
