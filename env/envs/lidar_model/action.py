@@ -688,6 +688,7 @@ class Stochastic_action_planner_w_CVAE:
         wo_cvae_sampled_command_traj = self.wo_cvae_sampler.sample()
         wo_cvae_sampled_command_traj = np.swapaxes(wo_cvae_sampled_command_traj, 0, 1)
         cvae_sampled_command_traj = self.w_cvae_sampler(observation, goal_position, self.w_cvae_n_sample, self.n_prediction_step, return_torch=False)
+        cvae_sampled_command_traj = cvae_sampled_command_traj * (1 - self.wo_cvae_sampler.beta) + self.wo_cvae_sampler.a_hat[:, np.newaxis, :] * self.wo_cvae_sampler.beta
         self.sampled_command_traj = np.concatenate((wo_cvae_sampled_command_traj, cvae_sampled_command_traj), axis=1)
         return self.sampled_command_traj.astype(np.float32).copy()
 
