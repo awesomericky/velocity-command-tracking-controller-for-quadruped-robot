@@ -278,6 +278,7 @@ for grid_size in [2.5, 3., 4.]:
 
         while n_test_case < num_goals:
             frame_start = time.time()
+            control_start = time.time()
 
             new_action_time = step % command_period_steps == 0
 
@@ -329,6 +330,7 @@ for grid_size in [2.5, 3., 4.]:
                 safety_reward /= (np.max(safety_reward) + 1e-5)  # normalize reward
 
                 reward = 1.0 * goal_reward * safety_reward + 0.3 * safety_reward
+                # reward = 1.0 * goal_reward * safety_reward
 
                 # exclude trajectory that collides with obstacle
                 coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
@@ -367,6 +369,8 @@ for grid_size in [2.5, 3., 4.]:
 
             with torch.no_grad():
                 tracking_action = command_tracking_policy.architecture(torch.from_numpy(tracking_obs).to(device))
+            
+            control_end = time.time()
 
             _, done = env.step(tracking_action.cpu().detach().numpy())
 
@@ -393,7 +397,7 @@ for grid_size in [2.5, 3., 4.]:
             #         pdb.set_trace()
 
             # if new_action_time:
-            #    print(frame_end - frame_start)
+            #    print(control_end - control_start)
 
             if cfg["realistic"]:
                 wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)

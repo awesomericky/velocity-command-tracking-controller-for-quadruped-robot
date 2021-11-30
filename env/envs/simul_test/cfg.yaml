@@ -11,7 +11,7 @@ environment:
     train: 0   # not used
     validate: 300 
     evaluate: 600
-  num_threads: 2 #12
+  num_threads: 3 #12
   simulation_dt: 0.0025
   control_dt: 0.01
   obstacle_grid_size:  # not used
@@ -31,12 +31,12 @@ environment:
       min: -1.2
       max: 1.2
   test_obstacle_grid_size: 2.5  # 2.5 / 3.0 / 4.0
-  test_obstacle_center_distribution_type: 2  # 0: (0.3 ~ g.s - 0.3) / 1: (0.8 ~ g.s - 0.8) / 2: (0.55 ~ g.s - 0.55)
+  test_obstacle_center_distribution_type: 3  # 0: (0.3 ~ g.s - 0.3) / 1: (0.8 ~ g.s - 0.8) / 2: (0.55 ~ g.s - 0.55) / 3: (1.0 ~ g.s. - 1.0)
   test_initialize:
     point_goal: True
     safety_control: False
   n_goals_per_env: 12
-  n_evaluate_envs: 30
+  n_evaluate_envs: 60
 
 command_tracking:
   command_period: 0.5
@@ -90,7 +90,7 @@ environment_model:
 Naive:
   planner:
     prediction_period: 6.0
-    number_of_sample: 2000
+    number_of_sample: 1000
     gamma: 20
     beta: 0.4  # 0.8  # bigger == more consider a_hat
     sigma: 0.3
@@ -99,9 +99,9 @@ Naive:
 CVAE:
   planner:
     prediction_period: 6.0
-    wo_CVAE_number_of_sample: 0 # 1000
-    CVAE_number_of_sample: 100 # 1000
-    gamma: 10
+    wo_CVAE_number_of_sample: 125 #125
+    CVAE_number_of_sample: 100
+    gamma: 20
     beta: 0.4
     sigma: 0.3
     number_of_bin: 5  # only used for command_sampler not using CVAE
@@ -155,7 +155,7 @@ CVAE:
 CWM:
   planner:
     prediction_period: 6.0
-    number_of_sample: 90
+    number_of_sample: 64
     gamma: 20
     beta: 0.4
     sigma: 0.3
