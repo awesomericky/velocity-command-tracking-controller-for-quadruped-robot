@@ -11,7 +11,7 @@ environment:
     train: 0   # not used
     validate: 300 
     evaluate: 600
-  num_threads: 3 #12
+  num_threads: 2 #12
   simulation_dt: 0.0025
   control_dt: 0.01
   obstacle_grid_size:  # not used
@@ -90,11 +90,11 @@ environment_model:
 Naive:
   planner:
     prediction_period: 6.0
-    number_of_sample: 1000
+    number_of_sample: 64
     gamma: 20
     beta: 0.4  # 0.8  # bigger == more consider a_hat
     sigma: 0.3
-    number_of_bin: 10
+    number_of_bin: 4
 
 CVAE:
   planner:

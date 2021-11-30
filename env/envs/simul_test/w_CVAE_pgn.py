@@ -252,6 +252,9 @@ for grid_size in [2.5, 3., 4.]:
     list_num_collision = []
     list_success = []
 
+    w_cvae_optimal = 0
+    wo_cvae_optimal = 0
+
     for env_id in range(cfg["environment"]["n_evaluate_envs"]):
         # Generate new environment with different seed (reset is automatically called)
         cfg["environment"]["seed"]["evaluate"] = env_id * 10 + init_seed
@@ -365,11 +368,15 @@ for grid_size in [2.5, 3., 4.]:
 
                 # select higher reward trajectory
                 if reward[0] >= reward[1]:
+                    # wo_cvae more optimal
                     sample_user_command = wo_cvae_optimized_command_traj[0]
                     sample_user_command_traj = wo_cvae_optimized_command_traj
+                    wo_cvae_optimal += 1
                 else:
+                    # w_cvae more optimal
                     sample_user_command = wo_cvae_optimized_command_traj[0]
                     sample_user_command_traj = w_cvae_optimized_command_traj
+                    w_cvae_optimal += 1
                 action_planner.set_optimized_result(sample_user_command_traj)
 
                 # # plot predicted trajectory
@@ -532,6 +539,7 @@ for grid_size in [2.5, 3., 4.]:
 
     # Save summarized result
     final_result = defaultdict(dict)
+    final_result["CVAE optimal"]["ratio"] = w_cvae_optimal / (w_cvae_optimal + wo_cvae_optimal)
     final_result["SR"]["ratio"] = success_rate
     final_result["SR"]["n_success"] = n_total_success_case
     final_result["SR"]["n_total"] = n_total_case

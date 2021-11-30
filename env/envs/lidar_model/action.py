@@ -709,11 +709,11 @@ class Stochastic_action_planner_w_CVAE:
     def seperate_update(self, rewards):
         wo_cvae_rewards = rewards[:self.wo_cvae_n_sample]
         wo_cvae_safe_idx = np.where(wo_cvae_rewards != 0)[0]
-        wo_cvae_sampled_command_traj = self.sampled_command_traj[:self.wo_cvae_n_sample]
+        wo_cvae_sampled_command_traj = self.sampled_command_traj[:, :self.wo_cvae_n_sample, :]
         w_cvae_rewards = rewards[self.wo_cvae_n_sample:]
         w_cvae_safe_idx = np.where(w_cvae_rewards != 0)[0]
-        w_cvae_sampled_command_traj = self.sampled_command_traj[self.wo_cvae_n_sample:]
-
+        w_cvae_sampled_command_traj = self.sampled_command_traj[:, self.wo_cvae_n_sample:, :]
+        
         # optimize w/o CVAE command trajectory
         if len(wo_cvae_safe_idx) != 0:
             probs = np.exp(self.gamma * wo_cvae_rewards[wo_cvae_safe_idx])
