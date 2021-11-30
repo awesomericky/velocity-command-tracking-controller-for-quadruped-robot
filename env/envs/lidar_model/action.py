@@ -665,15 +665,17 @@ class Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal:
 
 
 class Stochastic_action_planner_w_CVAE:
-    def __init__(self, wo_cvae_sampler, w_cvae_sampler, wo_cvae_n_sample, w_cvae_n_sample, n_prediction_step, gamma):
+    def __init__(self, wo_cvae_sampler, w_cvae_sampler, wo_cvae_n_sample, w_cvae_n_sample, n_prediction_step, gamma, beta):
         self.wo_cvae_sampler = wo_cvae_sampler
         self.w_cvae_sampler = w_cvae_sampler
         self.wo_cvae_n_sample = wo_cvae_n_sample
         self.w_cvae_n_sample = w_cvae_n_sample
         self.n_prediction_step = n_prediction_step
         self.gamma = gamma
+        self.beta = beta
         self.sampled_command_traj = None
         self.optimized_command_traj = None
+        self.first = True
 
     def sample(self, observation, goal_position):
         """
@@ -685,10 +687,16 @@ class Stochastic_action_planner_w_CVAE:
 
         * sampled_command_traj stacked order: (1) wo_cvae_sampling (2) w_cvae_sampling
         """
+        # sample using w/o cvae sampler
         wo_cvae_sampled_command_traj = self.wo_cvae_sampler.sample()
         wo_cvae_sampled_command_traj = np.swapaxes(wo_cvae_sampled_command_traj, 0, 1)
+
+        # sample using w/ cvae sampler
         cvae_sampled_command_traj = self.w_cvae_sampler(observation, goal_position, self.w_cvae_n_sample, self.n_prediction_step, return_torch=False)
-        cvae_sampled_command_traj = cvae_sampled_command_traj * (1 - self.wo_cvae_sampler.beta) + self.wo_cvae_sampler.a_hat[:, np.newaxis, :] * self.wo_cvae_sampler.beta
+        if self.first:
+            self.first = False
+        else:
+            cvae_sampled_command_traj = cvae_sampled_command_traj * (1 - self.beta) + self.optimized_command_traj[:, np.newaxis, :] * self.beta
         self.sampled_command_traj = np.concatenate((wo_cvae_sampled_command_traj, cvae_sampled_command_traj), axis=1)
         return self.sampled_command_traj.astype(np.float32).copy()
 
@@ -696,30 +704,51 @@ class Stochastic_action_planner_w_CVAE:
         self.wo_cvae_sampler.reset()
         self.sampled_command_traj = None
         self.optimized_command_traj = None
+        self.first = True
+
+    def seperate_update(self, rewards):
+        wo_cvae_rewards = rewards[:self.wo_cvae_n_sample]
+        wo_cvae_safe_idx = np.where(wo_cvae_rewards != 0)[0]
+        wo_cvae_sampled_command_traj = self.sampled_command_traj[:self.wo_cvae_n_sample]
+        w_cvae_rewards = rewards[self.wo_cvae_n_sample:]
+        w_cvae_safe_idx = np.where(w_cvae_rewards != 0)[0]
+        w_cvae_sampled_command_traj = self.sampled_command_traj[self.wo_cvae_n_sample:]
+
+        # optimize w/o CVAE command trajectory
+        if len(wo_cvae_safe_idx) != 0:
+            probs = np.exp(self.gamma * wo_cvae_rewards[wo_cvae_safe_idx])
+            probs /= (np.sum(probs) + 1e-10)
+            wo_cvae_optimized_command_traj = np.sum(wo_cvae_sampled_command_traj[:, wo_cvae_safe_idx, :] * probs[np.newaxis, :, np.newaxis], axis=1)
+        else:
+            probs = np.exp(self.gamma * wo_cvae_rewards)
+            probs /= (np.sum(probs) + 1e-10)
+            wo_cvae_optimized_command_traj = np.sum(wo_cvae_sampled_command_traj * probs[np.newaxis, :, np.newaxis], axis=1)
+
+        # optimize w/ CVAE command trajectory
+        if len(w_cvae_safe_idx) != 0:
+            probs = np.exp(self.gamma * w_cvae_rewards[w_cvae_safe_idx])
+            probs /= (np.sum(probs) + 1e-10)
+            w_cvae_optimized_command_traj = np.sum(w_cvae_sampled_command_traj[:, w_cvae_safe_idx, :] * probs[np.newaxis, :, np.newaxis], axis=1)
+        else:
+            probs = np.exp(self.gamma * w_cvae_rewards)
+            probs /= (np.sum(probs) + 1e-10)
+            w_cvae_optimized_command_traj = np.sum(w_cvae_sampled_command_traj * probs[np.newaxis, :, np.newaxis], axis=1)
+
+        return wo_cvae_optimized_command_traj.astype(np.float32), w_cvae_optimized_command_traj.astype(np.float32)
+
+    def set_optimized_result(self, optimized_command_traj):
+        self.wo_cvae_sampler.a_hat = optimized_command_traj   # update a_hat in wo_cvae_sampler
+        self.optimized_command_traj = optimized_command_traj   # update a_hat in cvae_sampler
 
     def update(self, rewards):
-        # # Just use top N% samples
-        # ratio = 0.01
-        # n_sample = rewards.shape[0]
-        # n_consider_sample = int(ratio * n_sample)
-        # safe_idx = np.argpartition(rewards, - n_consider_sample)[-n_consider_sample:]
-        # if len(safe_idx) != 0:
-        #     probs = np.exp(self.gamma * rewards[safe_idx])
-        #     probs /= np.sum(probs) + 1e-10
-        #     self.optimized_command_traj = np.sum(self.sampled_command_traj[:, safe_idx, :] * probs[np.newaxis, :, np.newaxis], axis=1)
-        # else:
-        #     probs = np.exp(self.gamma * rewards)
-        #     probs /= np.sum(probs) + 1e-10
-        #     self.optimized_command_traj = np.sum(self.sampled_command_traj * probs[np.newaxis, :, np.newaxis], axis=1)
-
         safe_idx = np.where(rewards != 0)[0]
         if len(safe_idx) != 0:
             probs = np.exp(self.gamma * rewards[safe_idx])
-            probs /= np.sum(probs) + 1e-10
+            probs /= (np.sum(probs) + 1e-10)
             self.optimized_command_traj = np.sum(self.sampled_command_traj[:, safe_idx, :] * probs[np.newaxis, :, np.newaxis], axis=1)
         else:
             probs = np.exp(self.gamma * rewards)
-            probs /= np.sum(probs) + 1e-10
+            probs /= (np.sum(probs) + 1e-10)
             self.optimized_command_traj = np.sum(self.sampled_command_traj * probs[np.newaxis, :, np.newaxis], axis=1)
 
     def action(self, rewards):
@@ -802,11 +831,11 @@ class Stochastic_action_planner_normal:
         # safe_idx = np.argpartition(rewards, -500)[-500:]
         if len(safe_idx) != 0:
             probs = np.exp(self.gamma * rewards[safe_idx])
-            probs /= np.sum(probs) + 1e-10
+            probs /= (np.sum(probs) + 1e-10)
             self.a_hat = np.sum(self.a_tilda[safe_idx, :, :] * probs[:, np.newaxis, np.newaxis], axis=0)
         else:
             probs = np.exp(self.gamma * rewards)
-            probs /= np.sum(probs) + 1e-10
+            probs /= (np.sum(probs) + 1e-10)
             self.a_hat = np.sum(self.a_tilda * probs[:, np.newaxis, np.newaxis], axis=0)
 
     def action(self, rewards, safe=False):
