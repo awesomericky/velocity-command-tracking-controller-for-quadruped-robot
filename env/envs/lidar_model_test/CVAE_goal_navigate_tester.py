@@ -219,7 +219,8 @@ else:
                                                       wo_cvae_n_sample=cfg["evaluating_w_CVAE"]["wo_CVAE_number_of_sample"],
                                                       w_cvae_n_sample=cfg["evaluating_w_CVAE"]["CVAE_number_of_sample"],
                                                       n_prediction_step=n_prediction_step,
-                                                      gamma=cfg["evaluating_w_CVAE"]["gamma"])
+                                                      gamma=cfg["evaluating_w_CVAE"]["gamma"],
+                                                      beta=cfg["evaluating_w_CVAE"]["beta"])
 
     env.initialize_n_step()
     action_planner.reset()

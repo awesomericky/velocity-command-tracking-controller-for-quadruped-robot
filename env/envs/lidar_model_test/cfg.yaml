@@ -67,13 +67,13 @@ evaluating:
   number_of_bin: 10
 
 evaluating_w_CVAE:
-  wo_CVAE_number_of_sample: 0  # should be at least 0 (0 is available)
+  wo_CVAE_number_of_sample: 125  # should be at least 0 (0 is available)
   CVAE_number_of_sample: 100  # should be at least 1
   gamma: 20
   beta: 0.4
   time_correlation_beta: 0.1
   sigma: 0.3
-  number_of_bin: 10  # only used for command_sampler not using CVAE
+  number_of_bin: 5  # only used for command_sampler not using CVAE
 
 data_collection:
   time_correlated_command_sampler_beta: 0.7

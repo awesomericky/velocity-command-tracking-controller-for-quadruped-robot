@@ -90,11 +90,11 @@ environment_model:
 Naive:
   planner:
     prediction_period: 6.0
-    number_of_sample: 64
+    number_of_sample: 1000
     gamma: 20
     beta: 0.4  # 0.8  # bigger == more consider a_hat
     sigma: 0.3
-    number_of_bin: 4
+    number_of_bin: 10
 
 CVAE:
   planner:

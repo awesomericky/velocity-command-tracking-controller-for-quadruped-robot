@@ -214,7 +214,7 @@ pdb.set_trace()
 
 print("<<-- Evaluating Naive -->>")
 
-for grid_size in [2.5, 3., 4.]:
+for grid_size in [4., 2.5, 3., 4., 5.]:
     eval_start = time.time()
 
     # Set obstacle grid size
