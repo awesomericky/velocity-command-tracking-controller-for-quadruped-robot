@@ -81,9 +81,11 @@ def compute_num_collision(collision_idx):
 
     return num_collision
 
-random.seed(1)
-np.random.seed(1)
-torch.manual_seed(1)
+
+evaluate_seed = 37 # 37, 143, 534, 792, 921
+random.seed(evaluate_seed)
+np.random.seed(evaluate_seed)
+torch.manual_seed(evaluate_seed)
 
 # task specification
 task_name = "Simple_point_goal_nav"
@@ -348,7 +350,7 @@ for grid_size in [2.5, 3., 4., 5.]:
                 # print(f"Intermediate result : {n_success_test_case} / {n_test_case} || Collision: {num_collision}")
 
                 # Save result
-                list_num_collision.append(num_collision)
+                # list_num_collision.append(num_collision)
                 list_success.append(False)
 
                 # Initialize
@@ -403,7 +405,7 @@ for grid_size in [2.5, 3., 4., 5.]:
 
     assert len(list_traversal_time) == n_total_success_case
     assert len(list_traversal_distance) == n_total_success_case
-    assert len(list_num_collision) == n_total_case
+    assert len(list_num_collision) == n_total_success_case
     assert len(list_success) == n_total_case
 
     success_rate = n_total_success_case / n_total_case
@@ -447,7 +449,8 @@ for grid_size in [2.5, 3., 4., 5.]:
     with open(f"{result_save_directory}/{str(grid_size)}_grid_result.json", "w") as f:
         json.dump(final_result, f)
 
-    wandb.log(final_result)
+    if cfg["logging"]:
+        wandb.log(final_result)
 
     # Save raw result
     np.savez_compressed(f"{result_save_directory}/{str(grid_size)}_grid_result", time=list_traversal_time,

@@ -1,6 +1,7 @@
 realistic: False   # if True, consider wait_time
 plot_command: False
 logging: True   # wandb
+check_time: False
 
 environment:
   render: True
@@ -31,7 +32,7 @@ environment:
       min: -1.2
       max: 1.2
   test_obstacle_grid_size: 2.5  # 2.5 / 3.0 / 4.0
-  test_obstacle_center_distribution_type: 3  # 0: (0.3 ~ g.s - 0.3) / 1: (0.8 ~ g.s - 0.8) / 2: (0.55 ~ g.s - 0.55) / 3: (1.0 ~ g.s. - 1.0)
+  test_obstacle_center_distribution_type: 1  # 0: (0.3 ~ g.s - 0.3) / 1: (0.8 ~ g.s - 0.8) / 2: (0.55 ~ g.s - 0.55) / 3: (1.0 ~ g.s. - 1.0)
   test_initialize:
     point_goal: True
     safety_control: False
@@ -99,13 +100,13 @@ Naive:
 CVAE:
   planner:
     prediction_period: 6.0
-    wo_CVAE_number_of_sample: 125 #125
+    wo_CVAE_number_of_sample: 729
     CVAE_number_of_sample: 100
     gamma: 20
     wo_CVAE_beta: 0.4
     CVAE_beta: 0.4
     sigma: 0.3
-    number_of_bin: 5  # only used for command_sampler not using CVAE
+    number_of_bin: 9  # only used for command_sampler not using CVAE
   architecture:
     state_encoder: # state = encoder(lidar + COM history)
       input: 450

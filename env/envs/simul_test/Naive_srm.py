@@ -47,9 +47,11 @@ def transform_coordinate_LW(w_init_coordinate, l_coordinate_traj):
     w_coordinate_traj += w_init_coordinate[:, :-1]
     return w_coordinate_traj
 
-random.seed(1)
-np.random.seed(1)
-torch.manual_seed(1)
+
+evaluate_seed = 37 # 37, 143, 534, 792, 921
+random.seed(evaluate_seed)
+np.random.seed(evaluate_seed)
+torch.manual_seed(evaluate_seed)
 
 # task specification
 task_name = "Simple_safety_remote_control"
@@ -402,7 +404,8 @@ for grid_size in [2.5, 3., 4., 5.]:
     with open(f"{result_save_directory}/{str(grid_size)}_grid_result.json", "w") as f:
         json.dump(final_result, f)
 
-    wandb.log(final_result)
+    if cfg["logging"]:
+        wandb.log(final_result)
 
     eval_end = time.time()
 

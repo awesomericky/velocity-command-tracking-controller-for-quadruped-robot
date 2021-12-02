@@ -696,14 +696,15 @@ namespace raisim
     bool isTerminalState(float &terminalReward) final
     {
         terminalReward = 0.f;
+	return collision_check();
 
         ///  if anymal falls down, count as failure
-        raisim::Vec<3> base_position;
-        anymal_->getFramePosition("base_to_base_inertia", base_position);
-        if (base_position[2] < 0.3)
-            return true;
+        //raisim::Vec<3> base_position;
+        //anymal_->getFramePosition("base_to_base_inertia", base_position);
+        //if (base_position[2] < 0.3)
+        //    return true;
 
-        return false;
+        //return false;
     }
 
     private:
