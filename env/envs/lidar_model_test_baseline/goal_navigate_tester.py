@@ -17,7 +17,7 @@ import argparse
 from collections import defaultdict
 import pdb
 from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
-from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin
+from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_normal, Stochastic_action_planner_uniform_bin, Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal
 from raisimGymTorch.env.envs.lidar_model.action import Zeroth_action_planner, Modified_zeroth_action_planner, Stochastic_action_planner_uniform_bin_baseline
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 import random
@@ -54,9 +54,10 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     return l_coordinate_traj
 
 # set seed
-random.seed(1)
-np.random.seed(1)
-torch.manual_seed(1)
+evaluate_seed = 37 # 37, 143, 534, 792, 921
+random.seed(evaluate_seed)
+np.random.seed(evaluate_seed)
+torch.manual_seed(evaluate_seed)
 
 # task specification
 task_name = "lidar_environment_model"
@@ -130,13 +131,17 @@ start = time.time()
 
 # Load action planner
 n_prediction_step = int(cfg["data_collection"]["prediction_period"] / cfg["data_collection"]["command_period"])
-action_planner = Stochastic_action_planner_uniform_bin_baseline(command_range=cfg["environment"]["command"],
-                                                                n_sample=cfg["evaluating"]["number_of_sample"],
-                                                                n_horizon=n_prediction_step,
-                                                                n_bin=cfg["evaluating"]["number_of_bin"],
-                                                                beta=cfg["evaluating"]["beta"],
-                                                                gamma=cfg["evaluating"]["gamma"],
-                                                                action_dim=command_dim)
+action_planner = Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal(command_range=cfg["environment"]["command"],
+                                                                                 n_sample=cfg["evaluating"]["number_of_sample"],
+                                                                                 n_horizon=n_prediction_step,
+                                                                                 n_bin=cfg["evaluating"]["number_of_bin"],
+                                                                                 beta=cfg["evaluating"]["beta"],
+                                                                                 gamma=cfg["evaluating"]["gamma"],
+                                                                                 sigma=cfg["evaluating"]["sigma"],
+                                                                                 noise_sigma=0.1,
+                                                                                 noise=False,
+                                                                                 action_dim=user_command_dim,
+                                                                                 random_command_sampler=user_command)
 
 env.initialize_n_step()
 env.reset()
@@ -153,6 +158,8 @@ step = 0
 n_test_case = 0
 if cfg["environment"]["type"] == 2:
     num_goals = 3
+elif cfg["environment"]["type"] == 10:
+    num_goals = 4
 else:
     num_goals = 1
 
@@ -160,7 +167,6 @@ else:
 MUST_safety_period = 3.0
 MUST_safety_period_n_steps = int(MUST_safety_period / cfg['data_collection']['command_period'])
 sample_user_command = np.zeros(3)
-prev_coordinate_obs = np.zeros((1, 3))
 goal_rewards = np.zeros((cfg["evaluating"]["number_of_sample"], 1), dtype=np.float32)
 collision_idx_list = np.zeros((cfg["evaluating"]["number_of_sample"], 1), dtype=np.float32)
 
@@ -177,144 +183,39 @@ while n_test_case < num_goals:
     frame_start = time.time()
     new_action_time = step % command_period_steps == 0
 
-    obs, _ = env.observe(False)  # observation before taking step
-
-    action_candidates = action_planner.sample()
-    action_candidates = action_candidates.astype(np.float32)
-    init_coordinate_obs = env.coordinate_observe()
+    # observation before taking step
+    obs, _ = env.observe(False)
 
     if new_action_time:
-        # compute reward (goal reward + safety reward)
-        goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
-        current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
+        # sample command sequences
+        action_candidates = action_planner.sample()
+        action_candidates = np.reshape(action_candidates, (action_candidates.shape[0], -1))
+        action_candidates = action_candidates.astype(np.float32)
 
+        # prepare state
+        init_coordinate_obs = env.coordinate_observe()
+
+        # compute reward (goal reward)
         goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
         current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
-        if current_goal_distance > goal_distance_threshold:
-            goal_position_L *= (goal_distance_threshold / current_goal_distance)
+        goal_position_L *= np.clip(goal_distance_threshold / current_goal_distance, a_min=None, a_max=1.)
+        current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
 
         goal_rewards, collision_idx_list = env.baseline_compute_reward(action_candidates, np.swapaxes(goal_position_L, 0, 1), goal_rewards, collision_idx_list,
                                                                        n_prediction_step, cfg["data_collection"]["command_period"], MUST_safety_period)
         coll_idx = np.where(collision_idx_list == 1)[0]
-
-
-        # if step % 200 == 0:
-        #     # predict trajectory
-        #     n_sample = action_candidates.shape[0]
-        #     n_prediction = 12
-        #     delta_t = 0.5
-        #     future_position = np.zeros((n_sample, n_prediction + 1, 2))
-        #     for i in range(action_candidates.shape[0]):
-        #         local_yaw = 0
-        #         local_x = 0
-        #         local_y = 0
-        #         vel_x, vel_y, vel_yaw = action_candidates[i, :]
-        #         for j in range(n_prediction):
-        #             local_yaw += vel_yaw * delta_t
-        #             local_x += vel_x * delta_t * np.cos(local_yaw) - vel_y * delta_t * np.sin(local_yaw)
-        #             local_y += vel_x * delta_t * np.sin(local_yaw) + vel_y * delta_t * np.cos(local_yaw)
-        #             future_position[i, j+1, 0] = local_x
-        #             future_position[i, j+1, 1] = local_y
-        #
-        #     # plot predicted trajectory
-        #     n_sample, traj_len, coor_dim = future_position.shape
-        #     for i in range(n_sample):
-        #         # plot_label = "{:.2f}, {:.2f}, {:.2f}".format(action_candidates[i, 0], action_candidates[i, 1], action_candidates[i, 2])
-        #         # plt.plot(future_position[i, :, 0], future_position[i, :, 1], label=plot_label)
-        #         plt.plot(future_position[i, :, 0], future_position[i, :, 1])
-        #     plt.title("Sampled trajectory (n_sample: 90)")
-        #     plt.savefig("sampled_traj_all(baseline).png")
-        #     plt.clf()
-        #
-        #     # plot predicted trajectory
-        #     n_sample, traj_len, coor_dim = future_position.shape
-        #     for i in range(n_sample):
-        #         if i not in coll_idx:
-        #             # plot_label = "{:.2f}, {:.2f}, {:.2f}".format(action_candidates[i, 0], action_candidates[i, 1], action_candidates[i, 2])
-        #             # plt.plot(future_position[i, :, 0], future_position[i, :, 1], label=plot_label)
-        #             plt.plot(future_position[i, :, 0], future_position[i, :, 1])
-        #     plt.title("Sampled trajectory (n_sample: 90)")
-        #     plt.savefig("sampled_traj(baseline).png")
-        #     plt.clf()
-        #
-        #     pdb.set_trace()
-
-        # # predict trajectory
-        # n_sample = action_candidates.shape[0]
-        # n_prediction = 12
-        # delta_t = 0.5
-        # future_position = np.zeros((n_sample, n_prediction + 1, 2))
-        # for i in range(action_candidates.shape[0]):
-        #     local_yaw = 0
-        #     local_x = 0
-        #     local_y = 0
-        #     vel_x, vel_y, vel_yaw = action_candidates[i, :]
-        #     for j in range(n_prediction):
-        #         local_yaw += vel_yaw * delta_t
-        #         local_x += vel_x * delta_t * np.cos(local_yaw) - vel_y * delta_t * np.sin(local_yaw)
-        #         local_y += vel_x * delta_t * np.sin(local_yaw) + vel_y * delta_t * np.cos(local_yaw)
-        #         future_position[i, j+1, 0] = local_x
-        #         future_position[i, j+1, 1] = local_y
-        #
-        # lidar_data = obs[0, proprioceptive_sensor_dim:]
-        # geometric_safe_traj_idx = []
-        # geometric_not_safe_traj_idx = []
-        # lidar_safe_threshold = 1.0 / 10.0
-        # angle = (np.arctan2(future_position[:, 2, 1], future_position[:, 2, 0]) + np.pi) * (180 / np.pi)  # after 1 [s]
-        # for i in range(cfg["evaluating"]["number_of_sample"]):
-        #     lower_angle_idx = math.floor(angle[i])
-        #     upper_angle_idx = math.ceil(angle[i])
-        #     if lower_angle_idx != upper_angle_idx:
-        #         if upper_angle_idx == 360:
-        #             upper_angle_idx = 0
-        #         if lidar_data[lower_angle_idx] >= lidar_safe_threshold and lidar_data[upper_angle_idx] >= lidar_safe_threshold:
-        #             geometric_safe_traj_idx.append(i)
-        #         else:
-        #             geometric_not_safe_traj_idx.append(i)
-        #     else:
-        #         if lower_angle_idx == 360:
-        #             lower_angle_idx = 0
-        #         if lidar_data[lower_angle_idx] >= lidar_safe_threshold:
-        #             geometric_safe_traj_idx.append(i)
-        #         else:
-        #             geometric_not_safe_traj_idx.append(i)
-        # geometric_safe_traj_idx = np.array(geometric_safe_traj_idx)
-        # geometric_not_safe_traj_idx = np.array(geometric_not_safe_traj_idx)
-        # if len(geometric_safe_traj_idx) != cfg["evaluating"]["number_of_sample"]:
-        #     use_geometric_filter = True
-        # else:
-        #     use_geometric_filter = False
-
-
-        if cfg["evaluating"]["number_of_sample"] > 1:
-            goal_rewards -= np.min(goal_rewards)
-            goal_rewards /= np.max(goal_rewards) + 1e-5
-
-            # command_difference_rewards = - np.sqrt(np.sum(np.power(sample_user_command - action_candidates, 2), axis=-1))
-            # command_difference_rewards /= np.abs(np.min(command_difference_rewards)) + 1e-5
-            # command_difference_rewards -= np.min(command_difference_rewards)  # normalize reward
-        else:
-            command_difference_rewards = 0
-
-        # action_size = np.sqrt((action_candidates[:, 0] / 1) ** 2 + (action_candidates[:, 1] / 0.4) ** 2 + (action_candidates[:, 2] / 1.2) ** 2)
-        # action_size /= np.max(action_size)
+        goal_rewards -= np.min(goal_rewards)
+        goal_rewards /= (np.max(goal_rewards) + 1e-5)
 
         reward = 1.0 * np.squeeze(goal_rewards, -1)
 
+        # exclude trajectory that collides with obstacle
         if len(coll_idx) != cfg["evaluating"]["number_of_sample"]:
             reward[coll_idx] = 0  # exclude trajectory that collides with obstacle
 
-        # if use_geometric_filter:
-        #     reward[geometric_not_safe_traj_idx] = 0
-
-        sample_user_command = action_planner.action(reward)
-
-        # # reset action planner if stuck in local optimum
-        # current_pos_change = np.sqrt(np.sum(np.power(init_coordinate_obs[0, :2] - prev_coordinate_obs[0, :2], 2)))
-        # if current_pos_change < 0.075:  # 0.1 [m / s]
-        #     action_planner.reset()
-
-        prev_coordinate_obs = init_coordinate_obs.copy()
+        # optimize command sequence
+        cand_sample_user_command, sample_user_command_traj = action_planner.action(reward)
+        sample_user_command = cand_sample_user_command.copy()
 
     tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
     tracking_obs = env.force_normalize_observation(tracking_obs, type=1)
@@ -349,8 +250,8 @@ while n_test_case < num_goals:
 
     wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
-    if wait_time > 0.:
-        time.sleep(wait_time)
+    # if wait_time > 0.:
+    #     time.sleep(wait_time)
 
     if wait_time > 0:
         total_time += cfg['environment']['control_dt']

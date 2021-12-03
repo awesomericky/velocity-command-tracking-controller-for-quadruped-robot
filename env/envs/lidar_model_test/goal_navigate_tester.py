@@ -184,6 +184,8 @@ else:
     n_test_case = 0
     if cfg["environment"]["type"] == 2:
         num_goals = 3
+    elif cfg["environment"]["type"] == 10:
+        num_goals = 4
     else:
         num_goals = 1
 

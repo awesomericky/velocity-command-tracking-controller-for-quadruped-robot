@@ -62,10 +62,10 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     l_coordinate_traj = np.matmul(l_coordinate_traj, transition_matrix.T)
     return l_coordinate_traj
 
-
-random.seed(1)
-np.random.seed(1)
-torch.manual_seed(1)
+evaluate_seed = 37 # 37, 143, 534, 792, 921
+random.seed(evaluate_seed)
+np.random.seed(evaluate_seed)
+torch.manual_seed(evaluate_seed)
 
 # task specification
 task_name = "CVAE_point_goal_nav_test"
@@ -234,6 +234,8 @@ else:
     n_test_case = 0
     if cfg["environment"]["type"] == 2:
         num_goals = 3
+    elif cfg["environment"]["type"] == 10:
+        num_goals = 4
     else:
         num_goals = 1
 
@@ -303,23 +305,13 @@ else:
 
             goal_reward = np.sum(delta_goal_distance, axis=0)
             goal_reward -= np.min(goal_reward)
-            goal_reward /= np.max(goal_reward) + 1e-5  # normalize reward
+            goal_reward /= (np.max(goal_reward) + 1e-5)  # normalize reward
 
             safety_reward = 1 - predicted_P_cols
             safety_reward = np.mean(safety_reward, axis=0)
-            safety_reward /= np.max(safety_reward) + 1e-5  # normalize reward
-
-            # command_difference_reward = - np.sqrt(np.sum(np.power(sample_user_command - action_candidates[0, :, :], 2), axis=-1))
-            # command_difference_reward /= np.abs(np.min(command_difference_reward)) + 1e-5
-            # command_difference_reward -= np.min(command_difference_reward)  # normalize reward
-
-            # action_size = np.sqrt((action_candidates[0, :, 0] / 1) ** 2 + (action_candidates[0, :, 1] / 0.4) ** 2 + (action_candidates[0, :, 2] / 1.2) ** 2)
-            # action_size /= np.max(action_size)
+            safety_reward /= (np.max(safety_reward) + 1e-5)  # normalize reward
 
             reward = 1.0 * goal_reward * safety_reward + 0.3 * safety_reward
-            # reward = 1.0 * goal_reward + 0.3 * safety_reward
-            # reward = 2.0 * goal_reward + 0.5 * safety_reward + 0.3 * action_size  # weighted sum for computing rewards
-            # reward = 1.0 * goal_reward + 0.5 * safety_reward  # weighted sum for computing rewards
             coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
 
             if len(coll_idx) != (cfg["evaluating_w_CVAE"]["wo_CVAE_number_of_sample"] + cfg["evaluating_w_CVAE"]["CVAE_number_of_sample"]):
@@ -334,7 +326,6 @@ else:
             #     plt.plot(predicted_coordinates[:, j, 0], predicted_coordinates[:, j, 1])
             # plt.savefig("sampled_traj (ours).png")
             # plt.clf()
-            # pdb.set_trace()
 
             # predict modified command trajectory
             state = state[0, :][np.newaxis, :]
@@ -388,8 +379,8 @@ else:
 
         wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
-        if wait_time > 0.:
-            time.sleep(wait_time)
+        # if wait_time > 0.:
+        #     time.sleep(wait_time)
 
         if wait_time > 0:
             total_time += cfg['environment']['control_dt']
@@ -409,6 +400,7 @@ else:
 
             # reset action planner and set new goal
             action_planner.reset()
+            COM_buffer.reset()
             goal_position = env.set_goal()[np.newaxis, :]
             n_test_case += 1
             step = 0
@@ -417,7 +409,7 @@ else:
 
     print(f"Time: {total_time}")
     print(f"Total number of steps: {total_n_step}")
-
+    pdb.set_trace()
     num_collision = 0
     for i in range(len(num_collision_idx) - 1):
         if num_collision_idx[i+1] - num_collision_idx[i] != 1:
@@ -429,7 +421,7 @@ else:
         num_collision += 1
 
     print(f"Collision: {num_collision}")
-    print(num_collision_idx)
+    # print(num_collision_idx)
 
     # env.stop_video_recording()
     env.turn_off_visualization()

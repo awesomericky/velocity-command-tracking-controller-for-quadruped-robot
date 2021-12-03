@@ -37,6 +37,7 @@ namespace raisim
             /// create world
             world_ = std::make_unique<raisim::World>();
             world_type = cfg["type"].As<int>();
+            visualize_path = cfg["visualize_path"].As<bool>();
 
             /// If .... ==> generate env
             if (world_type == 1)
@@ -55,6 +56,8 @@ namespace raisim
                 generate_env_8();
             else if (world_type == 9)
                 generate_env_9();
+            else
+                generate_env_10();
 
             /// add objects
             anymal_ = world_->addArticulatedSystem(resourceDir_ + "/anymal_c/urdf/anymal.urdf");
@@ -156,6 +159,18 @@ namespace raisim
                 double angle = - 0.5 * M_PI;
                 raisim::angleAxisToQuaternion(axis, angle, quaternion);
                 gc_init_.segment(3, 4) = quaternion.e();
+            } else if (world_type == 10) {
+                gc_init_ << -0.7 * (hm_sizeX / 2), 0.92 * (hm_sizeY / 2), 0.7, 1.0, 0.0, 0.0, 0.0, 0.03, 0.5, -0.9, -0.03, 0.5, -0.9, 0.03, -0.5, 0.9, -0.03, -0.5, 0.9;
+                raisim::Vec<3> axis;
+                raisim::Vec<4> quaternion;
+
+                // orientation
+                axis[0] = 0;
+                axis[1] = 0;
+                axis[2] = 1;
+                double angle = - 0.5 * M_PI;
+                raisim::angleAxisToQuaternion(axis, angle, quaternion);
+                gc_init_.segment(3, 4) = quaternion.e();
             }
             else
                 gc_init_ << 0.0, 0.0, 0.7, 1.0, 0.0, 0.0, 0.0, 0.03, 0.5, -0.9, -0.03, 0.5, -0.9, 0.03, -0.5, 0.9, -0.03, -0.5, 0.9;  //0.5
@@ -190,10 +205,10 @@ namespace raisim
             footIndices_.insert(anymal_->getBodyIdx("RF_SHANK"));
             footIndices_.insert(anymal_->getBodyIdx("LH_SHANK"));
             footIndices_.insert(anymal_->getBodyIdx("RH_SHANK"));
-            footIndices_.insert(anymal_->getBodyIdx("LF_THIGH"));
-            footIndices_.insert(anymal_->getBodyIdx("RF_THIGH"));
-            footIndices_.insert(anymal_->getBodyIdx("LH_THIGH"));
-            footIndices_.insert(anymal_->getBodyIdx("RH_THIGH"));
+//            footIndices_.insert(anymal_->getBodyIdx("LF_THIGH"));
+//            footIndices_.insert(anymal_->getBodyIdx("RF_THIGH"));
+//            footIndices_.insert(anymal_->getBodyIdx("LH_THIGH"));
+//            footIndices_.insert(anymal_->getBodyIdx("RH_THIGH"));
 
             /// visualize if it is the first environment
             if (visualizable_)
@@ -217,15 +232,30 @@ namespace raisim
                     server_->addVisualCylinder("goal2", 0.4, 0.8, 2, 1, 0);
                     server_->addVisualCylinder("goal3", 0.4, 0.8, 2, 1, 0);
                 }
+                else if (world_type == 10) {
+                    server_->addVisualCylinder("goal1", 0.4, 0.8, 2, 1, 0);
+                    server_->addVisualCylinder("goal2", 0.4, 0.8, 2, 1, 0);
+                    server_->addVisualCylinder("goal3", 0.4, 0.8, 2, 1, 0);
+                    server_->addVisualCylinder("goal4", 0.4, 0.8, 2, 1, 0);
+                }
                 else {
                     server_->addVisualCylinder("goal", 0.4, 0.8, 2, 1, 0);
                 }
 
                 /// set path
-                double max_time = 30., delta_time = 0.05;
-                int max_num_path_slice = int(max_time / delta_time);
-                for (int i=0; i<max_num_path_slice; i++)
-                    server_->addVisualBox("path" + std::to_string(i+1), 0.1, 0.1, 0.1, 1, 0, 0);
+                if (visualize_path) {
+                    double max_time = 200., delta_time = 0.1;
+                    int max_num_path_slice = int(max_time / delta_time);
+                    if (world_type == 2) {
+                        for (int i=0; i<max_num_path_slice; i++)
+                            server_->addVisualBox("path" + std::to_string(i+1), 0.1, 0.1, 0.1, 1, 0, 0);
+                    } else if (world_type == 10) {
+                        for (int i=0; i<(max_num_path_slice); i++) {
+                            server_->addVisualBox("path_one" + std::to_string(i+1), 0.1, 0.1, 0.1, 1, 0, 0);
+                            server_->addVisualBox("path_two" + std::to_string(i+1), 0.1, 0.1, 0.1, 0, 0, 1);
+                        }
+                    }
+                }
 
                 server_->focusOn(anymal_);
             }
@@ -322,6 +352,13 @@ namespace raisim
         hm_sizeX = 8;
         hm_sizeY = 4;
         auto heightmap = world_->addHeightMap("/home/awesomericky/Lab_intern/raisimLib/raisimGymTorch/heightmap/env5.png", 0, 0, hm_sizeX, hm_sizeY, 0.005, 0.0);
+    }
+
+    void generate_env_10()
+    {
+        hm_sizeX = 15;
+        hm_sizeY = 22.5;
+        auto heightmap = world_->addHeightMap("/home/awesomericky/Lab_intern/raisimLib/raisimGymTorch/heightmap/env10.png", 0, 0, hm_sizeX, hm_sizeY, 0.005, 0.0);
     }
 
     void generate_env_3(int seed, double sample_obstacle_grid_size, double sample_obstacle_dr)
@@ -544,6 +581,12 @@ namespace raisim
             anymal_->setState(gc_init_, gv_init_);
             initHistory();
         }
+        else if (world_type == 10) {
+            gc_init_[0] = -0.7 * (hm_sizeX / 2);
+            gc_init_[1] = 0.92 * (hm_sizeY / 2);
+            anymal_->setState(gc_init_, gv_init_);
+            initHistory();
+        }
 
         if (random_external_force) {
             random_force_period = int(1.0 / control_dt_);
@@ -627,11 +670,14 @@ namespace raisim
         bodyLinearVel_ = rot.e().transpose() * gv_.segment(0, 3);
         bodyAngularVel_ = rot.e().transpose() * gv_.segment(3, 3);
 
-//        /// Visualize base path
-//        if (current_n_step != 0 && current_n_step % 5 == 0)
-//            if (visualizable_) {
-//                server_->getVisualObject("path" + std::to_string(current_n_step/5))->setPosition(gc_.segment(0, 3));
-//            }
+        /// Visualize base path
+        if (current_n_step != 0 && current_n_step % 10 == 0)
+            if (visualizable_ && visualize_path) {
+                if (path_type)
+                    server_->getVisualObject("path_one" + std::to_string(current_n_step/5))->setPosition(gc_.segment(0, 3));
+                else
+                    server_->getVisualObject("path_two" + std::to_string(current_n_step/5))->setPosition(gc_.segment(0, 3));
+            }
 
         /// Get depth data
         raisim::Vec<3> lidarPos;
@@ -956,6 +1002,24 @@ namespace raisim
 
             num_set_goal += 1;
         }
+        else if (world_type == 10) {
+            std::vector<Eigen::Vector2d> goal_pos_;
+            goal_pos_.push_back({-0.7 * (hm_sizeX / 2), -0.5 * (hm_sizeY / 2)});
+            goal_pos_.push_back({0.7 * (hm_sizeX / 2), -0.87 * (hm_sizeY / 2)});
+            goal_pos_.push_back({-0.7 * (hm_sizeX / 2), -0.5 * (hm_sizeY / 2)});
+            goal_pos_.push_back({-0.7 * (hm_sizeX / 2), 0.92 * (hm_sizeY / 2)});
+            goal_pos = goal_pos_[num_set_goal].cast<float>();
+
+            server_->getVisualObject("goal1")->setPosition({goal_pos_[0][0], goal_pos_[0][1], 0.05});
+            server_->getVisualObject("goal2")->setPosition({goal_pos_[1][0], goal_pos_[1][1], 0.05});
+            server_->getVisualObject("goal3")->setPosition({goal_pos_[2][0], goal_pos_[2][1], 0.05});
+            server_->getVisualObject("goal4")->setPosition({goal_pos_[3][0], goal_pos_[3][1], 0.05});
+
+            num_set_goal += 1;
+
+            if (num_set_goal > 2)
+                path_type = false;
+        }
         else if (world_type == 6) {
             Eigen::Vector2d goal_pos_;
             goal_pos_[0] = -3.0;
@@ -1120,6 +1184,10 @@ namespace raisim
     /// world type
     int world_type;
     int num_set_goal=0;
+
+    /// use for visualizing path
+    bool visualize_path= false;
+    bool path_type= true;  //true: path_one, false: path_two
 
     };
 }

@@ -83,7 +83,7 @@ def compute_num_collision(collision_idx):
 
     return num_collision
 
-evaluate_seed = 534 # 37, 143, 534, 792, 921
+evaluate_seed = 37 # 37, 143, 534, 792, 921
 random.seed(evaluate_seed)
 np.random.seed(evaluate_seed)
 torch.manual_seed(evaluate_seed)

@@ -55,6 +55,8 @@ namespace raisim
                 generate_env_8();
             else if (world_type == 9)
                 generate_env_9();
+            else if (world_type == 10)
+                generate_env_10();
 
             /// add objects
             anymal_ = world_->addArticulatedSystem(resourceDir_ + "/anymal_c/urdf/anymal.urdf");
@@ -150,6 +152,18 @@ namespace raisim
             else if (world_type == 2) {
                 gc_init_ << hm_sizeX - 3.7, hm_sizeY - 0.8, 0.7, 1.0, 0.0, 0.0, 0.0, 0.03, 0.5, -0.9, -0.03, 0.5, -0.9, 0.03, -0.5, 0.9, -0.03, -0.5, 0.9;  //0.5
 
+                raisim::Vec<3> axis;
+                raisim::Vec<4> quaternion;
+
+                // orientation
+                axis[0] = 0;
+                axis[1] = 0;
+                axis[2] = 1;
+                double angle = - 0.5 * M_PI;
+                raisim::angleAxisToQuaternion(axis, angle, quaternion);
+                gc_init_.segment(3, 4) = quaternion.e();
+            } else if (world_type == 10) {
+                gc_init_ << -0.7 * (hm_sizeX / 2), 0.92 * (hm_sizeY / 2), 0.7, 1.0, 0.0, 0.0, 0.0, 0.03, 0.5, -0.9, -0.03, 0.5, -0.9, 0.03, -0.5, 0.9, -0.03, -0.5, 0.9;
                 raisim::Vec<3> axis;
                 raisim::Vec<4> quaternion;
 
@@ -472,6 +486,13 @@ namespace raisim
         auto heightmap = world_->addHeightMap("/home/awesomericky/Lab_intern/raisimLib/raisimGymTorch/heightmap/env5.png", 0, 0, hm_sizeX, hm_sizeY, 0.005, 0.0);
     }
 
+    void generate_env_10()
+    {
+        hm_sizeX = 15;
+        hm_sizeY = 22.5;
+        auto heightmap = world_->addHeightMap("/home/awesomericky/Lab_intern/raisimLib/raisimGymTorch/heightmap/env10.png", 0, 0, hm_sizeX, hm_sizeY, 0.005, 0.0);
+    }
+
     void generate_env_3(int seed, double sample_obstacle_grid_size, double sample_obstacle_dr)
     {
         double hm_centerX = 0.0, hm_centerY = 0.0;
@@ -691,6 +712,13 @@ namespace raisim
             anymal_->setState(gc_init_, gv_init_);
             initHistory();
         }
+        else if (world_type == 10) {
+            gc_init_[0] = -0.7 * (hm_sizeX / 2);
+            gc_init_[1] = 0.92 * (hm_sizeY / 2);
+            anymal_->setState(gc_init_, gv_init_);
+            initHistory();
+        }
+
 
         if (random_external_force) {
             random_force_period = int(1.0 / control_dt_);
@@ -1093,6 +1121,18 @@ namespace raisim
             server_->getVisualObject("goal3")->setPosition({goal_pos_[2][0], goal_pos_[2][1], 0.05});
 
 //            server_->getVisualObject("goal")->setPosition({goal_pos_[num_set_goal][0], goal_pos_[num_set_goal][1], 0.05});
+
+            num_set_goal += 1;
+        }
+        else if (world_type == 10) {
+            std::vector<Eigen::Vector2d> goal_pos_;
+            goal_pos_.push_back({-0.7 * (hm_sizeX / 2), -0.5 * (hm_sizeY / 2)});
+            goal_pos_.push_back({0.7 * (hm_sizeX / 2), -0.87 * (hm_sizeY / 2)});
+            goal_pos_.push_back({-0.7 * (hm_sizeX / 2), -0.5 * (hm_sizeY / 2)});
+            goal_pos_.push_back({-0.7 * (hm_sizeX / 2), 0.92 * (hm_sizeY / 2)});
+            goal_pos = goal_pos_[num_set_goal].cast<float>();
+
+            server_->getVisualObject("goal")->setPosition({goal_pos[0], goal_pos[1], 0.05});
 
             num_set_goal += 1;
         }

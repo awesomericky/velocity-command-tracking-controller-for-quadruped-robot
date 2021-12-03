@@ -3,9 +3,10 @@ record_video: yes
 
 environment:
   render: True
+  visualize_path: False
   evaluate: True
   determine_env: 0  # 0: not determine / 1: circle / 2: box / 3: corridor
-  type: 2
+  type: 10
   #    1 : 90 degree maze
   #    2 : diagonal maze (env1)  ===
   #    3 : scattered obstacle (seen)
@@ -13,8 +14,9 @@ environment:
   #    5 : narrow obstacle
   #    6 : (env2)
   #    7 : (env3)
-  #    8 : (env4)  ===
-  #    9 : (env5)  ===
+  #    8 : (env4)
+  #    9 : (env5)
+  #    10 : ===
   num_envs: 300
   max_n_update: 10000
   eval_every_n: 50
@@ -59,7 +61,7 @@ training:
     coordinate: 1
 
 evaluating:
-  number_of_sample: 2000
+  number_of_sample: 1000
   gamma: 20
   beta: 0.4  # 0.8  # bigger == more consider a_hat
   time_correlation_beta: 0.1   # 0.1
@@ -67,19 +69,19 @@ evaluating:
   number_of_bin: 10
 
 evaluating_w_CVAE:
-  wo_CVAE_number_of_sample: 125  # should be at least 0 (0 is available)
+  wo_CVAE_number_of_sample: 729  # should be at least 0 (0 is available)
   CVAE_number_of_sample: 100  # should be at least 1
   gamma: 20
   beta: 0.4
   time_correlation_beta: 0.1
-  sigma: 0.3
-  number_of_bin: 5  # only used for command_sampler not using CVAE
+  sigma: 0.3 #0.3
+  number_of_bin: 9  # only used for command_sampler not using CVAE
 
 data_collection:
   time_correlated_command_sampler_beta: 0.7
   normal_time_correlated_command_sampler_sigma: 0.3
   prediction_period: 6  # [s]
-  command_period: 0.5  # [s]
+  command_period: 0.5 #0.5  # [s]
   prioritized_data_update: True
   prioritized_data_update_magnitude: 0.8
 

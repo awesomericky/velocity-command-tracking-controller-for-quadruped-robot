@@ -91,22 +91,22 @@ environment_model:
 Naive:
   planner:
     prediction_period: 6.0
-    number_of_sample: 729 #1000
+    number_of_sample: 512
     gamma: 20
     beta: 0.4  # 0.8  # bigger == more consider a_hat
     sigma: 0.3
-    number_of_bin: 9 #10
+    number_of_bin: 8
 
 CVAE:
   planner:
     prediction_period: 6.0
-    wo_CVAE_number_of_sample: 0 #729
+    wo_CVAE_number_of_sample: 729
     CVAE_number_of_sample: 100
     gamma: 20
     wo_CVAE_beta: 0.4
     CVAE_beta: 0.4
     sigma: 0.3
-    number_of_bin: 5 #9  # only used for command_sampler not using CVAE
+    number_of_bin: 9 #9  # only used for command_sampler not using CVAE
   architecture:
     state_encoder: # state = encoder(lidar + COM history)
       input: 450
@@ -166,7 +166,7 @@ CWM:
 Oracle:
   planner:
     prediction_period: 6.0
-    number_of_sample: 2000
+    number_of_sample: 1000
     gamma: 20
     beta: 0.4
     sigma: 0.3
