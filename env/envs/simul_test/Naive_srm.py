@@ -161,7 +161,8 @@ else:
     print("Evaluating ...")
 
 # Make directory to save results
-result_save_directory = f"{task_name}/Result/Naive"
+num_sample = cfg["Naive"]["planner"]["number_of_sample"]
+result_save_directory = f"{task_name}/Result/Naive_{num_sample}_{evaluate_seed}"
 check_saving_folder(result_save_directory)
 
 # Backup files

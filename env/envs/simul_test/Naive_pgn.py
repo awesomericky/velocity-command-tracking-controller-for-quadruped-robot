@@ -82,7 +82,7 @@ def compute_num_collision(collision_idx):
 
     return num_collision
 
-evaluate_seed = 37 # 37, 143, 534, 792, 921
+evaluate_seed = 534 # 37, 143, 534, 792, 921
 random.seed(evaluate_seed)
 np.random.seed(evaluate_seed)
 torch.manual_seed(evaluate_seed)
@@ -199,7 +199,8 @@ else:
 goal_time_limit = 180.
 
 # Make directory to save results
-result_save_directory = f"{task_name}/Result/Naive"
+num_sample = cfg["Naive"]["planner"]["number_of_sample"]
+result_save_directory = f"{task_name}/Result/Naive_{num_sample}_{evaluate_seed}"
 check_saving_folder(result_save_directory)
 
 # Backup files

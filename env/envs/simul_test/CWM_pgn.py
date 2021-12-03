@@ -81,7 +81,7 @@ def compute_num_collision(collision_idx):
 
     return num_collision
 
-evaluate_seed = 37 # 37, 143, 534, 792, 921
+evaluate_seed =37 # 37, 143, 534, 792, 921
 random.seed(evaluate_seed)
 np.random.seed(evaluate_seed)
 torch.manual_seed(evaluate_seed)
@@ -181,7 +181,8 @@ goal_rewards = np.zeros((cfg["CWM"]["planner"]["number_of_sample"], 1), dtype=np
 collision_idx_list = np.zeros((cfg["CWM"]["planner"]["number_of_sample"], 1), dtype=np.float32)
 
 # Make directory to save results
-result_save_directory = f"{task_name}/Result/CWM"
+num_sample = cfg["CWM"]["planner"]["number_of_sample"]
+result_save_directory = f"{task_name}/Result/CWM_{num_sample}_{evaluate_seed}"
 check_saving_folder(result_save_directory)
 
 # Backup files
