@@ -420,6 +420,7 @@ for grid_size in [2.5, 3., 4., 5.]:
                 current_coordinate = None
             # success
             elif current_goal_distance < 0.5:
+                pdb.set_trace()
                 # Reset
                 env.initialize_n_step()  # keep start in different initial condiition
                 env.reset()

@@ -40,164 +40,136 @@ namespace raisim
             /// environment type to be generated
             env_type = sample_env_type;  // 1: scattered circle, 2: scattered box, 3: cross corridor
 
-            double hm_centerX = 0.0, hm_centerY = 0.0;
-//            hm_sizeX = 30., hm_sizeY = 30.;
-            hm_sizeX = 40., hm_sizeY = 40.;
-//            double hm_samplesX = hm_sizeX * 15, hm_samplesY = hm_sizeY * 15;
-            double hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
-            double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
-            double obstacle_height = 2;
-
             random_seed = seed;
             static std::default_random_engine env_generator(random_seed);
 
-            /// sample obstacle center
-            double obstacle_grid_size = sample_obstacle_grid_size;;
-//            double obstacle_grid_size = 2.5;
-            int n_x_grid = int(hm_sizeX / obstacle_grid_size);
-            int n_y_grid = int(hm_sizeY / obstacle_grid_size);
-            n_obstacle = n_x_grid * n_y_grid;
-
-            obstacle_centers.setZero(n_obstacle, 2); 
-            std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
-//            std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
-            for (int i=0; i<n_obstacle; i++) {
-                int current_n_y = int(i / n_x_grid);
-                int current_n_x = i - current_n_y * n_x_grid;
-                double sampled_x = uniform(env_generator);
-                double sampled_y = uniform(env_generator);
-                sampled_x +=  obstacle_grid_size * current_n_x;
-                sampled_x -= hm_sizeX/2;
-                sampled_y += obstacle_grid_size * current_n_y;
-                sampled_y -= hm_sizeY/2;
-                obstacle_centers(i, 0) = sampled_x;
-                obstacle_centers(i, 1) = sampled_y;
-            }
-
             /// generate obstacles
             if (env_type == 1) {
-                // obstacle_size_list : radius
-                // sample obstacle size
-                std::uniform_real_distribution<> uniform_obstacle(0.3, 0.5);
-                Eigen::VectorXd obstacle_circle_dr;
-                obstacle_circle_dr.setZero(n_obstacle);
-                for (int i=0; i<n_obstacle; i++) {
-//                    obstacle_circle_dr[i] = 0.4;
-                    obstacle_circle_dr[i] = uniform_obstacle(env_generator);
-                }
+                ///* Open field with cylinders and boxes *///
 
-                // set raw height value
-                for (int j=0; j<hm_samplesY; j++) {
-                    for (int i=0; i<hm_samplesX; i++) {
-                        double x = (i - (hm_samplesX / 2)) * unitX, y = (j - (hm_samplesY / 2)) * unitY;
-                        bool available_obstacle = false, not_available_init = false;
-                        for (int k=0; k<n_obstacle; k++) {
-                            double obstacle_x = obstacle_centers(k, 0), obstacle_y = obstacle_centers(k, 1);
-                            if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < obstacle_circle_dr[k])
-                                available_obstacle = true;
-                            if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < (obstacle_circle_dr[k] + 1.0))
-                                not_available_init = true;
-                        }
-
-                        if (j==0 || j==hm_samplesY-1)
-                            available_obstacle = true;
-                        if (i==0 || i==hm_samplesX-1)
-                            available_obstacle = true;
-
-                        if ( x < (- hm_sizeX/2 + 3) || (hm_sizeX/2 - 3) < x ||
-                             y < (- hm_sizeY/2 + 3) || (hm_sizeY/2 - 3) < y)
-                            not_available_init = true;
-
-                        if (!available_obstacle)
-                            hm_raw_value.push_back(0.0);
-                        else
-                            hm_raw_value.push_back(obstacle_height);
-
-                        if (!not_available_init) {
-                            init_set.push_back({x, y});
-
-                            /// For goal point distance condition, should also consider the "hm_size" because there should be enough goals in all four squares for evaluating in point_goal_initialize
-                            if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
-                                goal_set.push_back({x, y});
-                        }
-                    }
-                }
-            }
-            else if (env_type == 2) {
-                // obstacle_size_list : box length
-                // sample obstacle size
-                std::uniform_real_distribution<> uniform_obstacle(0.6, 1.0);
-                Eigen::VectorXd obstacle_box_size;
-                obstacle_box_size.setZero(n_obstacle);
-                for (int i=0; i<n_obstacle; i++) {
-//                    obstacle_box_size[i] = 0.8;
-                     obstacle_box_size[i] = uniform_obstacle(env_generator);
-                }
-
-                for (int j=0; j<hm_samplesY; j++) {
-                    for (int i=0; i<hm_samplesX; i++) {
-                        double x = (i - (hm_samplesX / 2)) * unitX, y = (j - (hm_samplesY / 2)) * unitY;
-                        bool available_obstacle = false, not_available_init = false;
-                        for (int k=0; k<n_obstacle; k++) {
-                            double obstacle_x = obstacle_centers(k, 0), obstacle_y = obstacle_centers(k, 1);
-                            if (abs(x - obstacle_x) <= obstacle_box_size[k]/2 && abs(y - obstacle_y) <= obstacle_box_size[k]/2)
-                                available_obstacle = true;
-                            if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < ((obstacle_box_size[k] * sqrt(2)) / 2 + 1.0))
-                                not_available_init = true;
-                        }
-
-                        if (j==0 || j==hm_samplesY-1)
-                            available_obstacle = true;
-                        if (i==0 || i==hm_samplesX-1)
-                            available_obstacle = true;
-
-                        if ( x < (- hm_sizeX/2 + 3) || (hm_sizeX/2 - 3) < x ||
-                             y < (- hm_sizeY/2 + 3) || (hm_sizeY/2 - 3) < y)
-                            not_available_init = true;
-
-                        if (!available_obstacle)
-                            hm_raw_value.push_back(0.0);
-                        else
-                            hm_raw_value.push_back(obstacle_height);
-
-                        if (!not_available_init) {
-                            init_set.push_back({x, y});
-
-                            /// For goal point distance condition, should also consider the "hm_size" because there should be enough goals in all four squares for evaluating in point_goal_initialize
-                            if (sqrt(pow(x, 2) + pow(y, 2)) > 10)
-                                goal_set.push_back({x, y});
-                        }
-                    }
-                }
-            }
-            else {
-                // sample environment size
-//                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 4.0);
-                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 6.0);
-//                std::uniform_real_distribution<> uniform_obstacle_long(8.0, 12.0);
-                std::uniform_real_distribution<> uniform_obstacle_long(26.0, 30.0);
-                double obstacle_corridor_short = uniform_obstacle_short(env_generator);
-                double obstacle_corridor_long = uniform_obstacle_long(env_generator);
-//                double obstacle_corridor_short = 2.0;
-//                double obstacle_corridor_long = 12.0;
-
+                /// set environment parameter
                 hm_centerX = 0.0, hm_centerY = 0.0;
-                hm_sizeX = obstacle_corridor_long, hm_sizeY = obstacle_corridor_long;
-                hm_samplesX = int(hm_sizeX * 12), hm_samplesY = int(hm_sizeY * 12);
-                unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
-                obstacle_height = 2;
+                hm_sizeX = 40., hm_sizeY = 40.;
+                hm_samplesX = hm_sizeX * 12, hm_samplesY = hm_sizeY * 12;
+                double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
+                double obstacle_height = 2;
 
-                /// sample obstacle center for cross-corridor
-                std::uniform_real_distribution<> uniform_corridor_grid_size(3., 4.);   // sample different grid size in different available range for data collection stability
-                double obstacle_grid_size = uniform_corridor_grid_size(env_generator);
-//                double obstacle_grid_size = 2.5;
+                /// sample obstacle center
+                double obstacle_grid_size = sample_obstacle_grid_size;;
                 int n_x_grid = int(hm_sizeX / obstacle_grid_size);
                 int n_y_grid = int(hm_sizeY / obstacle_grid_size);
                 n_obstacle = n_x_grid * n_y_grid;
 
                 obstacle_centers.setZero(n_obstacle, 2);
                 std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
-//                std::uniform_real_distribution<> uniform(0.8, obstacle_grid_size - 0.8);
+                for (int i=0; i<n_obstacle; i++) {
+                    int current_n_y = int(i / n_x_grid);
+                    int current_n_x = i - current_n_y * n_x_grid;
+                    double sampled_x;
+                    double sampled_y;
+                    sampled_x = uniform(env_generator);
+                    sampled_y = uniform(env_generator);
+
+                    sampled_x +=  obstacle_grid_size * current_n_x;
+                    sampled_x -= hm_sizeX/2;
+                    sampled_y += obstacle_grid_size * current_n_y;
+                    sampled_y -= hm_sizeY/2;
+                    obstacle_centers(i, 0) = sampled_x;
+                    obstacle_centers(i, 1) = sampled_y;
+                }
+
+                /// generate obstacles
+                std::uniform_int_distribution<> random_obstacle_sampling(1, 2);
+                std::uniform_real_distribution<> uniform_cylinder_obstacle(0.3, 0.5);
+                std::uniform_real_distribution<> uniform_box_obstacle(0.6, 1.0);
+                Eigen::VectorXd obstacle_type_list, obstacle_circle_dr, obstacle_box_size;
+                obstacle_type_list.setZero(n_obstacle);
+                obstacle_circle_dr.setZero(n_obstacle);
+                obstacle_box_size.setZero(n_obstacle);
+                for (int i=0; i<n_obstacle; i++) {
+                    int random_obstacle = random_obstacle_sampling(env_generator);
+                    obstacle_type_list[i] = random_obstacle;
+                    if (random_obstacle == 1) {
+                        /// generate cylinder
+                        obstacle_circle_dr[i] = uniform_cylinder_obstacle(env_generator);
+                    } else {
+                        /// generate box
+                        obstacle_box_size[i] = uniform_box_obstacle(env_generator);
+                    }
+                }
+
+                /// set raw height value
+                for (int j=0; j<hm_samplesY; j++) {
+                    for (int i=0; i<hm_samplesX; i++) {
+                        double x = (i - (hm_samplesX / 2)) * unitX, y = (j - (hm_samplesY / 2)) * unitY;
+                        bool available_obstacle = false, available_init = true;
+                        // consider box and cylinder obstacle
+                        for (int k=0; k<n_obstacle; k++) {
+                            double obstacle_x = obstacle_centers(k, 0), obstacle_y = obstacle_centers(k, 1);
+                            if (obstacle_type_list[k] == 1) {
+                                // cylinder obstacle
+                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < obstacle_circle_dr[k])
+                                    available_obstacle = true;
+                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < (obstacle_circle_dr[k] + 0.8))
+                                    available_init = false;
+                            } else {
+                                // box obstacle
+                                if (abs(x - obstacle_x) <= obstacle_box_size[k]/2 && abs(y - obstacle_y) <= obstacle_box_size[k]/2)
+                                    available_obstacle = true;
+                                if (sqrt(pow(x - obstacle_x, 2) + pow(y - obstacle_y, 2)) < ((obstacle_box_size[k] * sqrt(2)) / 2 + 0.8))
+                                    available_init = false;
+                            }
+                        }
+
+                        if (j==0 || j==hm_samplesY-1)
+                            available_obstacle = true;
+                        if (i==0 || i==hm_samplesX-1)
+                            available_obstacle = true;
+
+                        if ( x < (- hm_sizeX/2 + 3) || (hm_sizeX/2 - 3) < x ||
+                             y < (- hm_sizeY/2 + 3) || (hm_sizeY/2 - 3) < y)
+                            available_init = false;
+
+                        if (available_obstacle)
+                            hm_raw_value.push_back(obstacle_height);
+                        else
+                            hm_raw_value.push_back(0.0);
+
+                        if (available_init) {
+                            init_set.push_back({x, y});
+
+                            // For goal point distance condition, should also consider the "hm_size" because there should be enough goals in all four squares for evaluating in point_goal_initialize
+                            if (sqrt(pow(x, 2) + pow(y, 2)) > 15)
+                                goal_set.push_back({x, y});
+                        }
+                    }
+                }
+            }
+            else {
+                ///* Cross-corridor with cylinders and boxes *///
+
+                /// sample environment size
+                std::uniform_real_distribution<> uniform_obstacle_short(2.0, 6.0);
+                std::uniform_real_distribution<> uniform_obstacle_long(8.0, 30.0);
+                double obstacle_corridor_short = uniform_obstacle_short(env_generator);
+                double obstacle_corridor_long = uniform_obstacle_long(env_generator);
+
+                /// set environment parameter
+                hm_centerX = 0.0, hm_centerY = 0.0;
+                hm_sizeX = obstacle_corridor_long, hm_sizeY = obstacle_corridor_long;
+                hm_samplesX = int(hm_sizeX * 12), hm_samplesY = int(hm_sizeY * 12);
+                double unitX = hm_sizeX / hm_samplesX, unitY = hm_sizeY / hm_samplesY;
+                double obstacle_height = 2;
+
+                /// sample obstacle center for cross-corridor
+                std::uniform_real_distribution<> uniform_corridor_grid_size(3., 4.);   // sample different grid size in different available range for data collection stability
+                double obstacle_grid_size = uniform_corridor_grid_size(env_generator);
+                int n_x_grid = int(hm_sizeX / obstacle_grid_size);
+                int n_y_grid = int(hm_sizeY / obstacle_grid_size);
+                n_obstacle = n_x_grid * n_y_grid;
+
+                obstacle_centers.setZero(n_obstacle, 2);
+                std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
                 for (int i=0; i<n_obstacle; i++) {
                     int current_n_y = int(i / n_x_grid);
                     int current_n_x = i - current_n_y * n_x_grid;
@@ -306,12 +278,9 @@ namespace raisim
             n_init_set = init_set.size();
             n_goal_set = goal_set.size();
             int total_n_point_goal = 12;
-//            int total_n_point_goal = 8;
-
-            assert(n_init_set > 0);
-            assert(n_goal_set >= total_n_point_goal);
 
             /// initialization for each specific task
+            random_initialize = cfg["random_initialize"].template As<bool>();
             point_goal_initialize = cfg["point_goal_initialize"].template As<bool>();
             CVAE_data_collection_initialize = cfg["CVAE_data_collection_initialize"].template As<bool>();
             safe_control_initialize = cfg["safe_control_initialize"].template As<bool>();
@@ -394,50 +363,6 @@ namespace raisim
             pTarget12_.setZero(nJoints_);
             joint_position_error_history.setZero(nJoints_ * n_history_steps);
             joint_velocity_history.setZero(nJoints_ * n_history_steps);
-            GRF_impulse.setZero(4);
-            
-            /// Add intialization for extra cost terms
-            previous_action.setZero(nJoints_);
-            target_postion.setZero(nJoints_);
-            footPos_W.resize(4);
-            footVel_W.resize(4);
-            footContactVel_.resize(4);
-
-            /// Initialize user command values
-            before_user_command.setZero(3);
-            after_user_command.setZero(3);
-
-            /// collect joint positions, collision geometry
-            defaultJointPositions_.resize(13);
-            defaultBodyMasses_.resize(13);
-            for (int i = 0; i < 13; i++) {
-                defaultJointPositions_[i] = anymal_->getJointPos_P()[i].e();
-                defaultBodyMasses_[i] = anymal_->getMass(i);
-            }
-
-            /// Get COM_base position
-            COMPosition_ = anymal_->getBodyCOM_B()[0].e();
-
-            /// reward weights
-            reward_obstacle_distance_coeff = cfg["reward"]["obstacle_distance"]["coeff"].As<double>();
-            reward_command_similarity_coeff = cfg["reward"]["command_similarity"]["coeff"].As<double>();
-
-            /// total trajectory length
-            double control_dt = cfg["control_dt"].As<double>();
-            double max_time = cfg["max_time"].As<double>();
-            double command_period = cfg["command_period"].As<double>();
-            total_traj_len = int(max_time / control_dt);
-            command_len = int(command_period / control_dt);
-
-            /// Randomization
-            randomization = cfg["randomization"].template As<bool>();
-            if (randomization) {
-                /// Randomize mass and Dynamics (joint position)
-                noisify_Dynamics();
-                noisify_Mass_and_COM();
-            }
-            random_initialize = cfg["random_initialize"].template As<bool>();
-            random_external_force = cfg["random_external_force"].template As<bool>();
 
             if (point_goal_initialize || CVAE_data_collection_initialize) {
                 /// find the point closest to the center
@@ -454,18 +379,6 @@ namespace raisim
                     }
                 }
             }
-
-            /// contact foot index
-            foot_idx[0] = anymal_->getFrameIdxByName("LF_shank_fixed_LF_FOOT");  // 3
-            foot_idx[1] = anymal_->getFrameIdxByName("RF_shank_fixed_RF_FOOT");  // 6
-            foot_idx[2] = anymal_->getFrameIdxByName("LH_shank_fixed_LH_FOOT");  // 9
-            foot_idx[3] = anymal_->getFrameIdxByName("RH_shank_fixed_RH_FOOT");  // 12
-
-            /// contact shank index
-            shank_idx[0] = anymal_->getFrameIdxByName("LF_KFE");
-            shank_idx[1] = anymal_->getFrameIdxByName("RF_KFE");
-            shank_idx[2] = anymal_->getFrameIdxByName("LH_KFE");
-            shank_idx[3] = anymal_->getFrameIdxByName("RH_KFE");
 
             /// nominal configuration of anymal_c
             gc_init_ << 0, 0, 0.7, 1.0, 0.0, 0.0, 0.0, 0.03, 0.5, -0.9, -0.03, 0.5, -0.9, 0.03, -0.5, 0.9, -0.03, -0.5, 0.9;  //0.5
@@ -491,9 +404,6 @@ namespace raisim
             /// action scaling
             actionMean_ = gc_init_.tail(nJoints_);
             actionStd_.setConstant(0.3);
-
-            /// Reward coefficients
-            rewards_.initializeFromConfigurationFile(cfg["reward"]);
 
             /// indices of links that could make contact
             footIndices_.insert(anymal_->getBodyIdx("LF_SHANK"));
@@ -528,7 +438,6 @@ namespace raisim
 
                 server_->focusOn(anymal_);
             }
-
         }
 
     void init() final {}
@@ -597,15 +506,6 @@ namespace raisim
             initHistory();
         }
 
-        if (random_external_force) {
-            random_force_period = int(1.0 / control_dt_);
-            std::uniform_int_distribution<> uniform_force(1, total_traj_len - random_force_period);
-            std::uniform_int_distribution<> uniform_binary(0, 1);
-            random_force_n_step = uniform_force(generator);
-            random_external_force_final = uniform_binary(generator);  /// 0: x, 1: o
-            random_external_force_direction = uniform_binary(generator);  /// 0: -1, 1: +1
-        }
-
         updateObservation();
     }
 
@@ -617,7 +517,6 @@ namespace raisim
         pTarget12_ = action.cast<double>();
         pTarget12_ = pTarget12_.cwiseProduct(actionStd_);
         pTarget12_ += actionMean_;
-        target_postion = pTarget12_.cast<double>();
         pTarget_.tail(nJoints_) = pTarget12_;
 
         Eigen::VectorXd current_joint_position_error = pTarget12_ - gc_.tail(nJoints_);
@@ -625,20 +524,6 @@ namespace raisim
 
         anymal_->setPdTarget(pTarget_, vTarget_);
 
-        /// Set external force to the base of the robot
-        if (random_external_force)
-            if (bool (random_external_force_final))
-                if (random_force_n_step <= current_n_step && current_n_step < (random_force_n_step + random_force_period)) {
-                    raisim::Mat<3, 3> baseOri;
-                    Eigen::Vector3d force_direction;
-                    anymal_->getFrameOrientation("base_to_base_inertia", baseOri);
-                    if (random_external_force_direction == 0)
-                        force_direction = {0, -1, 0};
-                    else
-                        force_direction = {0, 1, 0};
-                    force_direction = baseOri.e() * force_direction;
-                    anymal_->setExternalForce(anymal_->getBodyIdx("base"), force_direction * 50);
-                }
 
         for (int i = 0; i < int(control_dt_ / simulation_dt_ + 1e-10); i++)
         {
@@ -657,7 +542,7 @@ namespace raisim
     void updateObservation()
     {
         static std::default_random_engine generator(random_seed);
-        std::normal_distribution<> lidar_noise(0., 0.1);
+        std::normal_distribution<> lidar_noise(0., 0.2);
 
         anymal_->getState(gc_, gv_);
         raisim::Vec<4> quat;
@@ -750,88 +635,9 @@ namespace raisim
         coordinate = coordinateDouble.cast<float>();
     }
 
-    void calculate_cost()
-    {
-        /// New rewards for collision avoidance
-        obstacle_distance_cost = 0.0, command_similarity_cost = 0.0;
-    }
+    void calculate_cost() {}
 
-    void comprehend_contacts()
-    {
-        numContact_ = anymal_->getContacts().size();
-
-        Eigen::Vector4d foot_Pos_height_map;
-        float shank_dr = 0.06;
-
-        for (int k = 0; k < 4; k++)
-        {
-            footContactState_[k] = false;
-            anymal_->getFramePosition(foot_idx[k], footPos_W[k]);  //position of the feet
-            anymal_->getFrameVelocity(foot_idx[k], footVel_W[k]);
-            foot_Pos_height_map[k] = hm->getHeight(footPos_W[k][0], footPos_W[k][1]);
-//            foot_Pos_height_map[k] = 0.;   /// Should change if it is rough terrain!!!!
-            foot_Pos_difference[k] = std::abs(footPos_W[k][2] - foot_Pos_height_map[k]);
-
-            std::vector<raisim::Vec<3>> shankPos_W;
-            shankPos_W.resize(4);
-            anymal_->getFramePosition(shank_idx[k], shankPos_W[k]);
-            shank_Pos_difference[k] = std::abs(shankPos_W[k][2] - shank_dr);
-        }
-
-        raisim::Vec<3> vec3;
-        float dr = 0.03;
-
-        //Classify foot contact
-        /// This only works for flat terrain!!
-        if (numContact_ > 0)
-        {
-            for (int k = 0; k < numContact_; k++)
-            {
-                if (!anymal_->getContacts()[k].skip())
-                {
-                    int idx = anymal_->getContacts()[k].getlocalBodyIndex();
-
-                    // check foot height to distinguish shank contact
-                    if (idx == 3 && foot_Pos_difference[0] <= dr && !footContactState_[0])
-                    {
-                        footContactState_[0] = true;
-                        // footNormal_[0] = anymal_->getContacts()[k].getNormal().e();
-                        anymal_->getContactPointVel(k, vec3);
-                        footContactVel_[0] = vec3.e();
-                        // numFootContact_++;
-                        GRF_impulse[0] = anymal_->getContacts()[k].getImpulse().e().squaredNorm();
-                    }
-                    else if (idx == 6 && foot_Pos_difference[1] <= dr && !footContactState_[1])
-                    {
-                        footContactState_[1] = true;
-                        // footNormal_[1] = anymal_->getContacts()[k].getNormal().e();
-                        anymal_->getContactPointVel(k, vec3);
-                        footContactVel_[1] = vec3.e();
-                        // numFootContact_++;
-                        GRF_impulse[1] = anymal_->getContacts()[k].getImpulse().e().squaredNorm();
-                    }
-                    else if (idx == 9 && foot_Pos_difference[2] <= dr && !footContactState_[2])
-                    {
-                        footContactState_[2] = true;
-                        // footNormal_[2] = anymal_->getContacts()[k].getNormal().e();
-                        anymal_->getContactPointVel(k, vec3);
-                        footContactVel_[2] = vec3.e();
-                        // numFootContact_++;
-                        GRF_impulse[2] = anymal_->getContacts()[k].getImpulse().e().squaredNorm();
-                    }
-                    else if (idx == 12 && foot_Pos_difference[3] <= dr && !footContactState_[3])
-                    {
-                        footContactState_[3] = true;
-                        // footNormal_[3] = anymal_->getContacts()[k].getNormal().e();
-                        anymal_->getContactPointVel(k, vec3);
-                        footContactVel_[3] = vec3.e();
-                        // numFootContact_++;
-                        GRF_impulse[3] = anymal_->getContacts()[k].getImpulse().e().squaredNorm();
-                    }
-                }
-            }
-        }
-    }
+    void comprehend_contacts() {}
 
     void visualize_desired_command_traj(Eigen::Ref<EigenRowMajorMat> coordinate_desired_command,
                                         Eigen::Ref<EigenVec> P_col_desired_command,
@@ -878,99 +684,13 @@ namespace raisim
 
     void reward_logging(Eigen::Ref<EigenVec> rewards, Eigen::Ref<EigenVec> rewards_w_coeff, int n_rewards) {}
 
-    void noisify_Dynamics() {
-        static std::default_random_engine generator(random_seed);
-        std::uniform_real_distribution<> uniform01(0.0, 1.0);
-        std::uniform_real_distribution<> uniform(-1.0, 1.0);
+    void noisify_Dynamics() {}
 
-        /// joint position randomization
-        for (int i = 0; i < 4; i++) {
-            double x_, y_, z_;
-            if (i < 2) x_ = uniform01(generator) * 0.005;
-            else x_ = -uniform01(generator) * 0.005;
+    void noisify_Mass_and_COM() {}
 
-            y_ = uniform(generator) * 0.01;
-            z_ = uniform(generator) * 0.01;
+    void contact_logging(Eigen::Ref<EigenVec> contacts) {}
 
-            int hipIdx = 3 * i + 1;
-            int thighIdx = 3 * i + 2;
-            int shankIdx = 3 * i + 3;
-
-            ///hip
-            anymal_->getJointPos_P()[hipIdx].e()[0] = defaultJointPositions_[hipIdx][0] + x_;
-            anymal_->getJointPos_P()[hipIdx].e()[1] = defaultJointPositions_[hipIdx][1] + y_;
-            anymal_->getJointPos_P()[hipIdx].e()[2] = defaultJointPositions_[hipIdx][2] + z_; ///1
-
-
-            /// thigh
-            x_ = - uniform01(generator) * 0.01;
-            y_ = uniform(generator) * 0.01;
-            z_ = uniform(generator) * 0.01;
-
-            anymal_->getJointPos_P()[thighIdx].e()[0] = defaultJointPositions_[thighIdx][0] + x_;
-            anymal_->getJointPos_P()[thighIdx].e()[1] = defaultJointPositions_[thighIdx][1] + y_;
-            anymal_->getJointPos_P()[thighIdx].e()[2] = defaultJointPositions_[thighIdx][2] + z_; ///1
-
-            /// shank
-            double dy_ = uniform(generator) * 0.005;
-            //  dy>0 -> move outwards
-            if (i % 2 == 1) {
-                y_ = -dy_;
-            } else {
-                y_ = dy_;
-            }
-
-            x_ = uniform(generator) * 0.01;
-            z_ = uniform(generator) * 0.01;
-
-            anymal_->getJointPos_P()[shankIdx].e()[0] = defaultJointPositions_[shankIdx][0] + x_;
-            anymal_->getJointPos_P()[shankIdx].e()[1] = defaultJointPositions_[shankIdx][1] + y_;
-            anymal_->getJointPos_P()[shankIdx].e()[2] = defaultJointPositions_[shankIdx][2] + z_;
-
-        }
-    }
-
-    void noisify_Mass_and_COM() {
-        static std::default_random_engine generator(random_seed);
-        std::uniform_real_distribution<> uniform(-1.0, 1.0);
-
-        /// base mass
-        anymal_->getMass()[0] = defaultBodyMasses_[0] * (1 + 0.15 * uniform(generator));
-
-        /// hip mass
-        for (int i = 1; i < 13; i += 3) {
-            anymal_->getMass()[i] = defaultBodyMasses_[i] * (1 + 0.15 * uniform(generator));
-        }
-
-        /// thigh mass
-        for (int i = 2; i < 13; i += 3) {
-            anymal_->getMass()[i] = defaultBodyMasses_[i] * (1 + 0.15 * uniform(generator));
-        }
-
-        /// shank mass
-        for (int i = 3; i < 13; i += 3) {
-            anymal_->getMass()[i] = defaultBodyMasses_[i] * (1 + 0.04 * uniform(generator));
-        }
-
-        anymal_->updateMassInfo();
-
-        /// COM position
-        for (int i = 0; i < 3; i++) {
-            anymal_->getBodyCOM_B()[0].e()[i] = COMPosition_[i] + uniform(generator) * 0.01;
-        }
-    }
-
-    void contact_logging(Eigen::Ref<EigenVec> contacts)
-    {
-        contacts = GRF_impulse.cast<float>();
-    }
-
-    void torque_and_velocity_logging(Eigen::Ref<EigenVec> torque_and_velocity)
-    {
-        /// 0 ~ 12 : torque, 12 ~ 24 : joint velocity
-        torque_and_velocity.segment(0, 12) = torque.tail(12).cast<float>();
-        torque_and_velocity.segment(12, 12) = gv_.segment(6, 12).cast<float>();
-    }
+    void torque_and_velocity_logging(Eigen::Ref<EigenVec> torque_and_velocity) {}
 
     void set_goal(Eigen::Ref<EigenVec> goal_pos)
     {
@@ -1011,31 +731,27 @@ namespace raisim
 
     void computed_heading_direction(Eigen::Ref<EigenVec> heading_direction_) {}
 
-    bool collision_check() {return false;}
+    bool collision_check() {
+        /// if the contact body is not feet, count as collision
+        for (auto &contact : anymal_->getContacts()) {
+            if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end()) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     bool isTerminalState(float &terminalReward) final
     {
-        terminalReward = float(terminalRewardCoeff_);
+        terminalReward = 0.f;
+        return collision_check();
 
         /// if anymal falls down
         // raisim::Vec<3> base_position;
         // anymal_->getFramePosition("base_to_base_inertia", base_position);
         // if (base_position[2] < 0.3)
         //    return true;
-
-        /// if the contact body is not feet (this terminal condition includes crashing with obstacle)
-        for (auto &contact : anymal_->getContacts()) {
-            if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end()) {
-                return true;
-            }
-////            for (int i=0; i<4; i++) {
-////                if (shank_Pos_difference[i] < 1e-2)
-////                    return true;
-////            }
-        }
-        terminalReward = 0.f;
-
-        return false;
+        // return false;
     }
 
     private:
@@ -1043,24 +759,12 @@ namespace raisim
     bool visualizable_ = false;
     raisim::ArticulatedSystem *anymal_;
     Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_, vTarget_;
-    double terminalRewardCoeff_ = -10.;
     Eigen::VectorXd actionMean_, actionStd_, obDouble_;
     Eigen::Vector3d bodyLinearVel_, bodyAngularVel_;
     std::set<size_t> footIndices_;
 
-    Eigen::VectorXd torque, reward_log, previous_action, target_postion, before_user_command, after_user_command;
-    Eigen::Vector3d roll_and_pitch;
-    Eigen::Vector4d foot_idx, shank_idx;
-    size_t numContact_;
-    size_t numFootContact_;
-    std::vector<raisim::Vec<3>> footPos_;
-    std::vector<raisim::Vec<3>> footPos_W;
-    std::vector<raisim::Vec<3>> footVel_W;
-    std::vector<Eigen::Vector3d> footContactVel_;
-    std::array<bool, 4> footContactState_;
-    Eigen::Vector4d foot_Pos_difference, shank_Pos_difference;
     int n_history_steps = 2;
-    Eigen::VectorXd joint_position_error_history, joint_velocity_history, GRF_impulse;
+    Eigen::VectorXd joint_position_error_history, joint_velocity_history;
 
     /// Lidar
     int scanSize;
@@ -1072,22 +776,15 @@ namespace raisim
     int random_seed = 0;
 
     /// Randomization
-    bool randomization = false, random_initialize = false, random_external_force = false;
-    int random_external_force_final = 0, random_external_force_direction = 0;
-    std::vector<raisim::Vec<3>> defaultJointPositions_;
-    std::vector<double> defaultBodyMasses_;
-    raisim::Vec<3> COMPosition_;
+    bool random_initialize = false;
 
-    /// Randon intialization & Random external force
+    /// Randon intialization
     Eigen::VectorXd random_gc_init, random_gv_init, current_random_gc_init, current_random_gv_init;
-    int random_init_n_step = 0, random_force_n_step = 0, random_force_period = 100, current_n_step = 0;
+    int current_n_step = 0;
 
     /// Heightmap
     double hm_sizeX, hm_sizeY;
     raisim::HeightMap* hm;
-
-    /// Traning configuration
-    int total_traj_len, command_len;
 
     /// Obstacle
     int n_obstacle = 0;
@@ -1098,14 +795,10 @@ namespace raisim
     int n_init_set = 0;
     Eigen::MatrixXd obstacle_centers;
 
-    /// Reward (Cost) - New
-    double obstacle_distance_cost = 0.0, command_similarity_cost = 0.0;
-    double reward_obstacle_distance_coeff, reward_command_similarity_coeff;
-
     /// Observation to be predicted
     Eigen::VectorXd coordinateDouble;
 
-    /// Trajectory prediction
+    /// Visualize trajectory prediction
     int n_prediction_step = 12;   // Determined manually
     std::vector<raisim::Visuals *> desired_command_traj, modified_command_traj;
 
@@ -1120,8 +813,10 @@ namespace raisim
     int current_n_goal = 0;
     std::vector<int> sampled_goal_set = {};
 
-    /// environment type
+    /// environment type and parameter
     int env_type;
+    double hm_centerX = 0.0, hm_centerY = 0.0;
+    double hm_samplesX = 0., hm_samplesY = 0.;
 
     };
 }

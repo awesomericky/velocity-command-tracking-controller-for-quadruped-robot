@@ -743,6 +743,8 @@ class Stochastic_action_planner_w_CVAE:
     def update(self, rewards):
         safe_idx = np.where(rewards != 0)[0]
         if len(safe_idx) != 0:
+            # safe_a_tilde = self.sampled_command_traj[:, safe_idx, :]
+            # self.optimized_command_traj = safe_a_tilde[:, np.argmax(rewards[safe_idx]), :]
             probs = np.exp(self.gamma * rewards[safe_idx])
             probs /= (np.sum(probs) + 1e-10)
             self.optimized_command_traj = np.sum(self.sampled_command_traj[:, safe_idx, :] * probs[np.newaxis, :, np.newaxis], axis=1)

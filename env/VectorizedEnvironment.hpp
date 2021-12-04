@@ -67,12 +67,10 @@ class VectorizedEnvironment {
     for (int i=0; i<num_envs_; i++) {
         seed_seq.push_back(seed_uniform(generator));
         if (cfg_determine_env == 0) {
-            if (i <= int(num_envs_ / 3))
+            if (i <= int(num_envs_ / 2))
                 env_type.push_back(1);
-            else if (i <= int(2 * num_envs_ / 3))
-                env_type.push_back(2);
             else
-                env_type.push_back(3);
+                env_type.push_back(2);
         } else {
             env_type.push_back(cfg_determine_env);
         }
@@ -80,21 +78,17 @@ class VectorizedEnvironment {
         obstacle_dr_seq.push_back(obstacle_dr_uniform(generator));
     }
 
-    float n_type_1 = 0;
-    float n_type_2 = 0;
-    float n_type_3 = 0;
+    double n_type_1 = 0;
+    double n_type_2 = 0;
     for (int i=0; i<num_envs_; i++) {
         if (env_type[i] == 1)
             n_type_1 += 1.;
         else if (env_type[i] == 2)
             n_type_2 += 1.;
-        else if (env_type[i] == 3)
-            n_type_3 += 1.;
     }
 
-//    std::cout << "Environment 1 (circle): " << std::to_string(n_type_1 / num_envs_) << "\n";
-//    std::cout << "Environment 2 (box): " << std::to_string(n_type_2 / num_envs_) << "\n";
-//    std::cout << "Environment 3 (corridor): " << std::to_string(n_type_3 / num_envs_) << "\n";
+//    std::cout << "Environment 1 (field): " << std::to_string(n_type_1 / num_envs_) << "\n";
+//    std::cout << "Environment 2 (corridor): " << std::to_string(n_type_2 / num_envs_) << "\n";
 
     environments_.reserve(num_envs_);
     rewardInformation_.reserve(num_envs_);

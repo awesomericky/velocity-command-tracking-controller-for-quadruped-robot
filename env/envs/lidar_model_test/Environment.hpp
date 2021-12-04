@@ -248,9 +248,9 @@ namespace raisim
                     int max_num_path_slice = int(max_time / delta_time);
                     if (world_type == 2) {
                         for (int i=0; i<max_num_path_slice; i++)
-                            server_->addVisualBox("path" + std::to_string(i+1), 0.1, 0.1, 0.1, 1, 0, 0);
+                            server_->addVisualBox("path_one" + std::to_string(i+1), 0.1, 0.1, 0.1, 1, 0, 0);
                     } else if (world_type == 10) {
-                        for (int i=0; i<(max_num_path_slice); i++) {
+                        for (int i=0; i<max_num_path_slice; i++) {
                             server_->addVisualBox("path_one" + std::to_string(i+1), 0.1, 0.1, 0.1, 1, 0, 0);
                             server_->addVisualBox("path_two" + std::to_string(i+1), 0.1, 0.1, 0.1, 0, 0, 1);
                         }
@@ -674,9 +674,9 @@ namespace raisim
         if (current_n_step != 0 && current_n_step % 10 == 0)
             if (visualizable_ && visualize_path) {
                 if (path_type)
-                    server_->getVisualObject("path_one" + std::to_string(current_n_step/5))->setPosition(gc_.segment(0, 3));
+                    server_->getVisualObject("path_one" + std::to_string(current_n_step/10))->setPosition(gc_.segment(0, 3));
                 else
-                    server_->getVisualObject("path_two" + std::to_string(current_n_step/5))->setPosition(gc_.segment(0, 3));
+                    server_->getVisualObject("path_two" + std::to_string(current_n_step/10))->setPosition(gc_.segment(0, 3));
             }
 
         /// Get depth data

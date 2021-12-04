@@ -53,8 +53,7 @@ class Trainer:
                                    command_shape=[self.n_prediction_step, command_dim],
                                    P_col_shape=[self.n_prediction_step, P_col_dim],
                                    coordinate_shape=[self.n_prediction_step, coordinate_dim],
-                                   device=device,
-                                   prioritized_data_update=self.prioritized_data_update)
+                                   device=device)
 
         if shuffle_batch:
             self.batch_sampler = self.storage.mini_batch_generator_shuffle

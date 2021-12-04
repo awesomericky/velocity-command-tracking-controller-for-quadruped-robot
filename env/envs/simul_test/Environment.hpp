@@ -50,6 +50,8 @@ namespace raisim
             random_seed = cfg["seed"]["evaluate"].template As<int>();
             static std::default_random_engine env_generator(random_seed);
 
+            visualize_path = cfg["visualize_path"].As<bool>();
+
             /// sample obstacle center
             double obstacle_grid_size = cfg["test_obstacle_grid_size"].template As<double>();
             int n_x_grid = int(hm_sizeX / obstacle_grid_size);
@@ -71,18 +73,18 @@ namespace raisim
                     sampled_x = uniform_distrib_0(env_generator);
                     sampled_y = uniform_distrib_0(env_generator);
                 } 
-		else if (obstacle_center_distribution_type == 1) {
-                    sampled_x = uniform_distrib_1(env_generator);
-                    sampled_y = uniform_distrib_1(env_generator);
+                else if (obstacle_center_distribution_type == 1) {
+                            sampled_x = uniform_distrib_1(env_generator);
+                            sampled_y = uniform_distrib_1(env_generator);
+                    }
+                else if (obstacle_center_distribution_type == 2) {
+                    sampled_x = uniform_distrib_2(env_generator);
+                    sampled_y = uniform_distrib_2(env_generator);
                 }
-		else if (obstacle_center_distribution_type == 2) {
-		    sampled_x = uniform_distrib_2(env_generator);
-		    sampled_y = uniform_distrib_2(env_generator);
-		}
-		else {
-		    sampled_x = uniform_distrib_3(env_generator);
-		    sampled_y = uniform_distrib_3(env_generator);
-		}
+                else {
+                    sampled_x = uniform_distrib_3(env_generator);
+                    sampled_y = uniform_distrib_3(env_generator);
+                }
 
                 sampled_x +=  obstacle_grid_size * current_n_x;
                 sampled_x -= hm_sizeX/2;
@@ -319,6 +321,14 @@ namespace raisim
                 if (point_goal_initialize) {
                     /// goal
                     server_->addVisualCylinder("goal", 0.4, 0.8, 2, 1, 0);
+
+                    /// set path
+                    if (visualize_path) {
+                        double max_time = 180., delta_time = 0.1;
+                        max_num_path_slice = int(max_time / delta_time);
+                        for (int i=0; i<max_num_path_slice; i++)
+                            server_->addVisualBox("path" + std::to_string(i+1), 0.1, 0.1, 0.1, 1, 0, 0);
+                    }
                 }
 
                 server_->focusOn(anymal_);
@@ -438,6 +448,12 @@ namespace raisim
         raisim::quatToRotMat(quat, rot);
         bodyLinearVel_ = rot.e().transpose() * gv_.segment(0, 3);
         bodyAngularVel_ = rot.e().transpose() * gv_.segment(3, 3);
+
+        /// Visualize base path
+        if (current_n_step != 0 && current_n_step % 10 == 0)
+            if (visualizable_ && visualize_path) {
+                server_->getVisualObject("path" + std::to_string(current_n_step/10))->setPosition(gc_.segment(0, 3));
+            }
 
         /// Get depth data
         raisim::Vec<3> lidarPos;
@@ -679,6 +695,11 @@ namespace raisim
     void initialize_n_step()
     {
         current_n_step = 0;
+
+        if (visualizable_ && visualize_path) {
+            for (int i=0; i<max_num_path_slice; i++)
+                server_->getVisualObject("path" + std::to_string(i+1))->setPosition({0, 0, 0});
+        }
     }
 
     void computed_heading_direction(Eigen::Ref<EigenVec> heading_direction_) {}
@@ -696,7 +717,7 @@ namespace raisim
     bool isTerminalState(float &terminalReward) final
     {
         terminalReward = 0.f;
-	return collision_check();
+	    return collision_check();
 
         ///  if anymal falls down, count as failure
         //raisim::Vec<3> base_position;
@@ -762,6 +783,10 @@ namespace raisim
     int n_goal_set;
     int current_n_goal = 0;
     std::vector<int> sampled_goal_set = {};
+
+    /// use for visualizing path
+    bool visualize_path= false;
+    int max_num_path_slice=0;
 
     };
 }

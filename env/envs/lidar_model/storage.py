@@ -7,9 +7,8 @@ from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler, Sequenti
 
 # Data storage when not using TCN COM encoder
 class DataStorage:
-    def __init__(self, max_storage_size, state_dim, command_shape, P_col_shape, coordinate_shape, device, prioritized_data_update):
+    def __init__(self, max_storage_size, state_dim, command_shape, P_col_shape, coordinate_shape, device):
         self.device = device
-        self.prioritized_data_update = prioritized_data_update
 
         # Core
         self.states = torch.zeros(max_storage_size, state_dim).to(self.device)

@@ -1,10 +1,11 @@
 realistic: False   # if True, consider wait_time
 plot_command: False
-logging: True   # wandb
+logging: False #True   # wandb
 check_time: False
 
 environment:
   render: True
+  visualize_path: True
   evaluate: True
   determine_env: 0  # not used
   num_envs: 1
@@ -91,11 +92,11 @@ environment_model:
 Naive:
   planner:
     prediction_period: 6.0
-    number_of_sample: 512
+    number_of_sample: 1000
     gamma: 20
     beta: 0.4  # 0.8  # bigger == more consider a_hat
     sigma: 0.3
-    number_of_bin: 8
+    number_of_bin: 10
 
 CVAE:
   planner:

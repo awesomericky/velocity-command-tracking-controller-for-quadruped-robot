@@ -82,20 +82,11 @@ command_dim = cfg["architecture"]["command_encoder"]["input"]
 P_col_dim = cfg["architecture"]["traj_predictor"]["collision"]["output"]
 coordinate_dim = cfg["architecture"]["traj_predictor"]["coordinate"]["output"]   # Just predict x, y coordinate (not yaw)
 
-use_TCN_COM_encoder = cfg["architecture"]["COM_encoder"]["use_TCN"]
-
-if use_TCN_COM_encoder:
-    # Use TCN for encoding COM vel history
-    COM_feature_dim = cfg["architecture"]["COM_encoder"]["TCN"]["input"]
-    COM_history_time_step = cfg["architecture"]["COM_encoder"]["TCN"]["time_step"]
-    COM_history_update_period = int(cfg["architecture"]["COM_encoder"]["TCN"]["update_period"] / cfg["environment"]["control_dt"])
-    assert state_dim - lidar_dim == cfg["architecture"]["COM_encoder"]["TCN"]["output"][-1], "Check COM_encoder output and state_encoder input in the cfg.yaml"
-else:
-    # Use naive concatenation for encoding COM vel history
-    COM_feature_dim = cfg["architecture"]["COM_encoder"]["naive"]["input"]
-    COM_history_time_step = cfg["architecture"]["COM_encoder"]["naive"]["time_step"]
-    COM_history_update_period = int(cfg["architecture"]["COM_encoder"]["naive"]["update_period"] / cfg["environment"]["control_dt"])
-    assert state_dim - lidar_dim == COM_feature_dim * COM_history_time_step, "Check COM_encoder output and state_encoder input in the cfg.yaml"
+# Use naive concatenation for encoding COM vel history
+COM_feature_dim = cfg["architecture"]["COM_encoder"]["naive"]["input"]
+COM_history_time_step = cfg["architecture"]["COM_encoder"]["naive"]["time_step"]
+COM_history_update_period = int(cfg["architecture"]["COM_encoder"]["naive"]["update_period"] / cfg["environment"]["control_dt"])
+assert state_dim - lidar_dim == COM_feature_dim * COM_history_time_step, "Check COM_encoder output and state_encoder input in the cfg.yaml"
 
 command_tracking_ob_dim = user_command_dim + proprioceptive_sensor_dim
 command_tracking_act_dim = env.num_acts
@@ -112,48 +103,28 @@ environment_model = Lidar_environment_model(COM_encoding_config=cfg["architectur
 # Log the training and evaluating process or not
 logging = cfg["logging"]
 
-if use_TCN_COM_encoder:
-    trainer = Trainer_TCN(environment_model=environment_model,
-                          COM_dim=(COM_feature_dim, COM_history_time_step),
-                          lidar_dim=lidar_dim,
-                          command_dim=command_dim,
-                          P_col_dim=P_col_dim,
-                          coordinate_dim=coordinate_dim,
-                          prediction_period=cfg["data_collection"]["prediction_period"],
-                          delta_prediction_time=cfg["data_collection"]["command_period"],
-                          loss_weight=cfg["training"]["loss_weight"],
-                          max_storage_size=cfg["training"]["storage_size"],
-                          num_learning_epochs=cfg["training"]["num_epochs"],
-                          mini_batch_size=cfg["training"]["batch_size"],
-                          shuffle_batch=cfg["training"]["shuffle_batch"],
-                          clip_grad=cfg["training"]["clip_gradient"],
-                          learning_rate=cfg["training"]["learning_rate"],
-                          max_grad_norm=cfg["training"]["max_gradient_norm"],
-                          device=device,
-                          logging=logging)
-else:
-    trainer = Trainer(environment_model=environment_model,
-                      state_dim=state_dim,
-                      command_dim=command_dim,
-                      P_col_dim=P_col_dim,
-                      coordinate_dim=coordinate_dim,
-                      prediction_period=cfg["data_collection"]["prediction_period"],
-                      delta_prediction_time=cfg["data_collection"]["command_period"],
-                      loss_weight=cfg["training"]["loss_weight"],
-                      max_storage_size=cfg["training"]["storage_size"],
-                      num_learning_epochs=cfg["training"]["num_epochs"],
-                      mini_batch_size=cfg["training"]["batch_size"],
-                      shuffle_batch=cfg["training"]["shuffle_batch"],
-                      clip_grad=cfg["training"]["clip_gradient"],
-                      learning_rate=cfg["training"]["learning_rate"],
-                      max_grad_norm=cfg["training"]["max_gradient_norm"],
-                      device=device,
-                      logging=logging,
-                      P_col_interpolate=cfg["training"]["interpolate_probability"],
-                      prioritized_data_update=cfg["data_collection"]["prioritized_data_update"],
-                      prioritized_data_update_magnitude=cfg["data_collection"]["prioritized_data_update_magnitude"],
-                      weight_decay=cfg["training"]["weight_decay"],
-                      weight_decay_lamda=cfg["training"]["weight_decay_lamda"])
+trainer = Trainer(environment_model=environment_model,
+                  state_dim=state_dim,
+                  command_dim=command_dim,
+                  P_col_dim=P_col_dim,
+                  coordinate_dim=coordinate_dim,
+                  prediction_period=cfg["data_collection"]["prediction_period"],
+                  delta_prediction_time=cfg["data_collection"]["command_period"],
+                  loss_weight=cfg["training"]["loss_weight"],
+                  max_storage_size=cfg["training"]["storage_size"],
+                  num_learning_epochs=cfg["training"]["num_epochs"],
+                  mini_batch_size=cfg["training"]["batch_size"],
+                  shuffle_batch=cfg["training"]["shuffle_batch"],
+                  clip_grad=cfg["training"]["clip_gradient"],
+                  learning_rate=cfg["training"]["learning_rate"],
+                  max_grad_norm=cfg["training"]["max_gradient_norm"],
+                  device=device,
+                  logging=logging,
+                  P_col_interpolate=cfg["training"]["interpolate_probability"],
+                  prioritized_data_update=cfg["data_collection"]["prioritized_data_update"],
+                  prioritized_data_update_magnitude=cfg["data_collection"]["prioritized_data_update_magnitude"],
+                  weight_decay=cfg["training"]["weight_decay"],
+                  weight_decay_lamda=cfg["training"]["weight_decay_lamda"])
 
 saver = ConfigurationSaver(log_dir=home_path + "/raisimGymTorch/data/"+task_name,
                            save_items=[task_path + "/cfg.yaml", task_path + "/Environment.hpp"])
@@ -259,12 +230,8 @@ for update in range(cfg["environment"]["max_n_update"]):
                 temp_coordinate = np.zeros((cfg['environment']['num_envs'], coordinate_dim))
 
                 lidar_data = obs[:, proprioceptive_sensor_dim:]
-                if use_TCN_COM_encoder:
-                    temp_COM_history = COM_buffer.return_data()
-                    temp_lidar = lidar_data
-                else:
-                    temp_COM_history = COM_buffer.return_data(flatten=True)
-                    temp_state = np.concatenate((lidar_data, temp_COM_history), axis=1)
+                temp_COM_history = COM_buffer.return_data(flatten=True)
+                temp_state = np.concatenate((lidar_data, temp_COM_history), axis=1)
 
                 sample_user_command_constant = command_sampler_constant.sample()
                 sample_user_command_correlated = command_sampler_correlated.sample()
@@ -298,8 +265,8 @@ for update in range(cfg["environment"]["max_n_update"]):
             frame_end = time.time()
             wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
-            if wait_time > 0.:
-                time.sleep(wait_time)
+            # if wait_time > 0.:
+            #     time.sleep(wait_time)
 
             if traj_update_time:
                 # update P_col and coordinate for not terminated environment
@@ -309,58 +276,32 @@ for update in range(cfg["environment"]["max_n_update"]):
                 temp_P_col[not_done_envs] = 0
                 temp_coordinate[not_done_envs, :] = coordinate_obs[not_done_envs, :-1]
 
-                if use_TCN_COM_encoder:
-                    COM_history_traj.append(temp_COM_history)
-                    lidar_traj.append(temp_lidar)
-                else:
-                    state_traj.append(temp_state)
+                state_traj.append(temp_state)
                 command_traj.append(temp_command)
                 P_col_traj.append(temp_P_col)
                 coordinate_traj.append(temp_coordinate)
 
-        if use_TCN_COM_encoder:
-            COM_history_traj = np.array(COM_history_traj)
-            lidar_traj = np.array(lidar_traj)
-        else:
-            state_traj = np.array(state_traj)
+        state_traj = np.array(state_traj)
         command_traj = np.array(command_traj)
         P_col_traj = np.array(P_col_traj)
         coordinate_traj = np.array(coordinate_traj)
         init_coordinate_traj = np.array(init_coordinate_traj)
 
-        if use_TCN_COM_encoder:
-            (real_P_cols, real_coordinates), (predicted_P_cols, predicted_coordinates), (mean_P_col_accuracy, mean_coordinate_error) \
-                = trainer.evaluate(environment_model=loaded_environment_model,
-                                   COM_traj=COM_history_traj,
-                                   lidar_traj=lidar_traj,
-                                   command_traj=command_traj,
-                                   dones_traj=P_col_traj,
-                                   coordinate_traj=coordinate_traj,
-                                   init_coordinate_traj=init_coordinate_traj)
+        (real_P_cols, real_coordinates), (predicted_P_cols, predicted_coordinates), (total_col_prediction_accuracy, col_prediction_accuracy, not_col_prediction_accuracy, mean_coordinate_error) \
+            = trainer.evaluate(environment_model=loaded_environment_model,
+                               state_traj=state_traj,
+                               command_traj=command_traj,
+                               dones_traj=P_col_traj,
+                               coordinate_traj=coordinate_traj,
+                               init_coordinate_traj=init_coordinate_traj)
+        print('====================================================')
+        print('{:>6}th evaluation'.format(update))
+        print('{:<40} {:>6}'.format("total collision accuracy: ", '{:0.6f}'.format(total_col_prediction_accuracy)))
+        print('{:<40} {:>6}'.format("collision accuracy: ", '{:0.6f}'.format(col_prediction_accuracy)))
+        print('{:<40} {:>6}'.format("no collision accuracy: ", '{:0.6f}'.format(not_col_prediction_accuracy)))
+        print('{:<40} {:>6}'.format("coordinate error: ", '{:0.6f}'.format(mean_coordinate_error)))
 
-            print('====================================================')
-            print('{:>6}th evaluation'.format(update))
-            print('{:<40} {:>6}'.format("collision accuracy: ", '{:0.6f}'.format(mean_P_col_accuracy)))
-            print('{:<40} {:>6}'.format("coordinate error: ", '{:0.6f}'.format(mean_coordinate_error)))
-
-            print('====================================================\n')
-
-        else:
-            (real_P_cols, real_coordinates), (predicted_P_cols, predicted_coordinates), (total_col_prediction_accuracy, col_prediction_accuracy, not_col_prediction_accuracy, mean_coordinate_error) \
-                = trainer.evaluate(environment_model=loaded_environment_model,
-                                   state_traj=state_traj,
-                                   command_traj=command_traj,
-                                   dones_traj=P_col_traj,
-                                   coordinate_traj=coordinate_traj,
-                                   init_coordinate_traj=init_coordinate_traj)
-            print('====================================================')
-            print('{:>6}th evaluation'.format(update))
-            print('{:<40} {:>6}'.format("total collision accuracy: ", '{:0.6f}'.format(total_col_prediction_accuracy)))
-            print('{:<40} {:>6}'.format("collision accuracy: ", '{:0.6f}'.format(col_prediction_accuracy)))
-            print('{:<40} {:>6}'.format("no collision accuracy: ", '{:0.6f}'.format(not_col_prediction_accuracy)))
-            print('{:<40} {:>6}'.format("coordinate error: ", '{:0.6f}'.format(mean_coordinate_error)))
-
-            print('====================================================\n')
+        print('====================================================\n')
 
         n_output_samples = real_P_cols.shape[1]
         plot_samples_idx = np.random.choice(n_output_samples, 7, replace=False)
@@ -441,12 +382,8 @@ for update in range(cfg["environment"]["max_n_update"]):
             temp_coordinate = np.zeros((cfg['environment']['num_envs'], coordinate_dim))
 
             lidar_data = obs[:, proprioceptive_sensor_dim:]
-            if use_TCN_COM_encoder:
-                temp_COM_history = COM_buffer.return_data()
-                temp_lidar = lidar_data
-            else:
-                temp_COM_history = COM_buffer.return_data(flatten=True)
-                temp_state = np.concatenate((lidar_data, temp_COM_history), axis=1)
+            temp_COM_history = COM_buffer.return_data(flatten=True)
+            temp_state = np.concatenate((lidar_data, temp_COM_history), axis=1)
             
             sample_user_command_constant = command_sampler_constant.sample()
             sample_user_command_correlated = command_sampler_correlated.sample()
@@ -482,8 +419,8 @@ for update in range(cfg["environment"]["max_n_update"]):
         frame_end = time.time()
         wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
-        if wait_time > 0.:
-            time.sleep(wait_time)
+        # if wait_time > 0.:
+        #     time.sleep(wait_time)
 
         if traj_update_time:
             # update P_col and coordinate for not terminated environment
@@ -493,74 +430,40 @@ for update in range(cfg["environment"]["max_n_update"]):
             temp_P_col[not_done_envs] = 0
             temp_coordinate[not_done_envs, :] = coordinate_obs[not_done_envs, :-1]
 
-            if use_TCN_COM_encoder:
-                COM_history_traj.append(temp_COM_history)
-                lidar_traj.append(temp_lidar)
-            else:
-                state_traj.append(temp_state)
+            state_traj.append(temp_state)
             command_traj.append(temp_command)
             P_col_traj.append(temp_P_col)
             coordinate_traj.append(temp_coordinate)
 
     # update training data buffer
-    if use_TCN_COM_encoder:
-        COM_history_traj = np.array(COM_history_traj)
-        lidar_traj = np.array(lidar_traj)
-    else:
-        state_traj = np.array(state_traj)
+    state_traj = np.array(state_traj)
     command_traj = np.array(command_traj)
     P_col_traj = np.array(P_col_traj)
     coordinate_traj = np.array(coordinate_traj)
     init_coordinate_traj = np.array(init_coordinate_traj)
 
-    if use_TCN_COM_encoder:
-        trainer.update_data(COM_traj=COM_history_traj,
-                            lidar_traj=lidar_traj,
-                            command_traj=command_traj,
-                            dones_traj=P_col_traj,
-                            coordinate_traj=coordinate_traj,
-                            init_coordinate_traj=init_coordinate_traj)
-    else:
-        trainer.update_data(state_traj=state_traj,
-                            command_traj=command_traj,
-                            dones_traj=P_col_traj,
-                            coordinate_traj=coordinate_traj,
-                            init_coordinate_traj=init_coordinate_traj)
+    trainer.update_data(state_traj=state_traj,
+                        command_traj=command_traj,
+                        dones_traj=P_col_traj,
+                        coordinate_traj=coordinate_traj,
+                        init_coordinate_traj=init_coordinate_traj)
 
     mean_loss, mean_P_col_loss, mean_coordinate_loss = 0.0, 0.0, 0.0
     if trainer.is_buffer_full():
-        if use_TCN_COM_encoder:
-            mean_loss, mean_P_col_loss, mean_coordinate_loss = trainer.train()
-            end = time.time()
+        mean_loss, mean_P_col_loss, mean_coordinate_loss, mean_col_prediction_accuracy, mean_not_col_prediction_accuracy = trainer.train()
+        end = time.time()
 
-            print('----------------------------------------------------')
-            print('{:>6}th iteration'.format(update))
-            print('{:<40} {:>6}'.format("loss: ", '{:0.6f}'.format(mean_loss)))
-            print('{:<40} {:>6}'.format("collision loss: ", '{:0.6f}'.format(mean_P_col_loss)))
-            print('{:<40} {:>6}'.format("coordinate loss: ", '{:0.6f}'.format(mean_coordinate_loss)))
-            print('{:<40} {:>6}'.format("time elapsed in this iteration: ", '{:6.4f}'.format(end - start)))
-            print('{:<40} {:>6}'.format("fps: ", '{:6.0f}'.format(total_steps / (end - start))))
-            print('{:<40} {:>6}'.format("real time factor: ", '{:6.0f}'.format(total_steps / (end - start)
-                                                                               * cfg['environment']['control_dt'])))
-            print('----------------------------------------------------\n')
-        else:
-            mean_loss, mean_P_col_loss, mean_coordinate_loss, mean_col_prediction_accuracy, mean_not_col_prediction_accuracy = trainer.train()
-            end = time.time()
-
-            print('----------------------------------------------------')
-            print('{:>6}th iteration'.format(update))
-            print('{:<40} {:>6}'.format("loss: ", '{:0.6f}'.format(mean_loss)))
-            print('{:<40} {:>6}'.format("collision loss: ", '{:0.6f}'.format(mean_P_col_loss)))
-            print('{:<40} {:>6}'.format("coordinate loss: ", '{:0.6f}'.format(mean_coordinate_loss)))
-            print('{:<40} {:>6}'.format("collision accuracy: ", '{:0.6f}'.format(mean_col_prediction_accuracy)))
-            print('{:<40} {:>6}'.format("no collision accuracy: ", '{:0.6f}'.format(mean_not_col_prediction_accuracy)))
-            print('{:<40} {:>6}'.format("time elapsed in this iteration: ", '{:6.4f}'.format(end - start)))
-            print('{:<40} {:>6}'.format("fps: ", '{:6.0f}'.format(total_steps / (end - start))))
-            print('{:<40} {:>6}'.format("real time factor: ", '{:6.0f}'.format(total_steps / (end - start)
-                                                                               * cfg['environment']['control_dt'])))
-            print('----------------------------------------------------\n')
-
-
-
+        print('----------------------------------------------------')
+        print('{:>6}th iteration'.format(update))
+        print('{:<40} {:>6}'.format("loss: ", '{:0.6f}'.format(mean_loss)))
+        print('{:<40} {:>6}'.format("collision loss: ", '{:0.6f}'.format(mean_P_col_loss)))
+        print('{:<40} {:>6}'.format("coordinate loss: ", '{:0.6f}'.format(mean_coordinate_loss)))
+        print('{:<40} {:>6}'.format("collision accuracy: ", '{:0.6f}'.format(mean_col_prediction_accuracy)))
+        print('{:<40} {:>6}'.format("no collision accuracy: ", '{:0.6f}'.format(mean_not_col_prediction_accuracy)))
+        print('{:<40} {:>6}'.format("time elapsed in this iteration: ", '{:6.4f}'.format(end - start)))
+        print('{:<40} {:>6}'.format("fps: ", '{:6.0f}'.format(total_steps / (end - start))))
+        print('{:<40} {:>6}'.format("real time factor: ", '{:6.0f}'.format(total_steps / (end - start)
+                                                                           * cfg['environment']['control_dt'])))
+        print('----------------------------------------------------\n')
 
 
