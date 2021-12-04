@@ -1,11 +1,11 @@
 realistic: False   # if True, consider wait_time
 plot_command: False
-logging: False #True   # wandb
+logging: True   # wandb
 check_time: False
 
 environment:
   render: True
-  visualize_path: True
+  visualize_path: False
   evaluate: True
   determine_env: 0  # not used
   num_envs: 1

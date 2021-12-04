@@ -5,7 +5,7 @@ logging: True
 environment:
   render: True
   # just testing commenting
-  evaluate: False
+  evaluate: True
   determine_env: 0  # 0: not determine / 1: open field with circle & box / 2: cross-corridor with circle & box
   num_envs: 500
   max_n_update: 30000
@@ -15,7 +15,7 @@ environment:
     train: 0
     evaluate: 600
   num_threads: 6 # 4 is (optimal for data collection)
-  evaluate_num_threads: 12  # Number of threads for evaluating model prediction
+  evaluate_num_threads: 6  # Number of threads for evaluating model prediction
   test_num_threads: 3  # Number of threads for evaluating model based RL
   simulation_dt: 0.0025
   control_dt: 0.01

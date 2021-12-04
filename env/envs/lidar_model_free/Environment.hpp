@@ -611,7 +611,7 @@ namespace raisim
     void updateObservation()
     {
         static std::default_random_engine generator(random_seed);
-        std::normal_distribution<> lidar_noise(0., 0.1);
+        std::normal_distribution<> lidar_noise(0., 0.2);
 
         anymal_->getState(gc_, gv_);
         raisim::Vec<4> quat;

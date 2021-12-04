@@ -78,6 +78,7 @@ cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 
 assert not cfg["environment"]["test_initialize"]["point_goal"], "Change cfg[environment][test_initialize][point_goal] to False"
 assert cfg["environment"]["test_initialize"]["safety_control"], "Change cfg[environment][test_initialize][safety_control] to True"
+assert not cfg["environment"]["visualize_path"], "Change cfg[environment][visualize_path] to False"
 
 # user command sampling
 user_command = UserCommand(cfg, cfg['Naive']['planner']['number_of_sample'])
@@ -119,8 +120,6 @@ env.load_scaling(command_tracking_weight_dir, int(iteration_number))
 
 print("Loaded command tracking policy weight from {}\n".format(command_tracking_weight_path))
 
-start = time.time()
-
 # Load learned environment model weight
 loaded_environment_model = Lidar_environment_model(COM_encoding_config=cfg["environment_model"]["architecture"]["COM_encoder"],
                                                    state_encoding_config=cfg["environment_model"]["architecture"]["state_encoder"],
@@ -136,6 +135,7 @@ print("Loaded environment model weight from {}\n".format(weight_path))
 
 # Set action planner
 n_prediction_step = int(cfg["Naive"]["planner"]["prediction_period"] / cfg['command_tracking']['command_period'])
+evaluate_command_sampling_steps = int(cfg["Naive"]["planner"]["prediction_period"] / cfg['environment']['control_dt'])
 action_planner = Stochastic_action_planner_normal(command_range=cfg["environment"]["command"],
                                                   n_sample=cfg["Naive"]["planner"]["number_of_sample"],
                                                   n_horizon=n_prediction_step,
@@ -214,7 +214,7 @@ for grid_size in [2.5, 3., 4., 5.]:
             COM_buffer.reset()
 
             # Test without safety controller
-            for step in range(n_prediction_step * 2):
+            for step in range(evaluate_command_sampling_steps * 2):
                 frame_start = time.time()
                 new_action_time = step % command_period_steps == 0
 
@@ -251,7 +251,8 @@ for grid_size in [2.5, 3., 4., 5.]:
                     w_coordinate_desired_command_path = transform_coordinate_LW(init_coordinate_obs, desired_command_path)
                     P_col_desired_command_path = predicted_P_cols[:, 0]
                     env.visualize_desired_command_traj(w_coordinate_desired_command_path,
-                                                       P_col_desired_command_path)
+                                                       P_col_desired_command_path,
+                                                       collision_threshold)
 
                 # Execute desired command
                 tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
@@ -285,7 +286,7 @@ for grid_size in [2.5, 3., 4., 5.]:
             modified_command_collision = False
 
             # Test with safety controller
-            for step in range(n_prediction_step * 2):
+            for step in range(evaluate_command_sampling_steps * 2):
                 frame_start = time.time()
                 new_action_time = step % command_period_steps == 0
 
@@ -322,7 +323,8 @@ for grid_size in [2.5, 3., 4., 5.]:
                     w_coordinate_desired_command_path = transform_coordinate_LW(init_coordinate_obs, desired_command_path)
                     P_col_desired_command_path = predicted_P_cols[:, 0]
                     env.visualize_desired_command_traj(w_coordinate_desired_command_path,
-                                                       P_col_desired_command_path)
+                                                       P_col_desired_command_path,
+                                                       collision_threshold)
 
                     if len(np.where(predicted_P_cols[:MUST_safety_period_n_steps, 0] > collision_threshold)[0]) == 0:
                         # current desired command is safe
@@ -351,7 +353,8 @@ for grid_size in [2.5, 3., 4., 5.]:
                         w_coordinate_modified_command_path = transform_coordinate_LW(init_coordinate_obs, predicted_coordinates[:, 0, :])
                         P_col_modified_command_path = predicted_P_cols[:, 0, :]
                         env.visualize_modified_command_traj(w_coordinate_modified_command_path,
-                                                            P_col_modified_command_path)
+                                                            P_col_modified_command_path,
+                                                            collision_threshold)
 
                 # Execute desired command
                 tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
