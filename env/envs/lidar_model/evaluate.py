@@ -157,7 +157,7 @@ final_P_col_accuracy = []
 final_col_accuracy = []
 final_not_col_accuracy = []
 final_coordinate_error = []
-num_test = 1
+num_test = 1000
 
 # env.turn_off_visualization()
 
