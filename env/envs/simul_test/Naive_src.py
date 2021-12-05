@@ -166,7 +166,7 @@ result_save_directory = f"{task_name}/Result/Naive_{num_sample}_{evaluate_seed}"
 check_saving_folder(result_save_directory)
 
 # Backup files
-items_to_save = ["/cfg.yaml", "/Naive_srm.py"]
+items_to_save = ["/cfg.yaml", "/Naive_src.py"]
 for item_to_save in items_to_save:
     save_location = task_path + "/../../../../" + result_save_directory + item_to_save
     copyfile(task_path + item_to_save, save_location)
