@@ -37,6 +37,7 @@ namespace raisim
             /// create world
             world_ = std::make_unique<raisim::World>();
             world_type = cfg["type"].As<int>();
+            visualize_path = cfg["visualize_path"].As<bool>();
 
             /// If .... ==> generate env
             if (world_type == 1)
@@ -89,62 +90,13 @@ namespace raisim
             pTarget12_.setZero(nJoints_);
             joint_position_error_history.setZero(nJoints_ * n_history_steps);
             joint_velocity_history.setZero(nJoints_ * n_history_steps);
-            GRF_impulse.setZero(4);
-
-            /// Add intialization for extra cost terms
-            previous_action.setZero(nJoints_);
-            target_postion.setZero(nJoints_);
-            footPos_W.resize(4);
-            footVel_W.resize(4);
-            footContactVel_.resize(4);
-
-            /// Initialize user command values
-            before_user_command.setZero(3);
-            after_user_command.setZero(3);
-
-            /// collect joint positions, collision geometry
-            defaultJointPositions_.resize(13);
-            defaultBodyMasses_.resize(13);
-            for (int i = 0; i < 13; i++) {
-                defaultJointPositions_[i] = anymal_->getJointPos_P()[i].e();
-                defaultBodyMasses_[i] = anymal_->getMass(i);
-            }
-
-            /// Get COM_base position
-            COMPosition_ = anymal_->getBodyCOM_B()[0].e();
-
-            /// reward weights
-            reward_obstacle_distance_coeff = cfg["reward"]["obstacle_distance"]["coeff"].As<double>();
-            reward_command_similarity_coeff = cfg["reward"]["command_similarity"]["coeff"].As<double>();
 
             /// total trajectory length
             double control_dt = cfg["control_dt"].As<double>();
             double max_time = cfg["max_time"].As<double>();
             double command_period = cfg["command_period"].As<double>();
-            total_traj_len = int(max_time / control_dt);
-            command_len = int(command_period / control_dt);
 
-            /// Randomization
-            randomization = cfg["randomization"].template As<bool>();
-            if (randomization) {
-                /// Randomize mass and Dynamics (joint position)
-                noisify_Dynamics();
-                noisify_Mass_and_COM();
-            }
             random_initialize = cfg["random_initialize"].template As<bool>();
-            random_external_force = cfg["random_external_force"].template As<bool>();
-
-            /// contact foot index
-            foot_idx[0] = anymal_->getFrameIdxByName("LF_shank_fixed_LF_FOOT");  // 3
-            foot_idx[1] = anymal_->getFrameIdxByName("RF_shank_fixed_RF_FOOT");  // 6
-            foot_idx[2] = anymal_->getFrameIdxByName("LH_shank_fixed_LH_FOOT");  // 9
-            foot_idx[3] = anymal_->getFrameIdxByName("RH_shank_fixed_RH_FOOT");  // 12
-
-            /// contact shank index
-            shank_idx[0] = anymal_->getFrameIdxByName("LF_KFE");
-            shank_idx[1] = anymal_->getFrameIdxByName("RF_KFE");
-            shank_idx[2] = anymal_->getFrameIdxByName("LH_KFE");
-            shank_idx[3] = anymal_->getFrameIdxByName("RH_KFE");
 
             /// nominal configuration of anymal_c
             if (world_type == 5)
@@ -200,9 +152,6 @@ namespace raisim
             actionMean_ = gc_init_.tail(nJoints_);
             actionStd_.setConstant(0.3);
 
-            /// Reward coefficients
-            rewards_.initializeFromConfigurationFile(cfg["reward"]);
-
             /// indices of links that should not make contact with ground
             footIndices_.insert(anymal_->getBodyIdx("LF_SHANK"));
             footIndices_.insert(anymal_->getBodyIdx("RF_SHANK"));
@@ -241,157 +190,100 @@ namespace raisim
                     server_->addVisualCylinder("goal2", 0.4, 0.8, 2, 1, 0);
                     server_->addVisualCylinder("goal3", 0.4, 0.8, 2, 1, 0);
                 }
+                else if (world_type == 10) {
+                    server_->addVisualCylinder("goal1", 0.4, 0.8, 2, 1, 0);
+                    server_->addVisualCylinder("goal2", 0.4, 0.8, 2, 1, 0);
+                    server_->addVisualCylinder("goal3", 0.4, 0.8, 2, 1, 0);
+                    server_->addVisualCylinder("goal4", 0.4, 0.8, 2, 1, 0);
+                }
                 else {
                     server_->addVisualCylinder("goal", 0.4, 0.8, 2, 1, 0);
                 }
 
-//                /// set path
-//                double max_time = 120., delta_time = 0.05;
-//                int max_num_path_slice = int(max_time / delta_time);
-//                for (int i=0; i<max_num_path_slice; i++)
-//                    server_->addVisualBox("path" + std::to_string(i+1), 0.1, 0.1, 0.1, 1, 0, 0);
+                /// set path
+                if (visualize_path) {
+                    double max_time = 200., delta_time = 0.1;
+                    int max_num_path_slice = int(max_time / delta_time);
+                    if (world_type == 2) {
+                        for (int i=0; i<max_num_path_slice; i++)
+                            server_->addVisualBox("path_one" + std::to_string(i+1), 0.1, 0.1, 0.1, 1, 0, 0);
+                    } else if (world_type == 10) {
+                        for (int i=0; i<max_num_path_slice; i++) {
+                            server_->addVisualBox("path_one" + std::to_string(i+1), 0.1, 0.1, 0.1, 1, 0, 0);
+                            server_->addVisualBox("path_two" + std::to_string(i+1), 0.1, 0.1, 0.1, 0, 0, 1);
+                        }
+                    }
+                }
 
                 server_->focusOn(anymal_);
             }
         }
 
-        void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> sampled_command,
-                                     Eigen::Ref<EigenVec> goal_Pos_local,
-                                     Eigen::Ref<EigenVec> rewards_p,
-                                     Eigen::Ref<EigenVec> collision_idx,
-                                     int steps, double delta_t, double must_safe_time)
-        {
-            int n_sample = sampled_command.rows();
-            raisim::Vec<3> future_coordinate;
-            raisim::Vec<4> future_quaternion;
-            Eigen::VectorXd rewards_cp;
-            Eigen::VectorXd collision_idx_cp;
-            int must_safe_n_steps = int(must_safe_time / delta_t);
+    void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> sampled_command,
+                                 Eigen::Ref<EigenVec> goal_Pos_local,
+                                 Eigen::Ref<EigenVec> rewards_p,
+                                 Eigen::Ref<EigenVec> collision_idx,
+                                 int steps, double delta_t, double must_safe_time)
+    {
+        int n_sample = sampled_command.rows();
+        raisim::Vec<3> future_coordinate;
+        raisim::Vec<4> future_quaternion;
+        Eigen::VectorXd rewards_cp;
+        Eigen::VectorXd collision_idx_cp;
+        int must_safe_n_steps = int(must_safe_time / delta_t);
 
-            rewards_cp.setZero(n_sample);
-            collision_idx_cp.setZero(n_sample);
-            double current_goal_distance = goal_Pos_local.norm();
+        rewards_cp.setZero(n_sample);
+        collision_idx_cp.setZero(n_sample);
+        double current_goal_distance = goal_Pos_local.norm();
 
-            if (server_)
-                server_->lockVisualizationServerMutex();
+        if (server_)
+            server_->lockVisualizationServerMutex();
 
-            for (int i=0; i<n_sample; i++) {
-                double local_x = 0.;
-                double local_y = 0.;
-                double local_yaw = 0.;
-                double final_local_x = 0.;
-                double final_local_y = 0.;
-                bool not_collide = true;
-                for (int j=0; j<steps; j++) {
-                    if (not_collide) {
-                        local_yaw += sampled_command(i, 2) * delta_t;
-                        local_x += sampled_command(i, 0) * delta_t * cos(local_yaw) - sampled_command(i, 1) * delta_t * sin(local_yaw);
-                        local_y += sampled_command(i, 0) * delta_t * sin(local_yaw) + sampled_command(i, 1) * delta_t * cos(local_yaw);
-                        future_coordinate[0] = local_x * cos(coordinateDouble[2]) - local_y * sin(coordinateDouble[2]) + coordinateDouble[0];
-                        future_coordinate[1] = local_x * sin(coordinateDouble[2]) + local_y * cos(coordinateDouble[2]) + coordinateDouble[1];
-                        future_coordinate[2] = local_yaw + coordinateDouble[2];
+        for (int i=0; i<n_sample; i++) {
+            double local_x = 0.;
+            double local_y = 0.;
+            double local_yaw = 0.;
+            double final_local_x = 0.;
+            double final_local_y = 0.;
+            bool not_collide = true;
+            for (int j=0; j<steps; j++) {
+                if (not_collide) {
+                    local_yaw += sampled_command(i, 2) * delta_t;
+                    local_x += sampled_command(i, 0) * delta_t * cos(local_yaw) - sampled_command(i, 1) * delta_t * sin(local_yaw);
+                    local_y += sampled_command(i, 0) * delta_t * sin(local_yaw) + sampled_command(i, 1) * delta_t * cos(local_yaw);
+                    future_coordinate[0] = local_x * cos(coordinateDouble[2]) - local_y * sin(coordinateDouble[2]) + coordinateDouble[0];
+                    future_coordinate[1] = local_x * sin(coordinateDouble[2]) + local_y * cos(coordinateDouble[2]) + coordinateDouble[1];
+                    future_coordinate[2] = local_yaw + coordinateDouble[2];
 
-                        raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
+                    raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
 
-                        anymal_box_->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
-                        anymal_box_->setOrientation(future_quaternion);
+                    anymal_box_->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
+                    anymal_box_->setOrientation(future_quaternion);
 
-                        world_->integrate1();
+                    world_->integrate1();
 
-                        int num_anymal_future_contact = anymal_box_->getContacts().size();
-                        if (num_anymal_future_contact > 0) {
-                            not_collide = false;
-                            if (j < must_safe_n_steps)
-                                collision_idx_cp[i] = 1;
-                        }
-
-                        final_local_x = local_x;
-                        final_local_y = local_y;
+                    int num_anymal_future_contact = anymal_box_->getContacts().size();
+                    if (num_anymal_future_contact > 0) {
+                        not_collide = false;
+                        if (j < must_safe_n_steps)
+                            collision_idx_cp[i] = 1;
                     }
 
-                    double future_goal_distance = sqrt(pow(final_local_x - goal_Pos_local[0], 2) + pow(final_local_y - goal_Pos_local[1], 2));
-                    rewards_cp[i] += current_goal_distance - future_goal_distance;
+                    final_local_x = local_x;
+                    final_local_y = local_y;
                 }
+
+                double future_goal_distance = sqrt(pow(final_local_x - goal_Pos_local[0], 2) + pow(final_local_y - goal_Pos_local[1], 2));
+                rewards_cp[i] += current_goal_distance - future_goal_distance;
             }
-
-            if (server_)
-                server_->unlockVisualizationServerMutex();
-
-            rewards_p = rewards_cp.cast<float>();
-            collision_idx = collision_idx_cp.cast<float>();
         }
 
-//    void baseline_compute_reward(Eigen::Ref<EigenRowMajorMat> sampled_command,
-//                                 Eigen::Ref<EigenVec> goal_Pos_local,
-//                                 Eigen::Ref<EigenVec> rewards_p,
-//                                 Eigen::Ref<EigenVec> collision_idx,
-//                                 int steps, double delta_t, double must_safe_time)
-//    {
-//        int n_sample = sampled_command.rows();
-//        raisim::Vec<3> future_coordinate;
-//        raisim::Vec<4> future_quaternion;
-//        Eigen::VectorXd rewards_cp;
-//        Eigen::VectorXd collision_idx_cp;
-//        int must_safe_n_steps = int(must_safe_time / delta_t);
-//
-//        rewards_cp.setZero(n_sample);
-//        collision_idx_cp.setZero(n_sample);
-//        double current_goal_distance = goal_Pos_local.norm();
-//
-//        if (server_)
-//            server_->lockVisualizationServerMutex();
-//
-//        for (int i=0; i<n_sample; i++) {
-//            double local_x = 0;
-//            double local_y = 0;
-//            double local_yaw = 0;
-//            for (int j=0; j<steps; j++) {
-//                local_yaw += sampled_command(i, 2) * delta_t;
-//                local_x += sampled_command(i, 0) * delta_t * cos(local_yaw) - sampled_command(i, 1) * delta_t * sin(local_yaw);
-//                local_y += sampled_command(i, 0) * delta_t * sin(local_yaw) + sampled_command(i, 1) * delta_t * cos(local_yaw);
-//                future_coordinate[0] = local_x * cos(coordinateDouble[2]) - local_y * sin(coordinateDouble[2]) + coordinateDouble[0];
-//                future_coordinate[1] = local_x * sin(coordinateDouble[2]) + local_y * cos(coordinateDouble[2]) + coordinateDouble[1];
-//                future_coordinate[2] = local_yaw + coordinateDouble[2];
-//
-//                raisim::angleAxisToQuaternion({0, 0, 1}, future_coordinate[2], future_quaternion);
-//
-////                if (i == 0) {
-////                    prediction_box_1[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
-////                    prediction_box_1[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
-////                }
-////                else if (i == 1) {
-////                    prediction_box_2[j]->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
-////                    prediction_box_2[j]->setOrientation({future_quaternion[0], future_quaternion[1], future_quaternion[2], future_quaternion[3]});
-////                }
-//
-//                if (j < must_safe_n_steps) {
-//                    anymal_box_->setPosition(future_coordinate[0], future_coordinate[1], 0.5);
-//                    anymal_box_->setOrientation(future_quaternion);
-//
-//                    world_->integrate1();
-//
-//                    int num_anymal_future_contact = anymal_box_->getContacts().size();
-//                    if (num_anymal_future_contact > 0) {
-//                        collision_idx_cp[i] = 1;
-//                    }
-//
-////                    if (future_coordinate[0] < -2 || hm_sizeX - 2 < future_coordinate[0] ||
-////                        future_coordinate[1] < 0 || hm_sizeY < future_coordinate[1]) {
-////                        collision_idx_cp[i] = 1;
-////                    }
-//                }
-//
-//                double future_goal_distance = sqrt(pow(local_x - goal_Pos_local[0], 2) + pow(local_y - goal_Pos_local[1], 2));
-//                rewards_cp[i] += current_goal_distance - future_goal_distance;
-//            }
-//        }
-//
-//        if (server_)
-//            server_->unlockVisualizationServerMutex();
-//
-//        rewards_p = rewards_cp.cast<float>();
-//        collision_idx = collision_idx_cp.cast<float>();
-//    }
+        if (server_)
+            server_->unlockVisualizationServerMutex();
+
+        rewards_p = rewards_cp.cast<float>();
+        collision_idx = collision_idx_cp.cast<float>();
+    }
 
     void init() final {}
 
@@ -719,16 +611,6 @@ namespace raisim
             initHistory();
         }
 
-
-        if (random_external_force) {
-            random_force_period = int(1.0 / control_dt_);
-            std::uniform_int_distribution<> uniform_force(1, total_traj_len - random_force_period);
-            std::uniform_int_distribution<> uniform_binary(0, 1);
-            random_force_n_step = uniform_force(generator);
-            random_external_force_final = uniform_binary(generator);  /// 0: x, 1: o
-            random_external_force_direction = uniform_binary(generator);  /// 0: -1, 1: +1
-        }
-
         updateObservation();
     }
 
@@ -740,28 +622,12 @@ namespace raisim
         pTarget12_ = action.cast<double>();
         pTarget12_ = pTarget12_.cwiseProduct(actionStd_);
         pTarget12_ += actionMean_;
-        target_postion = pTarget12_.cast<double>();
         pTarget_.tail(nJoints_) = pTarget12_;
 
         Eigen::VectorXd current_joint_position_error = pTarget12_ - gc_.tail(nJoints_);
         updateHistory(current_joint_position_error, gv_.tail(nJoints_));
 
         anymal_->setPdTarget(pTarget_, vTarget_);
-
-        /// Set external force to the base of the robot
-        if (random_external_force)
-            if (bool (random_external_force_final))
-                if (random_force_n_step <= current_n_step && current_n_step < (random_force_n_step + random_force_period)) {
-                    raisim::Mat<3, 3> baseOri;
-                    Eigen::Vector3d force_direction;
-                    anymal_->getFrameOrientation("base_to_base_inertia", baseOri);
-                    if (random_external_force_direction == 0)
-                        force_direction = {0, -1, 0};
-                    else
-                        force_direction = {0, 1, 0};
-                    force_direction = baseOri.e() * force_direction;
-                    anymal_->setExternalForce(anymal_->getBodyIdx("base"), force_direction * 50);
-                }
 
         for (int i = 0; i < int(control_dt_ / simulation_dt_ + 1e-10); i++)
         {
@@ -774,14 +640,7 @@ namespace raisim
 
         updateObservation();
 
-        torque = anymal_->getGeneralizedForce().e(); // squaredNorm
-
         calculate_cost();
-
-        rewards_.record("obstacle_distance", -obstacle_distance_cost);
-        rewards_.record("command_similarity", -command_similarity_cost);
-
-        previous_action = target_postion.cast<double>();
 
         return rewards_.sum();
     }
@@ -799,11 +658,14 @@ namespace raisim
         bodyLinearVel_ = rot.e().transpose() * gv_.segment(0, 3);
         bodyAngularVel_ = rot.e().transpose() * gv_.segment(3, 3);
 
-//        /// Visualize base path
-//        if (current_n_step != 0 && current_n_step % 5 == 0)
-//            if (visualizable_) {
-//                server_->getVisualObject("path" + std::to_string(current_n_step/5))->setPosition(gc_.segment(0, 3));
-//            }
+        /// Visualize base path
+        if (current_n_step != 0 && current_n_step % 10 == 0)
+            if (visualizable_ && visualize_path) {
+                if (path_type)
+                    server_->getVisualObject("path_one" + std::to_string(current_n_step/10))->setPosition(gc_.segment(0, 3));
+                else
+                    server_->getVisualObject("path_two" + std::to_string(current_n_step/10))->setPosition(gc_.segment(0, 3));
+            }
 
         /// Get depth data
         raisim::Vec<3> lidarPos;
@@ -847,11 +709,6 @@ namespace raisim
         double yaw = atan2(rot.e().col(0)[1], rot.e().col(0)[0]);
 
         coordinateDouble << gc_[0], gc_[1], yaw;
-
-        roll_and_pitch = rot.e().row(2).transpose();
-        GRF_impulse.setZero(4);
-
-//        comprehend_contacts();
     }
 
     void updateHistory(Eigen::VectorXd current_joint_position_error,
@@ -887,88 +744,9 @@ namespace raisim
         coordinate = coordinateDouble.cast<float>();
     }
 
-    void calculate_cost()
-    {
-        /// New rewards for collision avoidance
-        obstacle_distance_cost = 0.0, command_similarity_cost = 0.0;
-    }
+    void calculate_cost() {}
 
-    void comprehend_contacts()
-    {
-        numContact_ = anymal_->getContacts().size();
-
-        Eigen::Vector4d foot_Pos_height_map;
-        float shank_dr = 0.06;
-
-        for (int k = 0; k < 4; k++)
-        {
-            footContactState_[k] = false;
-            anymal_->getFramePosition(foot_idx[k], footPos_W[k]);  //position of the feet
-            anymal_->getFrameVelocity(foot_idx[k], footVel_W[k]);
-            foot_Pos_height_map[k] = hm->getHeight(footPos_W[k][0], footPos_W[k][1]);
-//            foot_Pos_height_map[k] = 0.;   /// Should change if it is rough terrain!!!!
-            foot_Pos_difference[k] = std::abs(footPos_W[k][2] - foot_Pos_height_map[k]);
-
-            std::vector<raisim::Vec<3>> shankPos_W;
-            shankPos_W.resize(4);
-            anymal_->getFramePosition(shank_idx[k], shankPos_W[k]);
-            shank_Pos_difference[k] = std::abs(shankPos_W[k][2] - shank_dr);
-        }
-
-        raisim::Vec<3> vec3;
-        float dr = 0.03;
-
-        //Classify foot contact
-        /// This only works for flat terrain!!
-        if (numContact_ > 0)
-        {
-            for (int k = 0; k < numContact_; k++)
-            {
-                if (!anymal_->getContacts()[k].skip())
-                {
-                    int idx = anymal_->getContacts()[k].getlocalBodyIndex();
-
-                    // check foot height to distinguish shank contact
-                    if (idx == 3 && foot_Pos_difference[0] <= dr && !footContactState_[0])
-                    {
-                        footContactState_[0] = true;
-                        // footNormal_[0] = anymal_->getContacts()[k].getNormal().e();
-                        anymal_->getContactPointVel(k, vec3);
-                        footContactVel_[0] = vec3.e();
-                        // numFootContact_++;
-                        GRF_impulse[0] = anymal_->getContacts()[k].getImpulse().e().squaredNorm();
-                    }
-                    else if (idx == 6 && foot_Pos_difference[1] <= dr && !footContactState_[1])
-                    {
-                        footContactState_[1] = true;
-                        // footNormal_[1] = anymal_->getContacts()[k].getNormal().e();
-                        anymal_->getContactPointVel(k, vec3);
-                        footContactVel_[1] = vec3.e();
-                        // numFootContact_++;
-                        GRF_impulse[1] = anymal_->getContacts()[k].getImpulse().e().squaredNorm();
-                    }
-                    else if (idx == 9 && foot_Pos_difference[2] <= dr && !footContactState_[2])
-                    {
-                        footContactState_[2] = true;
-                        // footNormal_[2] = anymal_->getContacts()[k].getNormal().e();
-                        anymal_->getContactPointVel(k, vec3);
-                        footContactVel_[2] = vec3.e();
-                        // numFootContact_++;
-                        GRF_impulse[2] = anymal_->getContacts()[k].getImpulse().e().squaredNorm();
-                    }
-                    else if (idx == 12 && foot_Pos_difference[3] <= dr && !footContactState_[3])
-                    {
-                        footContactState_[3] = true;
-                        // footNormal_[3] = anymal_->getContacts()[k].getNormal().e();
-                        anymal_->getContactPointVel(k, vec3);
-                        footContactVel_[3] = vec3.e();
-                        // numFootContact_++;
-                        GRF_impulse[3] = anymal_->getContacts()[k].getImpulse().e().squaredNorm();
-                    }
-                }
-            }
-        }
-    }
+    void comprehend_contacts() {}
 
     void visualize_desired_command_traj(Eigen::Ref<EigenRowMajorMat> coordinate_desired_command,
                                         Eigen::Ref<EigenVec> P_col_desired_command,
@@ -1013,99 +791,13 @@ namespace raisim
 
     void reward_logging(Eigen::Ref<EigenVec> rewards, Eigen::Ref<EigenVec> rewards_w_coeff, int n_rewards) {}
 
-    void noisify_Dynamics() {
-        static std::default_random_engine generator(random_seed);
-        std::uniform_real_distribution<> uniform01(0.0, 1.0);
-        std::uniform_real_distribution<> uniform(-1.0, 1.0);
+    void noisify_Dynamics() {}
 
-        /// joint position randomization
-        for (int i = 0; i < 4; i++) {
-            double x_, y_, z_;
-            if (i < 2) x_ = uniform01(generator) * 0.005;
-            else x_ = -uniform01(generator) * 0.005;
+    void noisify_Mass_and_COM() {}
 
-            y_ = uniform(generator) * 0.01;
-            z_ = uniform(generator) * 0.01;
+    void contact_logging(Eigen::Ref<EigenVec> contacts) {}
 
-            int hipIdx = 3 * i + 1;
-            int thighIdx = 3 * i + 2;
-            int shankIdx = 3 * i + 3;
-
-            ///hip
-            anymal_->getJointPos_P()[hipIdx].e()[0] = defaultJointPositions_[hipIdx][0] + x_;
-            anymal_->getJointPos_P()[hipIdx].e()[1] = defaultJointPositions_[hipIdx][1] + y_;
-            anymal_->getJointPos_P()[hipIdx].e()[2] = defaultJointPositions_[hipIdx][2] + z_; ///1
-
-
-            /// thigh
-            x_ = - uniform01(generator) * 0.01;
-            y_ = uniform(generator) * 0.01;
-            z_ = uniform(generator) * 0.01;
-
-            anymal_->getJointPos_P()[thighIdx].e()[0] = defaultJointPositions_[thighIdx][0] + x_;
-            anymal_->getJointPos_P()[thighIdx].e()[1] = defaultJointPositions_[thighIdx][1] + y_;
-            anymal_->getJointPos_P()[thighIdx].e()[2] = defaultJointPositions_[thighIdx][2] + z_; ///1
-
-            /// shank
-            double dy_ = uniform(generator) * 0.005;
-            //  dy>0 -> move outwards
-            if (i % 2 == 1) {
-                y_ = -dy_;
-            } else {
-                y_ = dy_;
-            }
-
-            x_ = uniform(generator) * 0.01;
-            z_ = uniform(generator) * 0.01;
-
-            anymal_->getJointPos_P()[shankIdx].e()[0] = defaultJointPositions_[shankIdx][0] + x_;
-            anymal_->getJointPos_P()[shankIdx].e()[1] = defaultJointPositions_[shankIdx][1] + y_;
-            anymal_->getJointPos_P()[shankIdx].e()[2] = defaultJointPositions_[shankIdx][2] + z_;
-
-        }
-    }
-
-    void noisify_Mass_and_COM() {
-        static std::default_random_engine generator(random_seed);
-        std::uniform_real_distribution<> uniform(-1.0, 1.0);
-
-        /// base mass
-        anymal_->getMass()[0] = defaultBodyMasses_[0] * (1 + 0.15 * uniform(generator));
-
-        /// hip mass
-        for (int i = 1; i < 13; i += 3) {
-            anymal_->getMass()[i] = defaultBodyMasses_[i] * (1 + 0.15 * uniform(generator));
-        }
-
-        /// thigh mass
-        for (int i = 2; i < 13; i += 3) {
-            anymal_->getMass()[i] = defaultBodyMasses_[i] * (1 + 0.15 * uniform(generator));
-        }
-
-        /// shank mass
-        for (int i = 3; i < 13; i += 3) {
-            anymal_->getMass()[i] = defaultBodyMasses_[i] * (1 + 0.04 * uniform(generator));
-        }
-
-        anymal_->updateMassInfo();
-
-        /// COM position
-        for (int i = 0; i < 3; i++) {
-            anymal_->getBodyCOM_B()[0].e()[i] = COMPosition_[i] + uniform(generator) * 0.01;
-        }
-    }
-
-    void contact_logging(Eigen::Ref<EigenVec> contacts)
-    {
-        contacts = GRF_impulse.cast<float>();
-    }
-
-    void torque_and_velocity_logging(Eigen::Ref<EigenVec> torque_and_velocity)
-    {
-        /// 0 ~ 12 : torque, 12 ~ 24 : joint velocity
-        torque_and_velocity.segment(0, 12) = torque.tail(12).cast<float>();
-        torque_and_velocity.segment(12, 12) = gv_.segment(6, 12).cast<float>();
-    }
+    void torque_and_velocity_logging(Eigen::Ref<EigenVec> torque_and_velocity) {}
 
     void set_goal(Eigen::Ref<EigenVec> goal_pos)
     {
@@ -1132,9 +824,15 @@ namespace raisim
             goal_pos_.push_back({-0.7 * (hm_sizeX / 2), 0.92 * (hm_sizeY / 2)});
             goal_pos = goal_pos_[num_set_goal].cast<float>();
 
-            server_->getVisualObject("goal")->setPosition({goal_pos[0], goal_pos[1], 0.05});
+            server_->getVisualObject("goal1")->setPosition({goal_pos_[0][0], goal_pos_[0][1], 0.05});
+            server_->getVisualObject("goal2")->setPosition({goal_pos_[1][0], goal_pos_[1][1], 0.05});
+            server_->getVisualObject("goal3")->setPosition({goal_pos_[2][0], goal_pos_[2][1], 0.05});
+            server_->getVisualObject("goal4")->setPosition({goal_pos_[3][0], goal_pos_[3][1], 0.05});
 
             num_set_goal += 1;
+
+            if (num_set_goal > 2)
+                path_type = false;
         }
         else if (world_type == 6) {
             Eigen::Vector2d goal_pos_;
@@ -1194,31 +892,28 @@ namespace raisim
 
     void computed_heading_direction(Eigen::Ref<EigenVec> heading_direction_) {}
 
-    bool collision_check() {return false;}
+    bool collision_check() {
+        /// if the contact body is not feet, count as collision
+        for (auto &contact : anymal_->getContacts()) {
+            if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end()) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     bool isTerminalState(float &terminalReward) final
     {
-        terminalReward = float(terminalRewardCoeff_);
-
-        /// if anymal falls down
-        raisim::Vec<3> base_position;
-        anymal_->getFramePosition("base_to_base_inertia", base_position);
-        if (base_position[2] < 0.3)
-            return true;
-
-//        /// if the contact body is not feet (this terminal condition includes crashing with obstacle)
-//        for (auto &contact : anymal_->getContacts()) {
-//            if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end()) {
-//                return true;
-//            }
-////            for (int i=0; i<4; i++) {
-////                if (shank_Pos_difference[i] < 1e-2)
-////                    return true;
-////            }
-//        }
         terminalReward = 0.f;
+        return collision_check();
 
-        return false;
+        ///  if anymal falls down, count as failure
+        //raisim::Vec<3> base_position;
+        //anymal_->getFramePosition("base_to_base_inertia", base_position);
+        //if (base_position[2] < 0.3)
+        //    return true;
+
+        //return false;
     }
 
     private:
@@ -1227,24 +922,12 @@ namespace raisim
     raisim::ArticulatedSystem *anymal_;
     raisim::Box *anymal_box_;
     Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_, vTarget_;
-    double terminalRewardCoeff_ = -10.;
     Eigen::VectorXd actionMean_, actionStd_, obDouble_;
     Eigen::Vector3d bodyLinearVel_, bodyAngularVel_;
     std::set<size_t> footIndices_;
 
-    Eigen::VectorXd torque, reward_log, previous_action, target_postion, before_user_command, after_user_command;
-    Eigen::Vector3d roll_and_pitch;
-    Eigen::Vector4d foot_idx, shank_idx;
-    size_t numContact_;
-    size_t numFootContact_;
-    std::vector<raisim::Vec<3>> footPos_;
-    std::vector<raisim::Vec<3>> footPos_W;
-    std::vector<raisim::Vec<3>> footVel_W;
-    std::vector<Eigen::Vector3d> footContactVel_;
-    std::array<bool, 4> footContactState_;
-    Eigen::Vector4d foot_Pos_difference, shank_Pos_difference;
     int n_history_steps = 2;
-    Eigen::VectorXd joint_position_error_history, joint_velocity_history, GRF_impulse;
+    Eigen::VectorXd joint_position_error_history, joint_velocity_history;
 
     /// Lidar
     int scanSize;
@@ -1256,22 +939,15 @@ namespace raisim
     int random_seed = 0;
 
     /// Randomization
-    bool randomization = false, random_initialize = false, random_external_force = false;
-    int random_external_force_final = 0, random_external_force_direction = 0;
-    std::vector<raisim::Vec<3>> defaultJointPositions_;
-    std::vector<double> defaultBodyMasses_;
-    raisim::Vec<3> COMPosition_;
+    bool random_initialize = false;
 
-    /// Randon intialization & Random external force
+    /// Randon intialization
     Eigen::VectorXd random_gc_init, random_gv_init, current_random_gc_init, current_random_gv_init;
-    int random_init_n_step = 0, random_force_n_step = 0, random_force_period = 100, current_n_step = 0;
+    int current_n_step = 0;
 
     /// Heightmap
     double hm_sizeX, hm_sizeY;
     raisim::HeightMap* hm;
-
-    /// Traning configuration
-    int total_traj_len, command_len;
 
     /// Obstacle
     int n_obstacle = 0;
@@ -1280,10 +956,6 @@ namespace raisim
     std::vector<raisim::Vec<2>> init_set = {};
     int n_init_set = 0;
     Eigen::MatrixXd obstacle_centers;
-
-    /// Reward (Cost) - New
-    double obstacle_distance_cost = 0.0, command_similarity_cost = 0.0;
-    double reward_obstacle_distance_coeff, reward_command_similarity_coeff;
 
     /// Observation to be predicted
     Eigen::VectorXd coordinateDouble;
@@ -1297,6 +969,10 @@ namespace raisim
     int num_set_goal=0;
 
     std::vector<raisim::Visuals *> prediction_box_1, prediction_box_2;
+
+    /// use for visualizing path
+    bool visualize_path= false;
+    bool path_type= true;  //true: path_one, false: path_two
 
     };
 }

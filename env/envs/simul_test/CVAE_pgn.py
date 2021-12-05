@@ -350,9 +350,9 @@ for grid_size in [2.5, 3., 4., 5.]:
 
                 # # plot predicted trajectory
                 # traj_len, n_sample, coor_dim = predicted_coordinates.shape
-                # for j in range(n_sample):
+                # for j in range(cfg["CVAE"]["planner"]["wo_CVAE_number_of_sample"], n_sample):
                 #     plt.plot(predicted_coordinates[:, j, 0], predicted_coordinates[:, j, 1])
-                # plt.savefig("sampled_traj (ours).png")
+                # plt.savefig("sampled_traj (cvae).png")
                 # plt.clf()
                 # pdb.set_trace()
 
@@ -443,7 +443,8 @@ for grid_size in [2.5, 3., 4., 5.]:
                 current_coordinate = None
             # success
             elif current_goal_distance < 0.5:
-                pdb.set_trace()
+                if cfg["environment"]["visualize_path"]:
+                    pdb.set_trace()
                 # Reset
                 env.initialize_n_step()  # keep start in different initial condiition
                 env.reset()

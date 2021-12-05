@@ -1084,31 +1084,28 @@ namespace raisim
 
     void computed_heading_direction(Eigen::Ref<EigenVec> heading_direction_) {}
 
-    bool collision_check() {return false;}
-
-    bool isTerminalState(float &terminalReward) final
-    {
-        terminalReward = float(terminalRewardCoeff_);
-
-//        /// if anymal falls down
-//        raisim::Vec<3> base_position;
-//        anymal_->getFramePosition("base_to_base_inertia", base_position);
-//        if (base_position[2] < 0.3)
-//            return true;
-
-        /// if the contact body is not feet (this terminal condition includes crashing with obstacle)
+    bool collision_check() {
+        /// if the contact body is not feet, count as collision
         for (auto &contact : anymal_->getContacts()) {
             if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end()) {
                 return true;
             }
-//            for (int i=0; i<4; i++) {
-//                if (shank_Pos_difference[i] < 1e-2)
-//                    return true;
-//            }
         }
-        terminalReward = 0.f;
-
         return false;
+    }
+
+    bool isTerminalState(float &terminalReward) final
+    {
+        terminalReward = 0.f;
+        return collision_check();
+
+        ///  if anymal falls down, count as failure
+        //raisim::Vec<3> base_position;
+        //anymal_->getFramePosition("base_to_base_inertia", base_position);
+        //if (base_position[2] < 0.3)
+        //    return true;
+
+        //return false;
     }
 
     private:

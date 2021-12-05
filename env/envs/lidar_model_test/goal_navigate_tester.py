@@ -54,9 +54,10 @@ def transform_coordinate_WL(w_init_coordinate, w_coordinate_traj):
     return l_coordinate_traj
 
 # set seed
-random.seed(1)
-np.random.seed(1)
-torch.manual_seed(1)
+evaluate_seed = 37 # 37, 143, 534, 792, 921
+random.seed(evaluate_seed)
+np.random.seed(evaluate_seed)
+torch.manual_seed(evaluate_seed)
 
 # task specification
 task_name = "point_goal_nav_test"
@@ -363,8 +364,9 @@ else:
 
         wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
-        if wait_time > 0.:
-            time.sleep(wait_time)
+        if cfg["realistic"]:
+            if wait_time > 0.:
+                time.sleep(wait_time)
 
         if wait_time > 0:
             total_time += cfg['environment']['control_dt']
@@ -373,7 +375,9 @@ else:
         total_n_step += 1
 
         if current_goal_distance < 0.5:
-            # pdb.set_trace()
+            if cfg["environment"]["visualize_path"] and n_test_case == (num_goals - 1):
+                pdb.set_trace()
+
             # plot command trajectory
             command_log = np.array(command_log)
             plot_command_result(command_traj=command_log,

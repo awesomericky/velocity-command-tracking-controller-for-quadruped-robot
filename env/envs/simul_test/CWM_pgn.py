@@ -259,6 +259,32 @@ for grid_size in [2.5, 3., 4., 5.]:
             if new_action_time:
                 # sample command sequences
                 action_candidates = action_planner.sample()
+
+                # # predict trajectory
+                # n_sample = action_candidates.shape[0]
+                # n_prediction = 12
+                # delta_t = 0.5
+                # future_position = np.zeros((n_sample, n_prediction + 1, 2))
+                # for i in range(action_candidates.shape[0]):
+                #     local_yaw = 0
+                #     local_x = 0
+                #     local_y = 0
+                #     for j in range(n_prediction):
+                #         vel_x, vel_y, vel_yaw = action_candidates[i, j, :]
+                #         local_yaw += vel_yaw * delta_t
+                #         local_x += vel_x * delta_t * np.cos(local_yaw) - vel_y * delta_t * np.sin(local_yaw)
+                #         local_y += vel_x * delta_t * np.sin(local_yaw) + vel_y * delta_t * np.cos(local_yaw)
+                #         future_position[i, j+1, 0] = local_x
+                #         future_position[i, j+1, 1] = local_y
+                #
+                # # plot predicted trajectory
+                # n_sample, traj_len, coor_dim = future_position.shape
+                # for i in range(n_sample):
+                #     plt.plot(future_position[i, :, 0], future_position[i, :, 1])
+                # plt.savefig("sampled_traj (baseline).png")
+                # plt.clf()
+                # pdb.set_trace()
+
                 action_candidates = np.reshape(action_candidates, (action_candidates.shape[0], -1))
                 action_candidates = action_candidates.astype(np.float32)
 
@@ -288,14 +314,6 @@ for grid_size in [2.5, 3., 4., 5.]:
                 # optimize command sequence
                 cand_sample_user_command, sample_user_command_traj = action_planner.action(reward)
                 sample_user_command = cand_sample_user_command.copy()
-
-                # # plot predicted trajectory
-                # traj_len, n_sample, coor_dim = predicted_coordinates.shape
-                # for j in range(n_sample):
-                #     plt.plot(predicted_coordinates[:, j, 0], predicted_coordinates[:, j, 1])
-                # plt.savefig("sampled_traj (ours).png")
-                # plt.clf()
-                # pdb.set_trace()
 
             # Execute first command in optimized command sequence using command tracking controller
             tracking_obs = np.concatenate((sample_user_command, obs[0, :proprioceptive_sensor_dim]))[np.newaxis, :]
@@ -370,6 +388,8 @@ for grid_size in [2.5, 3., 4., 5.]:
                 current_coordinate = None
             # success
             elif current_goal_distance < 0.5:
+                if cfg["environment"]["visualize_path"]:
+                    pdb.set_trace()
                 # Reset
                 env.initialize_n_step()  # keep start in different initial condiition
                 env.reset()

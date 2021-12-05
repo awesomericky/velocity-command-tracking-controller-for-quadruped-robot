@@ -1,9 +1,10 @@
 seed: 1
 record_video: yes
+realistic: False
 
 environment:
   render: True
-  visualize_path: False
+  visualize_path: True
   evaluate: True
   determine_env: 0  # 0: not determine / 1: circle / 2: box / 3: corridor
   type: 10

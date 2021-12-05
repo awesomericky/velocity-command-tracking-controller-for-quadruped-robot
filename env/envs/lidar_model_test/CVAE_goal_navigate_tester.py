@@ -379,8 +379,9 @@ else:
 
         wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
-        # if wait_time > 0.:
-        #     time.sleep(wait_time)
+        if cfg["realistic"]:
+            if wait_time > 0.:
+                time.sleep(wait_time)
 
         if wait_time > 0:
             total_time += cfg['environment']['control_dt']
@@ -389,6 +390,9 @@ else:
         total_n_step += 1
 
         if current_goal_distance < 0.5:
+            if cfg["environment"]["visualize_path"] and n_test_case == (num_goals - 1):
+                pdb.set_trace()
+
             # plot command trajectory
             command_log = np.array(command_log)
             plot_command_result(command_traj=np.array(command_log),

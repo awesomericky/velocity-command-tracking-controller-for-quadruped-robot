@@ -157,7 +157,7 @@ final_P_col_accuracy = []
 final_col_accuracy = []
 final_not_col_accuracy = []
 final_coordinate_error = []
-num_test = 1000
+num_test = 1
 
 # env.turn_off_visualization()
 
@@ -317,17 +317,17 @@ np.savez_compressed(f"Lidar_2D_model_result_{type}",
                     only_no_collision=final_not_col_accuracy,
                     coordinate=final_coordinate_error)
 
-plt.scatter(final_coordinate_error, final_P_col_accuracy, s=15)
-plt.title("Lidar 2D environment prediction result")
-plt.xlabel("Coordinate error [m]")
-plt.ylabel("Collision accuracy")
-plt.ylim(-0.1, 1.1)
-plt.savefig(f"Lidar_2D_model_result_{type}")
-plt.clf()
-
 print("--------------------------------------------------")
 print(f"Collision: {np.mean(final_P_col_accuracy)}")
 print(f"Collision(O): {np.mean(final_col_accuracy)}")
 print(f"Collision(X): {np.mean(final_not_col_accuracy)}")
 print(f"Coodinate: {np.mean(final_coordinate_error)}")
 print("--------------------------------------------------")
+
+plt.scatter(final_coordinate_error, final_P_col_accuracy, s=15)
+plt.title("Lidar 2D environment prediction result")
+plt.xlabel("Coordinate error [m]")
+plt.ylabel("Collision accuracy")
+plt.ylim(-0.1, 1.1)
+plt.savefig(f"Lidar_2D_model_result_{type}.png")
+plt.clf()
