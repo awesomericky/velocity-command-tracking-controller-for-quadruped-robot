@@ -175,6 +175,8 @@ for item_to_save in items_to_save:
 if cfg["logging"]:
     wandb.init(name="Naive_"+task_name, project="Quadruped_RL")
 
+cfg["environment"]["n_evaluate_envs"] = 3
+
 pdb.set_trace()
 
 print("<<-- Evaluating Naive -->>")
