@@ -422,8 +422,8 @@ for grid_size in [2.5, 3., 4., 5.]:
 
     print("===========================================")
     print(f"Grid_{str(grid_size)}:")
-    print(f"Collision safe: {round(collision_safe, 1)}")
-    print(f"No collision safe: {round(no_collision_safe, 1)}")
+    print(f"Collision safe: {round(collision_safe, 3)}")
+    print(f"No collision safe: {round(no_collision_safe, 3)}")
     print(f"Elapsed time: {elaspe_time_minutes}m {elapse_time_seconds}s")
 
 # env.stop_video_recording()
