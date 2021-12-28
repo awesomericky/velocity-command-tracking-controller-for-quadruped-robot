@@ -1,6 +1,6 @@
-realistic: False   # if True, consider wait_time
+realistic: True   # if True, consider wait_time
 plot_command: False
-logging: True   # wandb
+logging: False   # wandb
 check_time: False
 
 environment:
@@ -32,7 +32,7 @@ environment:
     yaw_rate:
       min: -1.2
       max: 1.2
-  test_obstacle_grid_size: 2.5  # 2.5 / 3.0 / 4.0
+  test_obstacle_grid_size: 2.5  # 2.5 / 3.0 / 4.0 / 5.0
   test_obstacle_center_distribution_type: 1  # 0: (0.3 ~ g.s - 0.3) / 1: (0.8 ~ g.s - 0.8) / 2: (0.55 ~ g.s - 0.55) / 3: (1.0 ~ g.s. - 1.0)
   test_initialize:
     point_goal: True

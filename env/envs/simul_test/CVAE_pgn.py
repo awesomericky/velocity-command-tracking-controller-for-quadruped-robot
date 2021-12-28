@@ -28,10 +28,11 @@ import wandb
 from shutil import copyfile
 
 """
-Check!!!!
+PGN using Time-correlated random sampler & CVAE sampler
 
-1. action_planner type & params
-2. collision_threshold
+- below code simply merge samples from two different sampler and optimize using MPPI
+- set number of samples from Time-correlated random sampler to 0 if you only want to sample using CVAE sampler
+
 """
 
 def transform_coordinate_LW(w_init_coordinate, l_coordinate_traj):

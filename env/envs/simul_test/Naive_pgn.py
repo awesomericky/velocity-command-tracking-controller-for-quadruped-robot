@@ -297,6 +297,7 @@ for grid_size in [2.5, 3., 4., 5.]:
                 predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
                                                                                    torch.from_numpy(action_candidates).to(device),
                                                                                    training=False)
+
                 predicted_P_cols = np.squeeze(predicted_P_cols, axis=-1)
 
                 # compute reward (goal reward + safety reward)

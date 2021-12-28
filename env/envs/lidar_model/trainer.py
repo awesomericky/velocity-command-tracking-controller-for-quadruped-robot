@@ -369,6 +369,22 @@ class Trainer:
                                                                     torch.from_numpy(new_command).to(self.device),
                                                                     training=False)  # prediction
 
+        # # compute future coordinates (w/ analytic model) ==> to compare the coordinate prediction error w/ analytic model vs w/ learned model
+        # analytic_predicted_coordinates = np.zeros((12, n_samples, 2))
+        # delta_t = 0.5
+        # for sample_idx in range(n_samples):
+        #     command_sequence = new_command[:, sample_idx, :]
+        #     local_yaw = 0
+        #     local_x = 0
+        #     local_y = 0
+        #     for step in range(12):
+        #         vel_x, vel_y, vel_yaw = command_sequence[step, :]
+        #         local_yaw += vel_yaw * delta_t
+        #         local_x += vel_x * delta_t * np.cos(local_yaw) - vel_y * delta_t * np.sin(local_yaw)
+        #         local_y += vel_x * delta_t * np.sin(local_yaw) + vel_y * delta_t * np.cos(local_yaw)
+        #         analytic_predicted_coordinates[step, sample_idx, 0] = local_x
+        #         analytic_predicted_coordinates[step, sample_idx, 1] = local_y
+
         # compute collision prediction accuracy
         if self.P_col_interpolate:
             col_state = np.where(predicted_P_cols > collision_threshold, 1, 0)
@@ -387,6 +403,7 @@ class Trainer:
             not_coll_correct_idx = np.where(col_state + ground_truth_col_state == 0, 1, 0)
             total_col_prediction_accuracy = np.sum(coll_correct_idx + not_coll_correct_idx) / (n_total_col + n_total_not_col)
         else:
+            # compute total collision accuracy
             col_state = np.where(predicted_P_cols > collision_threshold, 1, 0)
             ground_truth_col_state = np.where(real_P_cols == 1., 1, 0)
             n_total_col = np.sum(ground_truth_col_state)
@@ -403,10 +420,34 @@ class Trainer:
             not_coll_correct_idx = np.where(col_state + ground_truth_col_state == 0, 1, 0)
             total_col_prediction_accuracy = np.sum(coll_correct_idx + not_coll_correct_idx) / (n_total_col + n_total_not_col)
 
+            # =================================================
+            # # compute collision accuracy for each step
+            # col_state = np.where(predicted_P_cols > collision_threshold, 1, 0)
+            # ground_truth_col_state = np.where(real_P_cols == 1., 1, 0)
+            # n_total_col_stepwise = np.squeeze(np.sum(ground_truth_col_state, axis=1), axis=-1)
+            # n_total_not_col_stepwise = np.squeeze(np.sum(1 - ground_truth_col_state, axis=1), axis=-1)
+            #
+            # col_stepwise_acc = np.squeeze(np.sum(np.where(col_state + ground_truth_col_state == 2, 1, 0), axis=1), axis=-1) / n_total_col_stepwise
+            # no_col_stepwise_acc = np.squeeze(np.sum(np.where(col_state + ground_truth_col_state == 0, 1, 0), axis=1), axis=-1) / n_total_not_col_stepwise
+            # print(f"Collision acc: {col_stepwise_acc}")
+            # print(f"No collision acc {no_col_stepwise_acc}")
+            # =================================================
+
         # compute coordinate prediction error
         # mean of coordinate error distance sum for each trajectory
         # (divide the value by number of prediction step to compute the average coordinate distance error for each step)
         mean_coordinate_error = np.mean(np.sum(np.sqrt(np.sum(np.power(predicted_coordinates - real_coordinates, 2), axis=-1)), axis=0))
+
+        # =================================================
+        # # compute coordinate error for each step (w/ learned model)
+        # mean_coordinate_error_stepwise = np.mean(np.sqrt(np.sum(np.power(predicted_coordinates - real_coordinates, 2), axis=-1)), axis=1)
+        # print(f"Coordinate error: {mean_coordinate_error_stepwise}")
+
+        # # compute coordinate error for each step (w/ analytic model)
+        # analytic_mean_coordinate_error_stepwise = np.mean(np.sqrt(np.sum(np.power(analytic_predicted_coordinates - real_coordinates, 2), axis=-1)), axis=1)
+        # print(f"Analytic Coordinate error: {analytic_mean_coordinate_error_stepwise}")
+        # pdb.set_trace()
+        # =================================================
 
         logging_data = dict()
         if n_total_col != 0:

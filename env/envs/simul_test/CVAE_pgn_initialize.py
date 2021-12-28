@@ -28,10 +28,7 @@ import wandb
 from shutil import copyfile
 
 """
-Check!!!!
-
-1. action_planner type & params
-2. collision_threshold
+Initialize the optimizer with CVAE sampler
 """
 
 def transform_coordinate_LW(w_init_coordinate, l_coordinate_traj):
@@ -327,22 +324,14 @@ for grid_size in [2.5, 3., 4., 5.]:
                                                                                    torch.from_numpy(action_candidates).to(device),
                                                                                    training=False)
                 predicted_P_cols = np.squeeze(predicted_P_cols, axis=-1)
-
                 delta_goal_distance = current_goal_distance - np.sqrt(np.sum(np.power(predicted_coordinates - goal_position_L, 2), axis=-1))
-
                 goal_reward = np.sum(delta_goal_distance, axis=0)
                 goal_reward -= np.min(goal_reward)
                 goal_reward /= (np.max(goal_reward) + 1e-5)  # normalize reward
-
                 safety_reward = 1 - predicted_P_cols
                 safety_reward = np.mean(safety_reward, axis=0)
                 safety_reward /= (np.max(safety_reward) + 1e-5)  # normalize reward
-
                 reward = 1.0 * goal_reward * safety_reward + 0.3 * safety_reward
-                # reward = 1.0 * goal_reward * safety_reward
-
-                # exclude trajectory that collides with obstacle
-                # (do not filter if all trajectories are predicted to collide because we need minimal reward for optimization)
                 coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
                 if len(coll_idx) != (cfg["CVAE"]["planner"]["wo_CVAE_number_of_sample"] + cfg["CVAE"]["planner"]["CVAE_number_of_sample"]):
                     reward[coll_idx] = 0
@@ -350,12 +339,14 @@ for grid_size in [2.5, 3., 4., 5.]:
                 # receive final two candidate trajectories, each from different distribution
                 wo_cvae_optimized_command_traj, w_cvae_optimized_command_traj = action_planner.seperate_update(reward)
 
-                # simulate final two candidate trajectories
-                final_candidate_traj = np.stack((wo_cvae_optimized_command_traj, w_cvae_optimized_command_traj), axis=1)
-                predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state[:2, :]).to(device),
-                                                                                   torch.from_numpy(final_candidate_traj).to(device),
+
+                action_planner.set_optimized_result(w_cvae_optimized_command_traj)
+                state = np.concatenate((lidar_data, COM_history_feature)).astype(np.float32)
+                action_candidates = action_planner.sample(torch.from_numpy(state).unsqueeze(0).to(device), torch.from_numpy(goal_position_L).to(device))
+                state = np.tile(state, (cfg["CVAE"]["planner"]["wo_CVAE_number_of_sample"] + cfg["CVAE"]["planner"]["CVAE_number_of_sample"], 1))
+                predicted_P_cols, predicted_coordinates = loaded_environment_model(torch.from_numpy(state).to(device),
+                                                                                   torch.from_numpy(action_candidates).to(device),
                                                                                    training=False)
-                # compute rewards of final two candidate trajectories
                 predicted_P_cols = np.squeeze(predicted_P_cols, axis=-1)
                 delta_goal_distance = current_goal_distance - np.sqrt(np.sum(np.power(predicted_coordinates - goal_position_L, 2), axis=-1))
                 goal_reward = np.sum(delta_goal_distance, axis=0)
@@ -365,23 +356,12 @@ for grid_size in [2.5, 3., 4., 5.]:
                 safety_reward = np.mean(safety_reward, axis=0)
                 safety_reward /= (np.max(safety_reward) + 1e-5)  # normalize reward
                 reward = 1.0 * goal_reward * safety_reward + 0.3 * safety_reward
-
-                # exclude trajectory that collides with obstacle
                 coll_idx = np.where(np.sum(np.where(predicted_P_cols[:MUST_safety_period_n_steps, :] > collision_threshold, 1, 0), axis=0) != 0)[0]
-                if len(coll_idx) != 2:
+                if len(coll_idx) != (cfg["CVAE"]["planner"]["wo_CVAE_number_of_sample"] + cfg["CVAE"]["planner"]["CVAE_number_of_sample"]):
                     reward[coll_idx] = 0
-
-                # select higher reward trajectory
-                if reward[0] >= reward[1]:
-                    # wo_cvae more optimal
-                    sample_user_command = wo_cvae_optimized_command_traj[0]
-                    sample_user_command_traj = wo_cvae_optimized_command_traj
-                    wo_cvae_optimal += 1
-                else:
-                    # w_cvae more optimal
-                    sample_user_command = wo_cvae_optimized_command_traj[0]
-                    sample_user_command_traj = w_cvae_optimized_command_traj
-                    w_cvae_optimal += 1
+                wo_cvae_optimized_command_traj, w_cvae_optimized_command_traj = action_planner.seperate_update(reward)
+                sample_user_command = wo_cvae_optimized_command_traj[0]
+                sample_user_command_traj = wo_cvae_optimized_command_traj
                 action_planner.set_optimized_result(sample_user_command_traj)
 
                 # # plot predicted trajectory

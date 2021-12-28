@@ -38,7 +38,7 @@ namespace raisim
             world_ = std::make_unique<raisim::World>();
 
             /// environment type to be generated
-            env_type = sample_env_type;  // 1: scattered circle, 2: scattered box, 3: cross corridor
+            env_type = sample_env_type;  // 1: scattered cylinders and boxes in open field | 2: scattered cylinders and boxes in cross-corridor
 
             random_seed = seed;
             static std::default_random_engine env_generator(random_seed);
@@ -82,6 +82,8 @@ namespace raisim
                 std::uniform_int_distribution<> random_obstacle_sampling(1, 2);
                 std::uniform_real_distribution<> uniform_cylinder_obstacle(0.3, 0.5);
                 std::uniform_real_distribution<> uniform_box_obstacle(0.6, 1.0);
+//                std::uniform_real_distribution<> uniform_cylinder_obstacle(0.05, 1.0);
+//                std::uniform_real_distribution<> uniform_box_obstacle(0.1, 2.0);
                 Eigen::VectorXd obstacle_type_list, obstacle_circle_dr, obstacle_box_size;
                 obstacle_type_list.setZero(n_obstacle);
                 obstacle_circle_dr.setZero(n_obstacle);
@@ -187,6 +189,8 @@ namespace raisim
                 std::uniform_int_distribution<> random_obstacle_sampling(1, 2);
                 std::uniform_real_distribution<> uniform_cylinder_obstacle(0.3, 0.5);
                 std::uniform_real_distribution<> uniform_box_obstacle(0.6, 1.0);
+//                std::uniform_real_distribution<> uniform_cylinder_obstacle(0.05, 1.0);
+//                std::uniform_real_distribution<> uniform_box_obstacle(0.1, 2.0);
                 Eigen::VectorXd obstacle_type_list, obstacle_circle_dr, obstacle_box_size;
                 obstacle_type_list.setZero(n_obstacle);
                 obstacle_circle_dr.setZero(n_obstacle);

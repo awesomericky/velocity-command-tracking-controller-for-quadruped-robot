@@ -1,6 +1,6 @@
 seed: 1
 record_video: yes
-logging: True
+logging: False #True
 
 environment:
   render: True
@@ -16,7 +16,7 @@ environment:
     evaluate: 600
   num_threads: 6 # 4 is (optimal for data collection)
   evaluate_num_threads: 6  # Number of threads for evaluating model prediction
-  test_num_threads: 3  # Number of threads for evaluating model based RL
+  test_num_threads: 2  # Number of threads for evaluating model based RL
   simulation_dt: 0.0025
   control_dt: 0.01
   max_time: 9.0
