@@ -8,6 +8,12 @@
 #include <stdlib.h>
 #include <set>
 #include "../../RaisimGymEnv.hpp"
+#include <ompl/base/SpaceInformation.h>
+#include <ompl/base/spaces/SE3StateSpace.h>
+#include <ompl/geometric/planners/rrt/RRTConnect.h>
+#include <ompl/geometric/SimpleSetup.h>
+
+#include <ompl/config.h>
 
 // [Tip]
 //
@@ -24,6 +30,9 @@
 // 5. RaisimGymVecEnv.py (if needed)
 
 namespace raisim
+namespace ob = ompl::base;
+namespace og = ompl::geometric;
+
 {
 
     class ENVIRONMENT : public RaisimGymEnv
@@ -33,6 +42,7 @@ namespace raisim
         explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable, int sample_env_type, int seed)
         : RaisimGymEnv(resourceDir, cfg), visualizable_(visualizable)
         {
+            plan();
 
             /// create world
             world_ = std::make_unique<raisim::World>();
@@ -769,7 +779,81 @@ namespace raisim
         // return false;
     }
 
-    private:
+    ////////// Code for path planning w/ sampling based motion planner //////////
+
+    bool isStateValid(const ob::State *state)
+    {
+        // cast the abstract state type to the type we expect
+        const auto *R2state = state->as<ob::RealVectorStateSpace::StateType>(2);
+
+        // check validity of state defined by pos & rot
+
+
+        // return a value that is always true but uses the two variables we define, so we avoid compiler warnings
+        return true;
+    }
+
+    void plan() {
+        // construct the state space we are planning in
+        auto space(std::make_shared<ob::RealVectorStateSpace>(2));
+
+        // set the bounds for the R^2
+        ob::RealVectorBounds bounds(2);
+        bounds.setLow(-hm_sizeX/2);
+        bounds.setHigh(hm_sizeX/2);
+        space->setBounds(bounds);
+
+        // construct an instance of  space information from this state space
+        auto si(std::make_shared<ob::SpaceInformation>(space));
+
+        // set state validity checking for this space
+        si->setStateValidityChecker(isStateValid);
+
+        // create a random start state
+        ob::ScopedState<> start(space);
+        start.random();
+
+        // create a random goal state
+        ob::ScopedState<> goal(space);
+        goal.random();
+
+        // create a problem instance
+        auto pdef(std::make_shared<ob::ProblemDefinition>(si));
+
+        // set the start and goal states
+        pdef->setStartAndGoalStates(start, goal);
+
+        // create a planner for the defined space
+        auto planner(std::make_shared<og::BITstar>(si));
+
+        // set the problem we are trying to solve for the planner
+        planner->setProblemDefinition(pdef);
+
+        // perform setup steps for the planner
+        planner->setup();
+
+
+        // print the settings for this space
+        si->printSettings(std::cout);
+
+        // print the problem settings
+        pdef->print(std::cout);
+
+        // attempt to solve the problem within one second of planning time
+        ob::PlannerStatus solved = planner->ob::Planner::solve(10.0);
+
+        if (solved) {
+            // get the goal representation from the problem definition (not the same as the goal state)
+            // and inquire about the found path
+            ob::PathPtr path = pdef->getSolutionPath();
+            std::cout << "Found solution:" << std::endl;
+
+            // print the path to screen
+            path->print(std::cout);
+        } else
+    }
+
+            private:
     int gcDim_, gvDim_, nJoints_;
     bool visualizable_ = false;
     raisim::ArticulatedSystem *anymal_;

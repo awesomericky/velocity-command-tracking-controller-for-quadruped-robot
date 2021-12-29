@@ -94,7 +94,7 @@ cfg['environment']['num_envs'] = 1
 
 # create environment from the configuration file
 env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
-
+pdb.set_trace()
 # shortcuts
 user_command_dim = 3
 proprioceptive_sensor_dim = 81
