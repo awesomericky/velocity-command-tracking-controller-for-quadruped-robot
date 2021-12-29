@@ -16,12 +16,6 @@ environment:
   num_threads: 2 #12
   simulation_dt: 0.0025
   control_dt: 0.01
-  obstacle_grid_size:  # not used
-    min: 2.5
-    max: 5.0
-  obstacle_dr:  # not used
-    min: 0.3
-    max: 0.5
   command:
     forward_vel:
       min: -1.0

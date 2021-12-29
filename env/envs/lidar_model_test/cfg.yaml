@@ -8,15 +8,7 @@ environment:
   evaluate: True
   determine_env: 0  # 0: not determine / 1: circle / 2: box / 3: corridor
   type: 10
-  #    1 : 90 degree maze
   #    2 : diagonal maze (env1)  ===
-  #    3 : scattered obstacle (seen)
-  #    4 : scattered obstacle (unseen)
-  #    5 : narrow obstacle
-  #    6 : (env2)
-  #    7 : (env3)
-  #    8 : (env4)
-  #    9 : (env5)
   #    10 : ===
   num_envs: 300
   max_n_update: 10000

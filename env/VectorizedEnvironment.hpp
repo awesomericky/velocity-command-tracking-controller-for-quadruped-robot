@@ -40,11 +40,6 @@ class VectorizedEnvironment {
     omp_set_num_threads(cfg_["num_threads"].template As<int>());
     num_envs_ = cfg_["num_envs"].template As<int>();
 
-    double min_obstacle_grid_size = cfg_["obstacle_grid_size"]["min"].template As<double>();
-    double max_obstacle_grid_size = cfg_["obstacle_grid_size"]["max"].template As<double>();
-    double min_obstacle_dr = cfg_["obstacle_dr"]["min"].template As<double>();
-    double max_obstacle_dr = cfg_["obstacle_dr"]["max"].template As<double>();
-
     /// Set seed and obstacle grid size for generating random environment
     bool evaluate = cfg_["evaluate"].template As<bool>();
     int generator_seed;   /// Change the main seed to change the generated environment
@@ -56,13 +51,8 @@ class VectorizedEnvironment {
 //    std::cout << "Seed: " << generator_seed << "\n";
     std::default_random_engine generator(generator_seed);
     std::uniform_int_distribution<> seed_uniform(0, 1000000);
-    std::uniform_int_distribution<> env_type_uniform(1, 3);
-    std::uniform_real_distribution<> obstacle_grid_size_uniform(min_obstacle_grid_size, max_obstacle_grid_size);
-    std::uniform_real_distribution<> obstacle_dr_uniform(min_obstacle_dr, max_obstacle_dr);
     std::vector<int> seed_seq = {};
     std::vector<int> env_type = {};
-    std::vector<double> obstacle_grid_size_seq = {};
-    std::vector<double> obstacle_dr_seq = {};
     int cfg_determine_env = cfg_["determine_env"].template As<int>();
     for (int i=0; i<num_envs_; i++) {
         seed_seq.push_back(seed_uniform(generator));
@@ -74,8 +64,6 @@ class VectorizedEnvironment {
         } else {
             env_type.push_back(cfg_determine_env);
         }
-        obstacle_grid_size_seq.push_back(obstacle_grid_size_uniform(generator));
-        obstacle_dr_seq.push_back(obstacle_dr_uniform(generator));
     }
 
     double n_type_1 = 0;
@@ -93,7 +81,7 @@ class VectorizedEnvironment {
     environments_.reserve(num_envs_);
     rewardInformation_.reserve(num_envs_);
     for (int i = 0; i < num_envs_; i++) {
-        environments_.push_back(new ChildEnvironment(resourceDir_, cfg_, render_ && i == 0, env_type[i], seed_seq[i], obstacle_grid_size_seq[i], obstacle_dr_seq[i]));
+        environments_.push_back(new ChildEnvironment(resourceDir_, cfg_, render_ && i == 0, env_type[i], seed_seq[i]));
         environments_.back()->setSimulationTimeStep(cfg_["simulation_dt"].template As<double>());
         environments_.back()->setControlTimeStep(cfg_["control_dt"].template As<double>());
         rewardInformation_.push_back(environments_.back()->getRewards().getStdMap());

@@ -30,7 +30,7 @@ namespace raisim
     {
 
     public:
-        explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable, int sample_env_type, int seed, double sample_obstacle_grid_size, double sample_obstacle_dr)
+        explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable, int sample_env_type, int seed)
         : RaisimGymEnv(resourceDir, cfg), visualizable_(visualizable)
         {
 

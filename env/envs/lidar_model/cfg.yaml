@@ -5,7 +5,7 @@ logging: False #True
 environment:
   render: True
   # just testing commenting
-  evaluate: True
+  evaluate: False
   determine_env: 0  # 0: not determine / 1: open field with circle & box / 2: cross-corridor with circle & box
   num_envs: 500
   max_n_update: 30000
@@ -14,18 +14,25 @@ environment:
   seed:
     train: 0
     evaluate: 600
-  num_threads: 6 # 4 is (optimal for data collection)
+  num_threads: 12 # 4 is (optimal for data collection)
   evaluate_num_threads: 6  # Number of threads for evaluating model prediction
   test_num_threads: 2  # Number of threads for evaluating model based RL
   simulation_dt: 0.0025
   control_dt: 0.01
   max_time: 9.0
   obstacle_grid_size:
-    min: 3.0
-    max: 4.0
-  obstacle_dr:  # not used
-    min: 0.3
-    max: 0.6 #0.5
+    env_one:
+      min: 2.3  # 3.0
+      max: 5.0  # 4.0
+    env_two:
+      min: 2.3  # 3.0
+      max: 5.0  # 4.0
+  obstacle_size:  # cylinder: radius (min ~ max) / box: side length (min*2 ~ max*2)
+    min: 0.05  # 0.3
+    max: 1.0  # 0.5
+  obstacle_randomness:
+    min: 0.1
+    max: 0.9
   command:
     forward_vel:
       min: -1.0
@@ -91,7 +98,7 @@ data_collection:
   normal_time_correlated_command_sampler_sigma: 0.3
   prediction_period: 6  # [s]
   command_period: 0.5  # [s]
-  prioritized_data_update: True
+  prioritized_data_update: False
   prioritized_data_update_magnitude: 0.8
 
 architecture:

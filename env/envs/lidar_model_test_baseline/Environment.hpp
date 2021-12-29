@@ -30,7 +30,7 @@ namespace raisim
     {
 
     public:
-        explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable, int sample_env_type, int seed, double sample_obstacle_grid_size, double sample_obstacle_dr)
+        explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable, int sample_env_type, int seed)
         : RaisimGymEnv(resourceDir, cfg), visualizable_(visualizable)
         {
 
@@ -45,7 +45,7 @@ namespace raisim
             else if (world_type == 2)
                 generate_env_2();
             else if (world_type == 3)
-                generate_env_3(seed, sample_obstacle_grid_size, sample_obstacle_dr);
+                generate_env_3(seed, 1., 1.);
             else if (world_type == 5)
                 generate_env_5(seed);
             else if (world_type == 6)

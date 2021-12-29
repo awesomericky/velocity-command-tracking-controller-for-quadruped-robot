@@ -30,12 +30,11 @@ namespace raisim
     {
 
     public:
-        explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable, int sample_env_type, int seed, double sample_obstacle_grid_size, double sample_obstacle_dr)
+        explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable, int sample_env_type, int seed)
         : RaisimGymEnv(resourceDir, cfg), visualizable_(visualizable)
         {
             /*
-             * For testing, we do not use sampled sample_env_type, seed, sample_obstacle_grid_size, sample_obstacle_dr.
-             * We rather use deterministic configuration.
+             * We use deterministic configuration.
              */
 
             /// create world

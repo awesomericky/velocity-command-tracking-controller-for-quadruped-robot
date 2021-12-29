@@ -30,7 +30,7 @@ namespace raisim
     {
 
     public:
-        explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable, int sample_env_type, int seed, double sample_obstacle_grid_size, double sample_obstacle_dr)
+        explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable, int sample_env_type, int seed)
         : RaisimGymEnv(resourceDir, cfg), visualizable_(visualizable)
         {
 
@@ -42,6 +42,12 @@ namespace raisim
 
             random_seed = seed;
             static std::default_random_engine env_generator(random_seed);
+
+            /// set obstacle distribution randomness
+            double min_obstacle_randomness = cfg["obstacle_randomness"]["min"].As<double>();
+            double max_obstacle_randomness = cfg["obstacle_randomness"]["max"].As<double>();
+            std::uniform_real_distribution<> obstacle_randomness_sampler(min_obstacle_randomness, max_obstacle_randomness);
+            double obstacle_randomness = obstacle_randomness_sampler(env_generator);
 
             /// generate obstacles
             if (env_type == 1) {
@@ -55,20 +61,23 @@ namespace raisim
                 double obstacle_height = 2;
 
                 /// sample obstacle center
-                double obstacle_grid_size = sample_obstacle_grid_size;;
+                double min_obstacle_grid_size = cfg["obstacle_grid_size"]["env_one"]["min"].template As<double>();
+                double max_obstacle_grid_size = cfg["obstacle_grid_size"]["env_one"]["max"].template As<double>();
+                std::uniform_real_distribution<> env_one_grid_size_sampler(min_obstacle_grid_size, max_obstacle_grid_size);
+                double obstacle_grid_size = env_one_grid_size_sampler(env_generator);
                 int n_x_grid = int(hm_sizeX / obstacle_grid_size);
                 int n_y_grid = int(hm_sizeY / obstacle_grid_size);
                 n_obstacle = n_x_grid * n_y_grid;
 
                 obstacle_centers.setZero(n_obstacle, 2);
-                std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
+                std::uniform_real_distribution<> obstacle_center_sampler(obstacle_randomness, obstacle_grid_size - obstacle_randomness);
                 for (int i=0; i<n_obstacle; i++) {
                     int current_n_y = int(i / n_x_grid);
                     int current_n_x = i - current_n_y * n_x_grid;
                     double sampled_x;
                     double sampled_y;
-                    sampled_x = uniform(env_generator);
-                    sampled_y = uniform(env_generator);
+                    sampled_x = obstacle_center_sampler(env_generator);
+                    sampled_y = obstacle_center_sampler(env_generator);
 
                     sampled_x +=  obstacle_grid_size * current_n_x;
                     sampled_x -= hm_sizeX/2;
@@ -79,11 +88,11 @@ namespace raisim
                 }
 
                 /// generate obstacles
+                double min_obstacle_size = cfg["obstacle_size"]["min"].As<double>();
+                double max_obstacle_size = cfg["obstacle_size"]["max"].As<double>();
                 std::uniform_int_distribution<> random_obstacle_sampling(1, 2);
-                std::uniform_real_distribution<> uniform_cylinder_obstacle(0.3, 0.5);
-                std::uniform_real_distribution<> uniform_box_obstacle(0.6, 1.0);
-//                std::uniform_real_distribution<> uniform_cylinder_obstacle(0.05, 1.0);
-//                std::uniform_real_distribution<> uniform_box_obstacle(0.1, 2.0);
+                std::uniform_real_distribution<> uniform_cylinder_obstacle(min_obstacle_size, max_obstacle_size);
+                std::uniform_real_distribution<> uniform_box_obstacle(min_obstacle_size*2, max_obstacle_size*2);
                 Eigen::VectorXd obstacle_type_list, obstacle_circle_dr, obstacle_box_size;
                 obstacle_type_list.setZero(n_obstacle);
                 obstacle_circle_dr.setZero(n_obstacle);
@@ -164,19 +173,21 @@ namespace raisim
                 double obstacle_height = 2;
 
                 /// sample obstacle center for cross-corridor
-                std::uniform_real_distribution<> uniform_corridor_grid_size(3., 4.);   // sample different grid size in different available range for data collection stability
-                double obstacle_grid_size = uniform_corridor_grid_size(env_generator);
+                double min_obstacle_grid_size = cfg["obstacle_grid_size"]["env_two"]["min"].template As<double>();
+                double max_obstacle_grid_size = cfg["obstacle_grid_size"]["env_two"]["max"].template As<double>();
+                std::uniform_real_distribution<> env_two_grid_size_sampler(min_obstacle_grid_size, max_obstacle_grid_size);
+                double obstacle_grid_size = env_two_grid_size_sampler(env_generator);
                 int n_x_grid = int(hm_sizeX / obstacle_grid_size);
                 int n_y_grid = int(hm_sizeY / obstacle_grid_size);
                 n_obstacle = n_x_grid * n_y_grid;
 
                 obstacle_centers.setZero(n_obstacle, 2);
-                std::uniform_real_distribution<> uniform(0.3, obstacle_grid_size - 0.3);
+                std::uniform_real_distribution<> obstacle_center_sampler(obstacle_randomness, obstacle_grid_size - obstacle_randomness);
                 for (int i=0; i<n_obstacle; i++) {
                     int current_n_y = int(i / n_x_grid);
                     int current_n_x = i - current_n_y * n_x_grid;
-                    double sampled_x = uniform(env_generator);
-                    double sampled_y = uniform(env_generator);
+                    double sampled_x = obstacle_center_sampler(env_generator);
+                    double sampled_y = obstacle_center_sampler(env_generator);
                     sampled_x +=  obstacle_grid_size * current_n_x;
                     sampled_x -= hm_sizeX/2;
                     sampled_y += obstacle_grid_size * current_n_y;
@@ -186,11 +197,11 @@ namespace raisim
                 }
 
                 /// sample obstacle size
+                double min_obstacle_size = cfg["obstacle_size"]["min"].As<double>();
+                double max_obstacle_size = cfg["obstacle_size"]["max"].As<double>();
                 std::uniform_int_distribution<> random_obstacle_sampling(1, 2);
-                std::uniform_real_distribution<> uniform_cylinder_obstacle(0.3, 0.5);
-                std::uniform_real_distribution<> uniform_box_obstacle(0.6, 1.0);
-//                std::uniform_real_distribution<> uniform_cylinder_obstacle(0.05, 1.0);
-//                std::uniform_real_distribution<> uniform_box_obstacle(0.1, 2.0);
+                std::uniform_real_distribution<> uniform_cylinder_obstacle(min_obstacle_size, max_obstacle_size);
+                std::uniform_real_distribution<> uniform_box_obstacle(min_obstacle_size*2, max_obstacle_size*2);
                 Eigen::VectorXd obstacle_type_list, obstacle_circle_dr, obstacle_box_size;
                 obstacle_type_list.setZero(n_obstacle);
                 obstacle_circle_dr.setZero(n_obstacle);
