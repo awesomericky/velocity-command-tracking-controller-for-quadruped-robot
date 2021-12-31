@@ -8,12 +8,6 @@
 #include <stdlib.h>
 #include <set>
 #include "../../RaisimGymEnv.hpp"
-#include <ompl/base/SpaceInformation.h>
-#include <ompl/base/spaces/SE3StateSpace.h>
-#include <ompl/geometric/planners/rrt/RRTConnect.h>
-#include <ompl/geometric/SimpleSetup.h>
-
-#include <ompl/config.h>
 
 // [Tip]
 //
@@ -30,9 +24,6 @@
 // 5. RaisimGymVecEnv.py (if needed)
 
 namespace raisim
-namespace ob = ompl::base;
-namespace og = ompl::geometric;
-
 {
 
     class ENVIRONMENT : public RaisimGymEnv
@@ -42,8 +33,6 @@ namespace og = ompl::geometric;
         explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable, int sample_env_type, int seed)
         : RaisimGymEnv(resourceDir, cfg), visualizable_(visualizable)
         {
-            plan();
-
             /// create world
             world_ = std::make_unique<raisim::World>();
 
@@ -780,142 +769,78 @@ namespace og = ompl::geometric;
     }
 
     ////////// Code for path planning w/ sampling based motion planner //////////
-
-    bool isStateValid(const ob::State *state)
-    {
-        // cast the abstract state type to the type we expect
-        const auto *R2state = state->as<ob::RealVectorStateSpace::StateType>(2);
-
-        // check validity of state defined by pos & rot
+//    namespace ob = ompl::base;
+//    namespace og = ompl::geometric;
 
 
-        // return a value that is always true but uses the two variables we define, so we avoid compiler warnings
-        return true;
-    }
 
-    void plan() {
-        // construct the state space we are planning in
-        auto space(std::make_shared<ob::RealVectorStateSpace>(2));
+    private:
+        int gcDim_, gvDim_, nJoints_;
+        bool visualizable_ = false;
+        raisim::ArticulatedSystem *anymal_;
+        Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_, vTarget_;
+        Eigen::VectorXd actionMean_, actionStd_, obDouble_;
+        Eigen::Vector3d bodyLinearVel_, bodyAngularVel_;
+        std::set<size_t> footIndices_;
 
-        // set the bounds for the R^2
-        ob::RealVectorBounds bounds(2);
-        bounds.setLow(-hm_sizeX/2);
-        bounds.setHigh(hm_sizeX/2);
-        space->setBounds(bounds);
+        int n_history_steps = 2;
+        Eigen::VectorXd joint_position_error_history, joint_velocity_history;
 
-        // construct an instance of  space information from this state space
-        auto si(std::make_shared<ob::SpaceInformation>(space));
+        /// Lidar
+        int scanSize;
+        double lidar_theta, delta_lidar_theta;
+        std::vector<raisim::Visuals *> scans;
+        Eigen::VectorXd lidar_scan_depth;
 
-        // set state validity checking for this space
-        si->setStateValidityChecker(isStateValid);
+        /// Random data generator
+        int random_seed = 0;
 
-        // create a random start state
-        ob::ScopedState<> start(space);
-        start.random();
+        /// Randomization
+        bool random_initialize = false;
 
-        // create a random goal state
-        ob::ScopedState<> goal(space);
-        goal.random();
+        /// Randon intialization
+        Eigen::VectorXd random_gc_init, random_gv_init, current_random_gc_init, current_random_gv_init;
+        int current_n_step = 0;
 
-        // create a problem instance
-        auto pdef(std::make_shared<ob::ProblemDefinition>(si));
+        /// Heightmap
+        double hm_sizeX, hm_sizeY;
+        raisim::HeightMap* hm;
 
-        // set the start and goal states
-        pdef->setStartAndGoalStates(start, goal);
+        /// Obstacle
+        int n_obstacle = 0;
+        double obstacle_dr = 0.5;
+        Eigen::VectorXd obstacle_size_list;
+        std::vector<double> hm_raw_value = {};
+        std::vector<raisim::Vec<2>> init_set = {};
+        int n_init_set = 0;
+        Eigen::MatrixXd obstacle_centers;
 
-        // create a planner for the defined space
-        auto planner(std::make_shared<og::BITstar>(si));
+        /// Observation to be predicted
+        Eigen::VectorXd coordinateDouble;
 
-        // set the problem we are trying to solve for the planner
-        planner->setProblemDefinition(pdef);
+        /// Visualize trajectory prediction
+        int n_prediction_step = 12;   // Determined manually
+        std::vector<raisim::Visuals *> desired_command_traj, modified_command_traj;
 
-        // perform setup steps for the planner
-        planner->setup();
+        /// Task specific initialization for evaluation
+        bool point_goal_initialize= false, CVAE_data_collection_initialize= false;
+        bool safe_control_initialize= false, CVAE_environment_initialize=false;
+        raisim::Vec<2> point_goal_init;
 
+        /// goal position
+        std::vector<raisim::Vec<2>> goal_set = {};
+        int n_goal_set;
+        int current_n_goal = 0;
+        std::vector<int> sampled_goal_set = {};
 
-        // print the settings for this space
-        si->printSettings(std::cout);
-
-        // print the problem settings
-        pdef->print(std::cout);
-
-        // attempt to solve the problem within one second of planning time
-        ob::PlannerStatus solved = planner->ob::Planner::solve(10.0);
-
-        if (solved) {
-            // get the goal representation from the problem definition (not the same as the goal state)
-            // and inquire about the found path
-            ob::PathPtr path = pdef->getSolutionPath();
-            std::cout << "Found solution:" << std::endl;
-
-            // print the path to screen
-            path->print(std::cout);
-        } else
-    }
-
-            private:
-    int gcDim_, gvDim_, nJoints_;
-    bool visualizable_ = false;
-    raisim::ArticulatedSystem *anymal_;
-    Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_, vTarget_;
-    Eigen::VectorXd actionMean_, actionStd_, obDouble_;
-    Eigen::Vector3d bodyLinearVel_, bodyAngularVel_;
-    std::set<size_t> footIndices_;
-
-    int n_history_steps = 2;
-    Eigen::VectorXd joint_position_error_history, joint_velocity_history;
-
-    /// Lidar
-    int scanSize;
-    double lidar_theta, delta_lidar_theta;
-    std::vector<raisim::Visuals *> scans;
-    Eigen::VectorXd lidar_scan_depth;
-
-    /// Random data generator
-    int random_seed = 0;
-
-    /// Randomization
-    bool random_initialize = false;
-
-    /// Randon intialization
-    Eigen::VectorXd random_gc_init, random_gv_init, current_random_gc_init, current_random_gv_init;
-    int current_n_step = 0;
-
-    /// Heightmap
-    double hm_sizeX, hm_sizeY;
-    raisim::HeightMap* hm;
-
-    /// Obstacle
-    int n_obstacle = 0;
-    double obstacle_dr = 0.5;
-    Eigen::VectorXd obstacle_size_list;
-    std::vector<double> hm_raw_value = {};
-    std::vector<raisim::Vec<2>> init_set = {};
-    int n_init_set = 0;
-    Eigen::MatrixXd obstacle_centers;
-
-    /// Observation to be predicted
-    Eigen::VectorXd coordinateDouble;
-
-    /// Visualize trajectory prediction
-    int n_prediction_step = 12;   // Determined manually
-    std::vector<raisim::Visuals *> desired_command_traj, modified_command_traj;
-
-    /// Task specific initialization for evaluation
-    bool point_goal_initialize= false, CVAE_data_collection_initialize= false;
-    bool safe_control_initialize= false, CVAE_environment_initialize=false;
-    raisim::Vec<2> point_goal_init;
-
-    /// goal position
-    std::vector<raisim::Vec<2>> goal_set = {};
-    int n_goal_set;
-    int current_n_goal = 0;
-    std::vector<int> sampled_goal_set = {};
-
-    /// environment type and parameter
-    int env_type;
-    double hm_centerX = 0.0, hm_centerY = 0.0;
-    double hm_samplesX = 0., hm_samplesY = 0.;
-
+        /// environment type and parameter
+        int env_type;
+        double hm_centerX = 0.0, hm_centerY = 0.0;
+        double hm_samplesX = 0., hm_samplesY = 0.;
     };
 }
+
+//namespace ob = ompl::base;
+//namespace og = ompl::geometric;
+
+
