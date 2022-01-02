@@ -16,9 +16,10 @@ from raisimGymTorch.env.envs.lidar_model.model import Lidar_environment_model
 from raisimGymTorch.env.envs.lidar_model.action import Stochastic_action_planner_uniform_bin, Stochastic_action_planner_uniform_bin_w_time_correlation_nprmal
 from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 import random
+from analytic_planner import Analytic_planner
 
 """
-Collect data to train CVAE
+Collect data to train CVAE (w/ analytic planner)
 """
 
 """
@@ -98,7 +99,19 @@ cfg['environment']['num_envs'] = 1
 
 # create environment from the configuration file
 env = VecEnv(lidar_model.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'], normalize_ob=False)
-pdb.set_trace()
+
+# # ======================
+# env.initialize_n_step()
+# env.reset()
+# goal_position = env.set_goal()
+# start_position = env.coordinate_observe()[0, :2]
+# analytic_planner = Analytic_planner(env, 40, 20)
+# planned_path = analytic_planner.plan(start_position.astype(np.float64), goal_position.astype(np.float64))
+#
+# if cfg["environment"]["analytic_planner"]["visualize"] and planned_path is not None:
+#     analytic_planner.visualize_path()
+# # ======================
+
 # shortcuts
 user_command_dim = 3
 proprioceptive_sensor_dim = 81
@@ -197,6 +210,11 @@ saved_data_size = {'env1': 0, 'env2': 0, 'env3': 0}
 folder_name = "CVAE_data"
 check_saving_folder(folder_name)
 
+# hyperparameter for path tracking
+n_waypoints = 5
+lookahead_distance = 8
+waypoint_update_threshold = 3
+
 for env_type in [1, 2, 3]:
     # Set environment type
     # 1: cylinder
@@ -218,6 +236,10 @@ for env_type in [1, 2, 3]:
         env.load_scaling(command_tracking_weight_dir, int(iteration_number))
         # env.turn_on_visualization()
 
+        # set analytic planner
+        # analytic_planner = Analytic_planner(env, 40, 120)
+        analytic_planner = Analytic_planner(env, 40, 10)
+
         current_num_success_goals = 0
         current_num_fail_goals = 0
         current_num_success_but_short_goals = 0
@@ -232,6 +254,13 @@ for env_type in [1, 2, 3]:
             action_planner.reset()
             goal_position = env.set_goal()[np.newaxis, :]
             COM_buffer.reset()
+            start_position = env.coordinate_observe()[0, :2]
+
+            # plan path with analytic planner
+            planned_path = analytic_planner.plan(start_position.astype(np.float64), goal_position[0, :].astype(np.float64))
+
+            if cfg["environment"]["analytic_planner"]["visualize"] and planned_path is not None:
+                analytic_planner.visualize_path()
 
             # intialize counting variables
             goal_current_duration = 0.
@@ -272,16 +301,26 @@ for env_type in [1, 2, 3]:
 
                     predicted_P_cols = np.squeeze(predicted_P_cols, axis=-1)
 
-                    # compute reward (goal reward + safety reward)
-                    goal_position_L = transform_coordinate_WL(init_coordinate_obs, goal_position)
-                    current_goal_distance = np.sqrt(np.sum(np.power(goal_position_L, 2)))
-                    if current_goal_distance > goal_distance_threshold:
-                        goal_position_L *= (goal_distance_threshold / current_goal_distance)
-                    delta_goal_distance = current_goal_distance - np.sqrt(np.sum(np.power(predicted_coordinates - goal_position_L, 2), axis=-1))
+                    # select goal
+                    goal_position_list_L = transform_coordinate_WL(init_coordinate_obs, planned_path)
+                    goal_distance_list = np.sqrt(np.sum(np.power(goal_position_list_L, 2), axis=-1))
+                    goal_distance_list = np.abs(goal_distance_list - lookahead_distance)
+                    waypoint_idx = np.argpartition(goal_distance_list, n_waypoints)[:n_waypoints]
+                    goal_positions_L = goal_position_list_L[waypoint_idx]
 
-                    goal_reward = np.sum(delta_goal_distance, axis=0)
-                    goal_reward -= np.min(goal_reward)
-                    goal_reward /= np.max(goal_reward) + 1e-5  # normalize reward
+                    # compute reward (goal reward + safety reward)
+                    # # (traj_len, n_sample, single_command_dim) = (12, 1000, 2)  ==> (3, 12, 1000, 2)  ==> (3, 12, 1000)  ==> (3, 1000)
+                    current_goal_distances = goal_distance_list[waypoint_idx]
+                    goal_positions_L *= np.clip(goal_distance_threshold / current_goal_distances, a_min=None, a_max=1.)[:, np.newaxis]  # (3, 2)
+                    delta_goal_distance = current_goal_distances[:, np.newaxis, np.newaxis] - np.sqrt(np.sum(np.power(predicted_coordinates[np.newaxis, :, :, :] - goal_positions_L[:, np.newaxis, np.newaxis, :], 2), axis=-1))
+                    goal_reward = np.sum(delta_goal_distance, axis=1)
+                    goal_reward -= np.min(goal_reward, axis=-1)[:, np.newaxis]
+                    goal_reward /= (np.max(goal_reward, axis=-1)[:, np.newaxis] + 1e-5)  # normalize reward
+                    goal_reward = np.mean(goal_reward, axis=0)
+
+                    """
+                    Need to update waypoints & Erase waypoints that have passed
+                    """
 
                     safety_reward = 1 - predicted_P_cols
                     safety_reward = np.mean(safety_reward, axis=0)
@@ -331,8 +370,9 @@ for env_type in [1, 2, 3]:
                 frame_end = time.time()
                 wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
-                if wait_time > 0.:
-                    time.sleep(wait_time)
+                # # Just to make realistic
+                # if wait_time > 0.:
+                #     time.sleep(wait_time)
 
                 if wait_time > 0.:
                     goal_current_duration += cfg['environment']['control_dt']
@@ -348,7 +388,7 @@ for env_type in [1, 2, 3]:
                     current_num_fail_goals += 1
                     break
                 # success
-                elif current_goal_distance < 0.5:
+                elif np.mean(current_goal_distances) < 0.5:
                     # Will record (sampled) success case
                     n_steps = len(observation_traj)
                     n_max_available_steps = n_steps - n_prediction_step  # maximum available index which starts from 0

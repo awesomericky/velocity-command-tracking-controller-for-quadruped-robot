@@ -1,3 +1,5 @@
+import pdb
+
 try:
     from ompl import base as ob
     from ompl import geometric as og
@@ -9,15 +11,23 @@ except ImportError:
     sys.path.insert(0, '/home/awesomericky/raisim/raisimLib/thirdParty/ompl-1.5.2/py-bindings')
     from ompl import base as ob
     from ompl import geometric as og
+    from ompl import util as ou
+
+import numpy as np
 
 class Analytic_planner:
     """
     Generate instacle of corresponding class when new environment is generated
     """
-    def __init__(self, heightmap, map_size, max_planning_time):
-        self.heightmap = heightmap
+    def __init__(self, env, map_size, max_planning_time, min_n_states=50):
+        self.env = env
         self.map_size = map_size
         self.max_planning_time = max_planning_time  # seconds
+        self.min_n_states = min_n_states
+        self.path_coordinates = None
+
+        # disable ompl log except error
+        ou.setLogLevel(ou.LOG_ERROR)  # LOG_ERROR / LOG_WARN / LOG_INFO / LOG_DEBUG
 
         space = ob.RealVectorStateSpace(2)
         bounds = ob.RealVectorBounds(2)
@@ -27,11 +37,14 @@ class Analytic_planner:
 
         si = ob.SpaceInformation(space)
         si.setStateValidityChecker(ob.StateValidityCheckerFn(self.isStateValid))
+        resolution_size = 0.05  # [m]
+        si.setStateValidityCheckingResolution(resolution_size / si.getMaximumExtent())
 
         self.start = ob.State(space)
         self.goal = ob.State(space)
 
         self.planner = og.BITstar(si)  # create a planner for the defined space
+        # self.planner = og.RRTstar(si)  # create a planner for the defined space
         self.pdef = ob.ProblemDefinition(si)  # create a problem instance
 
     """
@@ -45,13 +58,18 @@ class Analytic_planner:
     (1) Threshold distance 내에서 N개의 goal 선택 (waypoint와 같이)
     """
 
-    def isStateValid(state):
+    def isStateValid(self, state):
         """
         Set sphere and check collision
 
         :return:
         """
-        return True
+        if self.env is None:
+            return True
+        else:
+            safe = not self.env.analytic_planner_collision_check(state[0], state[1])
+            return safe
+            # return not self.env.analytic_planner_collision_check(state[0], state[1])
 
     def plan(self, start, goal):
         """
@@ -73,8 +91,26 @@ class Analytic_planner:
 
         if solved:
             path = self.pdef.getSolutionPath()
-            return path
+            path.interpolate(self.min_n_states)
+            n_states = path.getStateCount()
+            path_states = path.getStates()
+
+            self.path_coordinates = np.zeros((n_states, 2))
+            for i in range(n_states):
+                self.path_coordinates[i][0] = path_states[i][0]
+                self.path_coordinates[i][1] = path_states[i][1]
+            self.path_coordinates = self.path_coordinates.astype(np.float32)
+            return self.path_coordinates.copy()
         else:
             print("No solution found")
             return None
 
+    def visualize_path(self):
+        self.env.visualize_analytic_planner_path(self.path_coordinates)
+
+if __name__ == "__main__":
+    planner = Analytic_planner(env=None, map_size=40., max_planning_time=10.)
+    start = [0., 0.]
+    goal = [18., 18.]
+    path = planner.plan(start, goal)
+    print(path)

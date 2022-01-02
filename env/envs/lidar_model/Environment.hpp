@@ -419,6 +419,14 @@ namespace raisim
             actionMean_ = gc_init_.tail(nJoints_);
             actionStd_.setConstant(0.3);
 
+            analytic_planner_run = cfg["analytic_planner"]["run"].As<bool>();
+
+            /// analytic planner
+            if (analytic_planner_run) {
+                anymal_sphere_ = world_->addSphere(0.55, 1, "default", raisim::COLLISION(2), RAISIM_STATIC_COLLISION_GROUP);
+                anymal_sphere_->setName("anymal_sphere");
+            }
+
             /// indices of links that could make contact
             footIndices_.insert(anymal_->getBodyIdx("LF_SHANK"));
             footIndices_.insert(anymal_->getBodyIdx("RF_SHANK"));
@@ -586,7 +594,7 @@ namespace raisim
             rayDirection = lidarOri.e() * direction;
 
             /// front lidar
-            auto &col = world_->rayTest(lidarPos.e(), rayDirection, ray_length, true);
+            auto &col = world_->rayTest(lidarPos.e(), rayDirection, ray_length, true, RAISIM_STATIC_COLLISION_GROUP);
             if (col.size() > 0) {
                 if (visualizable_)
                     scans[i]->setPosition(col[0].getPosition());
@@ -745,6 +753,39 @@ namespace raisim
 
     void computed_heading_direction(Eigen::Ref<EigenVec> heading_direction_) {}
 
+    bool analytic_planner_collision_check(double x, double y) {
+        anymal_sphere_->setPosition(x, y, 1.0);
+        world_->integrate1();
+
+        int num_contacts = anymal_sphere_->getContacts().size();
+        if (num_contacts > 0)
+            return true;
+        else
+            return false;
+    }
+
+    void visualize_analytic_planner(Eigen::Ref<EigenRowMajorMat> planned_path) {
+        int path_length = planned_path.rows();
+
+        if (path_length > max_analytic_planned_path_length) {
+            // generate box instances to visualize path
+            for (int i=max_analytic_planned_path_length; i<path_length; i++) {
+                analytic_planned_traj.push_back(server_->addVisualBox("analytic_planned_traj" + std::to_string(i), 0.08, 0.08, 0.08, 0, 1, 0));
+            }
+            max_analytic_planned_path_length = path_length;
+        } else {
+            // reset positions of boxes that will not be used
+            for (int i=path_length; i<max_analytic_planned_path_length; i++) {
+                analytic_planned_traj[i]->setPosition({0., 0., 0.});
+            }
+        }
+
+        // visualize path
+        for (int i=0; i<path_length; i++) {
+            analytic_planned_traj[i]->setPosition({planned_path(i, 0), planned_path(i, 1), 0.5});
+        }
+    }
+
     bool collision_check() {
         /// if the contact body is not feet, count as collision
         for (auto &contact : anymal_->getContacts()) {
@@ -767,11 +808,6 @@ namespace raisim
         //    return true;
         // return false;
     }
-
-    ////////// Code for path planning w/ sampling based motion planner //////////
-//    namespace ob = ompl::base;
-//    namespace og = ompl::geometric;
-
 
 
     private:
@@ -837,6 +873,12 @@ namespace raisim
         int env_type;
         double hm_centerX = 0.0, hm_centerY = 0.0;
         double hm_samplesX = 0., hm_samplesY = 0.;
+
+        /// analytic planner
+        raisim::Sphere *anymal_sphere_;
+        bool analytic_planner_run = false;
+        std::vector<raisim::Visuals *> analytic_planned_traj;
+        int max_analytic_planned_path_length = 0.;
     };
 }
 

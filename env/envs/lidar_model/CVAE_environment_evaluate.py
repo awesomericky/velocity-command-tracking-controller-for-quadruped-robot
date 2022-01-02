@@ -24,6 +24,10 @@ from raisimGymTorch.env.envs.lidar_model.storage import Buffer
 from raisimGymTorch.env.envs.lidar_model.model import CVAE_implicit_distribution_inference
 import random
 
+"""
+Evaluate dynamic model prediction accuracy using CVAE sampler
+"""
+
 
 def transform_coordinate_LW(w_init_coordinate, l_coordinate_traj):
     """

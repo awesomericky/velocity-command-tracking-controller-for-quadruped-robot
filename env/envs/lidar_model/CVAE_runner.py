@@ -14,6 +14,10 @@ import argparse
 import numpy as np
 import random
 
+"""
+Training CVAE
+"""
+
 random.seed(0)
 np.random.seed(0)
 torch.manual_seed(0)

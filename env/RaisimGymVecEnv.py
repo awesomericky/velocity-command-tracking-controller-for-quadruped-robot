@@ -250,6 +250,17 @@ class RaisimGymVecEnv:
         self.wrapper.parallel_env_collision_check(self._parallel_collision)
         return self._parallel_collision.copy()
 
+    def analytic_planner_collision_check(self, x, y):
+        return self.wrapper.analytic_planner_collision_check(x, y)
+
+    def visualize_analytic_planner_path(self, path):
+        """
+
+        :param path: (N, 2)  N: path length
+        :return:
+        """
+        self.wrapper.visualize_analytic_planner(path)
+
 
 class RunningMeanStd(object):
     def __init__(self, epsilon=1e-4, shape=()):

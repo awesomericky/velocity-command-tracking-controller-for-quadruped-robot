@@ -12,7 +12,7 @@ environment:
   eval_every_n: 100
   new_environment_every_n: 100
   seed:
-    train: 0
+    train: 100
     evaluate: 600
   num_threads: 12 # 4 is (optimal for data collection)
   evaluate_num_threads: 6  # Number of threads for evaluating model prediction
@@ -21,10 +21,10 @@ environment:
   control_dt: 0.01
   max_time: 9.0
   obstacle_grid_size:
-    env_one:
-      min: 2.3  # 3.0
-      max: 5.0  # 4.0
-    env_two:
+    env_one:  # scattered object in open field
+      min: 2.5  # 3.0
+      max: 2.6 #5.0  # 4.0
+    env_two:  # scattered object in cross-corridor
       min: 2.3  # 3.0
       max: 5.0  # 4.0
   obstacle_size:  # cylinder: radius (min ~ max) / box: side length (min*2 ~ max*2)
@@ -44,12 +44,15 @@ environment:
       min: -1.2
       max: 1.2
   randomization: False  # 1) Base COM position, 2) Mass of links, 3) Joint position
-  random_initialize: True  # yaw angle is only randomized
+  random_initialize: False  # yaw angle is only randomized
   random_external_force: False  # 50N force for 1s for lateral direction
   point_goal_initialize: False
-  CVAE_data_collection_initialize: False
+  CVAE_data_collection_initialize: True
   CVAE_environment_initialize: False
   safe_control_initialize: False
+  analytic_planner:
+    run: True
+    visualize: True
 
 training:
   learning_rate: 3e-4

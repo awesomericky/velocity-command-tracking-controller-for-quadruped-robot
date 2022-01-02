@@ -576,6 +576,10 @@ namespace raisim
 
     void computed_heading_direction(Eigen::Ref<EigenVec> heading_direction_) {}
 
+    bool analytic_planner_collision_check(double x, double y) {return false;}
+
+    void visualize_analytic_planner(Eigen::Ref<EigenRowMajorMat> planned_path) {}
+
     bool collision_check() {return false;}
 
     bool isTerminalState(float &terminalReward) final

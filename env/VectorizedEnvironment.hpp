@@ -187,6 +187,14 @@ class VectorizedEnvironment {
       }
   }
 
+  bool analytic_planner_collision_check(double x, double y) {
+      return environments_[0]->analytic_planner_collision_check(x, y);
+  }
+
+  void visualize_analytic_planner(Eigen::Ref<EigenRowMajorMat> planned_path) {
+      environments_[0]->visualize_analytic_planner(planned_path);
+  }
+
   void isTerminalState(Eigen::Ref<EigenBoolVec> &terminalState) {
     for (int i = 0; i < num_envs_; i++) {
       float terminalReward;

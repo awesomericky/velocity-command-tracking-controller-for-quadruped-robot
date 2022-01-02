@@ -25,12 +25,8 @@ from raisimGymTorch.env.envs.lidar_model.model import CVAE_implicit_distribution
 import random
 
 """
-Check!!!!
-
-1. action_planner type & params
-2. collision_threshold
+Point goal navigation using CVAE sampler
 """
-
 
 def transform_coordinate_LW(w_init_coordinate, l_coordinate_traj):
     """
