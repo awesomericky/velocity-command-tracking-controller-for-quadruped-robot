@@ -29,3 +29,8 @@ python raisimGymTorch/env/envs/command_tracking_flat/tester.py -w /home/awesomer
 
 ### Trained weights
 Available in data.zip
+
+### Command tracking plot
+<div>
+  <img width=1500 src='test.png'>
+</div>
