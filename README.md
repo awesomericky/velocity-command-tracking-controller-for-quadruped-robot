@@ -26,3 +26,6 @@ python raisimGymTorch/env/envs/command_tracking_flat/runner.py
 ```
 python raisimGymTorch/env/envs/command_tracking_flat/tester.py -w /home/awesomericky/raisim/raisimLib/raisimGymTorch/data/command_tracking_flat/2021-07-15-21-15-21/full_16200.pt
 ```
+
+### Trained weights
+Available in data.zip
