@@ -3,8 +3,10 @@
 ### Prepare
 1. Install RAISIM [link](https://raisim.com/sections/Installation.html)
 2. Move to YOUR_PATH/raisimLib/raisimGymTorch/.
-3. Build environment
-4. Train / Evaluate
+3. Remove everything in YOUR_PATH/raisimLib/raisimGymTorch/.
+4. Clone the repository in YOUR_PATH/raisimLib/raisimGymTorch/.
+5. Build environment
+6. Train / Evaluate
 
 cf)
 - Trained model will be saved in YOUR_PATH/raisimLib/raisimGymTorch/data/command_tracking_flat/.
