@@ -279,7 +279,7 @@ class VectorizedEnvironment {
     done[agentId] = environments_[agentId]->isTerminalState(terminalReward);
 
     if (done[agentId]) {
-//      environments_[agentId]->reset();  // automatic reset after termination
+      environments_[agentId]->reset();  // automatic reset after termination
       reward[agentId] += terminalReward;
     }
   }
