@@ -1,5 +1,5 @@
 from ruamel.yaml import YAML, dump, RoundTripDumper
-from raisimGymTorch.env.bin import anymal_rough
+from raisimGymTorch.env.bin import command_tracking_flat
 from raisimGymTorch.env.RaisimGymVecEnv import RaisimGymVecEnv as VecEnv
 from raisimGymTorch.helper.raisim_gym_helper import ConfigurationSaver, load_param, tensorboard_launcher, UserCommand
 from raisimGymTorch.helper.utils_plot import plot_command_tracking_result
@@ -24,7 +24,7 @@ np.random.seed(0)
 torch.manual_seed(0)
 
 # task specification
-task_name = "anymal_locomotion_rough"
+task_name = "command_tracking_flat"
 
 # configuration
 parser = argparse.ArgumentParser()
@@ -50,10 +50,10 @@ reward_names.append('reward_sum')
 user_command = UserCommand(cfg, cfg['environment']['num_envs'])
 
 # create environment from the configuration file
-env = VecEnv(anymal_rough.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'])
+env = VecEnv(command_tracking_flat.RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)), cfg['environment'])
 
 # shortcuts
-ob_dim = env.num_obs
+ob_dim = env.num_obs  # include command dimension
 act_dim = env.num_acts
 
 # Training
@@ -93,6 +93,8 @@ ppo = PPO.PPO(actor=actor,
 if mode == 'retrain':
     load_param(weight_path, env, actor, critic, ppo.optimizer, saver.data_dir)
 
+pdb.set_trace()
+
 for update in range(20000):
     start = time.time()
     reward_ll_sum = 0
@@ -114,24 +116,25 @@ for update in range(20000):
         env.initialize_n_step()
         env.reset()
         env.turn_on_visualization()
-        env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_"+str(update)+'.mp4')
+        # env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_"+str(update)+'.mp4')
 
         command_trajectory = []
         real_trajectory = []
 
         for step in range(n_steps*2):
+            frame_start = time.time()
             if step % command_period_steps == 0:
                 sample_user_command = user_command.uniform_sample_evaluate()
                 # sample_user_command[:, 2] = 0  # set yaw rate command to zero
                 env.set_user_command(sample_user_command)   # Hash this when n_env=1 for logging
 
-            frame_start = time.time()
             obs, non_obs = env.observe(False)
             action_ll = loaded_graph.architecture(torch.from_numpy(obs).cpu())
             reward_ll, dones = env.step(action_ll.cpu().detach().numpy())
             frame_end = time.time()
             wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
 
+            # command tracking logging
             command_trajectory.append(sample_user_command[0])
             real_trajectory.append([non_obs[0, 18], non_obs[0, 19], non_obs[0, 23]])
 
@@ -142,11 +145,9 @@ for update in range(20000):
         real_trajectory = np.array(real_trajectory)
         plot_command_tracking_result(command_trajectory, real_trajectory, saver.data_dir.split('/')[-2], saver.data_dir.split('/')[-1], update, control_dt=cfg['environment']['control_dt'])
 
-        env.stop_video_recording()
-        env.stop_video_recording()
-        env.turn_off_visualization()
+        # env.stop_video_recording()
+        # env.turn_off_visualization()
 
-        env.reset()
         env.save_scaling(saver.data_dir, str(update))
 
     env.initialize_n_step()

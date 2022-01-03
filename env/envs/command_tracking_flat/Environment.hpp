@@ -96,14 +96,6 @@ namespace raisim
             reward_foot_z_vel_coeff = cfg["reward"]["foot_z_vel"]["coeff"].As<double>();
             reward_orientation_coeff = cfg["reward"]["orientation"]["coeff"].As<double>();
 
-//            /// user commmand range
-//            min_forward_vel = cfg["command"]["forward_vel"]["min"].As<double>();
-//            max_forward_vel = cfg["command"]["forward_vel"]["max"].As<double>();
-//            min_lateral_vel = cfg["command"]["lateral_vel"]["min"].As<double>();
-//            max_lateral_vel = cfg["command"]["lateral_vel"]["max"].As<double>();
-//            min_yaw_rate = cfg["command"]["yaw_rate"]["min"].As<double>();
-//            max_yaw_rate = cfg["command"]["yaw_rate"]["max"].As<double>();
-
             /// total trajectory length
             double control_dt = cfg["control_dt"].As<double>();
             double max_time = cfg["max_time"].As<double>();
@@ -147,7 +139,7 @@ namespace raisim
             anymal_->setGeneralizedForce(Eigen::VectorXd::Zero(gvDim_));
 
             /// MUST BE DONE FOR ALL ENVIRONMENTS
-            obDim_ = 81;
+            obDim_ = 81 + 3;
             actionDim_ = nJoints_;
             actionMean_.setZero(actionDim_);
             actionStd_.setZero(actionDim_);
@@ -227,11 +219,7 @@ namespace raisim
 
     float step(const Eigen::Ref<EigenVec> &action) final
     {
-//        clock_t start, end;
-//        double result;
-//
-//        start = clock();
-//        current_n_step += 1;
+        current_n_step += 1;
 
         /// action scaling
         pTarget12_ = action.cast<double>();
@@ -260,12 +248,6 @@ namespace raisim
                     anymal_->setExternalForce(anymal_->getBodyIdx("base"), force_direction * 50);
                 }
 
-//        end = clock();
-//        result = (double) (end - start);
-//        std::cout << "result (PD) : " << ((result) / CLOCKS_PER_SEC) << " seconds" << std::endl;
-
-
-//        start = clock();
         for (int i = 0; i < int(control_dt_ / simulation_dt_ + 1e-10); i++)
         {
             if (server_)
@@ -274,35 +256,26 @@ namespace raisim
             if (server_)
                 server_->unlockVisualizationServerMutex();
         }
-//        end = clock();
-//        result = (double) (end - start);
-//        std::cout << "result (integrate) : " << ((result) / CLOCKS_PER_SEC) << " seconds" << std::endl;
 
-//        start = clock();
         updateObservation();
-//        end = clock();
-//        result = (double) (end - start);
-//        std::cout << "result (observe) : " << ((result) / CLOCKS_PER_SEC) << " seconds" << std::endl;
 
-        return 0.0;
+        torque = anymal_->getGeneralizedForce().e(); // squaredNorm
 
-//        torque = anymal_->getGeneralizedForce().e(); // squaredNorm
+        calculate_cost();
 
-//        calculate_cost();
+        rewards_.record("joint_torque", -torqueCost);
+        rewards_.record("linear_vel_error", -linvelCost);
+        rewards_.record("angular_vel_error", -angVelCost);
+        rewards_.record("joint_vel", -velLimitCost);
+        rewards_.record("foot_clearance", -footClearanceCost);
+        rewards_.record("foot_slip", -slipCost);
+        rewards_.record("previous_action_smooth", -previousActionCost);
+        rewards_.record("foot_z_vel", -footVelCost);
+        rewards_.record("orientation", -orientationCost);
 
-//        rewards_.record("joint_torque", -torqueCost);
-//        rewards_.record("linear_vel_error", -linvelCost);
-//        rewards_.record("angular_vel_error", -angVelCost);
-//        rewards_.record("joint_vel", -velLimitCost);
-//        rewards_.record("foot_clearance", -footClearanceCost);
-//        rewards_.record("foot_slip", -slipCost);
-//        rewards_.record("previous_action_smooth", -previousActionCost);
-//        rewards_.record("foot_z_vel", -footVelCost);
-//        rewards_.record("orientation", -orientationCost);
-//
-//        previous_action = target_postion.cast<double>();
+        previous_action = target_postion.cast<double>();
 
-//        return rewards_.sum();
+        return rewards_.sum();
     }
 
     void updateObservation() {
@@ -317,22 +290,23 @@ namespace raisim
         bodyLinearVel_ = rot.e().transpose() * gv_.segment(0, 3);
         bodyAngularVel_ = rot.e().transpose() * gv_.segment(3, 3);
 
-        obDouble_ << rot.e().row(2).transpose(),      /// body orientation (dim=3)
-                     gc_.tail(12),                    /// joint angles (dim=12)
-                     bodyLinearVel_, bodyAngularVel_, /// body linear&angular velocity (dim=3+3=6)
+        obDouble_ << user_command,                     /// user command (dim=3)
+                     rot.e().row(2).transpose(),    /// body orientation (dim=3)
+                     gc_.tail(12),                  /// joint angles (dim=12)
+                     bodyLinearVel_, bodyAngularVel_,  /// body linear&angular velocity (dim=3+3=6)
                      gv_.tail(12),                  /// joint velocity (dim=12)
-                     joint_position_error_history,    /// joint position error history (dim=24)
-                     joint_velocity_history;          /// joint velocity history (dim=24)
+                     joint_position_error_history,     /// joint position error history (dim=24)
+                     joint_velocity_history;           /// joint velocity history (dim=24)
 
         /// Update coordinate
         double yaw = atan2(rot.e().col(0)[1], rot.e().col(0)[0]);
 
         coordinateDouble << gc_[0], gc_[1], yaw;
 
-//        roll_and_pitch = rot.e().row(2).transpose();
-//        GRF_impulse.setZero(4);
+        roll_and_pitch = rot.e().row(2).transpose();
+        GRF_impulse.setZero(4);
 
-//        comprehend_contacts();
+        comprehend_contacts();
 
     }
 
@@ -375,6 +349,55 @@ namespace raisim
     {
         torqueCost=0, linvelCost=0, angVelCost=0, velLimitCost = 0, footClearanceCost = 0, slipCost = 0;
         previousActionCost = 0, footVelCost = 0, orientationCost = 0;
+
+        double yawRateError = (bodyAngularVel_[2] - user_command[2]) * (bodyAngularVel_[2] - user_command[2]);
+        const double commandNorm = user_command.norm();
+
+        torqueCost = costScale_ * 0.5 * torque.tail(12).squaredNorm() * simulation_dt_;
+//        for (int i=0; i<12; i++)
+//            torqueCost += 0.5 * fabs(torque.tail(12)[i]) * simulation_dt_;
+//        torqueCost *= costScale_;
+
+//        torqueCost = costScale_ * 0.5 * torque.tail(12).norm() * simulation_dt_;
+        Eigen::Vector3d desiredLinearSpeed, linSpeedCostScale;
+
+        desiredLinearSpeed << user_command[0], user_command[1], 0;
+        linSpeedCostScale << 1.0, 1.0, 0.35;
+        const double velErr = (desiredLinearSpeed - bodyLinearVel_).cwiseProduct(linSpeedCostScale).norm();
+
+        linvelCost = -500.0 * ((simulation_dt_ / (exp(velErr) + 2.0 + exp(-velErr))) + 0.4 * (simulation_dt_ / (exp(5 * velErr) + 2.0 + exp(-5 * velErr))));
+
+        angVelCost = -100.0 * ((simulation_dt_ / (exp(yawRateError) + 2.0 + exp(-yawRateError))) + 0.4 * (simulation_dt_ / (exp(5 * yawRateError) + 2.0 + exp(-5 * yawRateError))));
+//        angVelCost += costScale_ * std::min(0.25 * bodyAngularVel_.segment(0, 2).squaredNorm() * simulation_dt_, 0.002) / std::min(0.3 + 3.0 * commandNorm, 1.0);
+
+        double velLim = 0.0;
+//        for (int i = 6; i < 18; i++)
+//            if (fabs(gv_(i)) > velLim) velLimitCost += costScale2_ * 3.0 / std::min(0.09 + 2.5 * commandNorm, 1.0) * (std::fabs(gv_(i)) - velLim) * (std::fabs(gv_(i)) - velLim) * simulation_dt_;
+
+        for (int i = 6; i < 18; i++)
+            if (fabs(gv_(i)) > velLim) {
+                velLimitCost += costScale2_ * 0.02 * (fabs(gv_(i)) - velLim) * (fabs(gv_(i)) - velLim) * simulation_dt_;
+                velLimitCost += costScale2_ * 0.02 * fabs(gv_(i)) * simulation_dt_;
+            }
+
+        for (int i = 0; i < 4; i++)
+        {
+            footVelCost += costScale2_ * footVel_W[i][2] * footVel_W[i][2] * simulation_dt_;
+
+            if (!footContactState_[i]) {
+                // not in contact
+                footClearanceCost += costScale_ * 15000 * pow(std::max(0.0, 0.07 - foot_Pos_difference[i]), 2) * footVel_W[i].e().head(2).norm() * simulation_dt_;
+            }
+            else{
+                // in contact
+                slipCost += 10. * (costScale_ * (0.2 * footContactVel_[i].head(2).norm())) * simulation_dt_;
+            }
+        }
+
+        previousActionCost = 0.5 * costScale_ * (previous_action - target_postion).norm() * simulation_dt_;
+
+        Eigen::Vector3d identityRot(0,0,1);
+        orientationCost = costScale_ * 100.0 * (roll_and_pitch - identityRot).norm() * simulation_dt_;
     }
 
     void comprehend_contacts()
@@ -463,9 +486,31 @@ namespace raisim
                                          Eigen::Ref<EigenVec> P_col_modified_command,
                                          double collision_threshold) {}
 
-    void set_user_command(Eigen::Ref<EigenVec> command) {}
+    void set_user_command(Eigen::Ref<EigenVec> command) {
+        // 0 : x-axis body velocity (forward velocity)
+        // 1 : y-axis body velocity (lateral velocity)
+        // 2 : yaw angular velocity
+        for (int i = 0; i < 3; i++)
+        {
+            user_command[i] = command[i];
+        }
+    }
 
-    void reward_logging(Eigen::Ref<EigenVec> rewards, Eigen::Ref<EigenVec> rewards_w_coeff, int n_rewards) {}
+    void reward_logging(Eigen::Ref<EigenVec> rewards, Eigen::Ref<EigenVec> rewards_w_coeff, int n_rewards) {
+        reward_log.setZero(9+1);  ///////// Need to change!! Don't forget!! /////////////
+        reward_log[0] = -torqueCost * reward_joint_torque_coeff;
+        reward_log[1] = -linvelCost * reward_linear_vel_coeff;
+        reward_log[2] = -angVelCost * reward_angular_vel_coeff;
+        reward_log[3] = -velLimitCost * reward_joint_vel_coeff;
+        reward_log[4] = -footClearanceCost * reward_foot_clearance_coeff;
+        reward_log[5] = -slipCost * reward_foot_slip_coeff;
+        reward_log[6] = -previousActionCost * reward_previous_action_smooth_coeff;
+        reward_log[7] = -footVelCost * reward_foot_z_vel_coeff;
+        reward_log[8] = -orientationCost * reward_orientation_coeff;
+        reward_log[9] = rewards_.sum();
+
+        rewards = reward_log.cast<float>();
+    }
 
     void noisify_Dynamics() {
         static std::default_random_engine generator(random_seed);
@@ -591,21 +636,20 @@ namespace raisim
             if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end()) {
                 return true;
             }
-//            for (int i=0; i<4; i++) {
-//                if (shank_Pos_difference[i] < 1e-2)
-//                    return true;
-//            }
+	    for (int i=0; i<4; i++) {
+                if (shank_Pos_difference[i] < 1e-2)
+                    return true;
+            }
         }
         terminalReward = 0.f;
-
-        /// if the robot is out of the terrain
-        if (fabs(gc_[0])>25. || fabs(gc_[1])>25.)
-            return true;
 
         return false;
     }
 
-    void curriculumUpdate() final {}
+    void curriculumUpdate() final {
+        costScale_ = std::pow(costScale_, 0.9997);
+        costScale2_ = std::pow(costScale2_, 0.9997);
+    }
 
     private:
         int gcDim_, gvDim_, nJoints_;
